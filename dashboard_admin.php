@@ -70,8 +70,10 @@ $inactiveCount = (int)$challengeStatus['inactiveCount'];
 $cityData = $conn->query("
     SELECT city, COUNT(*) AS cnt
     FROM challenge
+    WHERE is_active = 1
     GROUP BY city
 ")->fetch_all(MYSQLI_ASSOC);
+
 
 $cityLabels = array_column($cityData, 'city');
 $cityCounts = array_column($cityData, 'cnt');
@@ -91,9 +93,11 @@ $catCounts = array_column($catData, 'cnt');
 $pointsData = $conn->query("
     SELECT challengeTitle, pointAward
     FROM challenge
+    WHERE is_active = 1
     ORDER BY pointAward DESC
     LIMIT 5
 ")->fetch_all(MYSQLI_ASSOC);
+
 
 $topPointsLabels = array_column($pointsData, 'challengeTitle');
 $topPointsValues = array_column($pointsData, 'pointAward');
@@ -101,10 +105,12 @@ $topPointsValues = array_column($pointsData, 'pointAward');
 $expiringChallenges = $conn->query("
     SELECT challengeTitle, city, end_date
     FROM challenge
-    WHERE end_date >= CURDATE()
+    WHERE is_active = 1
+      AND end_date >= CURDATE()
     ORDER BY end_date ASC
     LIMIT 5
 ")->fetch_all(MYSQLI_ASSOC);
+
 
 
 // ----------------------------------
@@ -278,6 +284,29 @@ $topRedeemers = $conn->query("
     LIMIT 5
 ")->fetch_all(MYSQLI_ASSOC);
 
+$redeemTrend = $conn->query("
+    SELECT DATE(fulfilled_at) AS day, COUNT(*) AS cnt
+    FROM redemptionrequest
+    WHERE status='Approved'
+    AND fulfilled_at >= DATE_SUB(CURDATE(), INTERVAL {$trendWindow} DAY)
+    GROUP BY DATE(fulfilled_at)
+    ORDER BY day ASC
+")->fetch_all(MYSQLI_ASSOC);
+
+
+$topCategories = $conn->query("
+    SELECT c.categoryName AS category, COUNT(*) AS cnt
+    FROM sub s
+    LEFT JOIN challenge ch ON s.challengeID = ch.challengeID
+    LEFT JOIN category c ON ch.categoryID = c.categoryID
+    WHERE s.uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$trendWindow} DAY)
+    GROUP BY c.categoryID
+    ORDER BY cnt DESC
+    LIMIT 5
+")->fetch_all(MYSQLI_ASSOC);
+
+
+
 ?>
 <!doctype html>
 <html lang="en">
@@ -346,9 +375,22 @@ const dashboardData = {
     totalStock: <?= json_encode($totalStock) ?>,
     totalRedeemed: <?= json_encode($totalRedeemed) ?>,
     lowStockRewards: <?= json_encode($lowStockRewards) ?>,
-    topRedeemers: <?= json_encode($topRedeemers) ?>
+    topRedeemers: <?= json_encode($topRedeemers) ?>,
+    redeemTrend: <?= json_encode($redeemTrend) ?>
+
 
 };
+
+function formatDate(dateStr) {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "2-digit",
+        year: "numeric"
+    });
+}
+
+
 </script>
 
 <div class="max-w-7xl mx-auto p-6">
@@ -394,13 +436,15 @@ const dashboardData = {
   </div>
 
   <!-- tabs -->
-  <div class="bg-white rounded-2xl p-6 shadow-card">
-    <div class="flex gap-4 border-b pb-4 mb-6">
-      <button id="tab-charts" class="pb-3 border-b-2 border-blue-600 text-blue-600" onclick="showTab('charts')">Growth</button>
-      <button id="tab-user" class="text-gray-600" onclick="showTab('user')">Users</button>
-      <button id="tab-Challenge" class="text-gray-600" onclick="showTab('Challenge')">Challenge</button>
-      <button id="tab-tables" class="text-gray-600" onclick="showTab('tables')">Submission</button>
-      <button id="tab-reward" class="text-gray-600" onclick="showTab('reward')">Reward</button>
+  <div class="bg-white rounded-2xl shadow-lg p-6">
+
+    <div class="flex border-b border-light-2 mb-6 space-x-6">
+      <button id="tab-charts" class=" py-3 px-4 text-sm font-semibold text-primary border-b-2 border-primary transition-all" onclick="showTab('charts')">Growth</button>
+      <button id="tab-user" class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('user')">Users</button>
+      <button id="tab-Challenge" class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('Challenge')">Challenge</button>
+      <button id="tab-tables" class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('tables')">Submission</button>
+      <button id="tab-reward" class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('reward')">Reward</button>
+
     </div>
 
 
@@ -498,7 +542,7 @@ const dashboardData = {
         </div>
       </div>
     </div>
-  </div>
+  
 
 
   <div id="Challenge" class="tab-content hidden">
@@ -572,6 +616,7 @@ const dashboardData = {
 
 </div>
 
+</div>
 
 
 
@@ -639,7 +684,13 @@ function loadSummaryCards(){
 loadSummaryCards();
 
 // tab controller
-const tabInitialized = { charts:false, user:false, tables:false, reward:false,  Challenge:false };
+const tabInitialized = {
+    charts: false,
+    user: false,
+    tables: false,
+    reward: false,
+    Challenge: false
+};
 
 function showTab(tab) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
@@ -654,19 +705,18 @@ function showTab(tab) {
         tabInitialized[tab] = true;
     }
 
-    // ensure Chart.js resizes after visible
-    setTimeout(()=> {
-      if (tab === 'tables') {
-        if (window.submissionCharts?.trend) window.submissionCharts.trend.resize();
-        if (window.submissionCharts?.cat) window.submissionCharts.cat.resize();
-      }
-      if (tab === 'user') Object.values(window.usersCharts || {}).forEach(c=>c.resize && c.resize());
-      if (tab === 'reward') Object.values(window.rewardCharts || {}).forEach(c=>c.resize && c.resize());
+    setTimeout(() => {
+        if (tab === 'tables') {
+            if (window.submissionCharts?.trend) window.submissionCharts.trend.resize();
+            if (window.submissionCharts?.cat) window.submissionCharts.cat.resize();
+        }
+        if (tab === 'user') Object.values(window.usersCharts || {}).forEach(c=>c.resize && c.resize());
+        if (tab === 'reward') Object.values(window.rewardCharts || {}).forEach(c=>c.resize && c.resize());
     }, 200);
 }
 
-// default
-showTab('charts');
+// ensure executed after whole page load
+window.onload = () => showTab("charts");
 
 
 
@@ -784,34 +834,69 @@ function initChallengeTab() {
     document.getElementById("challengeInactive").innerText = dashboardData.challenge.inactive;
     document.getElementById("challengeTotal").innerText = dashboardData.challenge.total;
 
-    // Expiring Soon List
-    let list = "";
-    dashboardData.challenge.expiring.forEach(item => {
-        list += `
-            <div class="flex items-center gap-3 border-b py-2">
-                <div class="text-red-500 font-bold">${item.end_date}</div>
-                <div>
-                    <p class="font-semibold">${item.challengeTitle}</p>
-                    <p class="text-gray-500 text-sm">${item.city || 'Global'}</p>
+    /* ----------------------------------------------------
+       NEW EXPIRING LIST (Better UI + formatted date)
+    ---------------------------------------------------- */
+    let listHTML = "";
+
+    (dashboardData.challenge.expiring || []).forEach(item => {
+        
+        const niceDate = formatDate(item.end_date);
+
+        listHTML += `
+            <div class="flex items-center gap-4 p-3 mb-2 rounded-xl border border-gray-100 hover:bg-gray-50 transition">
+                
+                <!-- Date Badge -->
+                <div class="bg-red-100 text-red-600 font-bold px-3 py-2 rounded-lg text-center w-24">
+                    ${niceDate}
+                </div>
+
+                <div class="flex-1">
+                    <p class="font-semibold text-gray-800">${item.challengeTitle}</p>
+                    <p class="text-gray-500 text-sm flex items-center gap-1">
+                        <i class="bi bi-geo-alt text-red-400"></i>
+                        ${item.city || "Global"}
+                    </p>
                 </div>
             </div>
         `;
     });
-    document.getElementById("expiringList").innerHTML = list || "<p class='text-gray-400 text-sm'>No expiring challenges.</p>";
 
-    // Charts
+    document.getElementById("expiringList").innerHTML =
+        listHTML.trim() !== ""
+        ? listHTML
+        : "<p class='text-gray-400 text-sm'>No expiring challenges.</p>";
+
+
+    /* ----------------------------------------------------
+       Charts (unchanged)
+    ---------------------------------------------------- */
+
+    const activeCityLabels = [];
+const activeCityCounts = [];
+
+dashboardData.challenge.cityLabels.forEach((label, index) => {
+    const cnt = dashboardData.challenge.cityCounts[index];
+    if (cnt > 0) {  // keep only cities that have active challenges
+        activeCityLabels.push(label);
+        activeCityCounts.push(cnt);
+    }
+});
+
+
     const cityCtx = document.getElementById("challengeCityChart").getContext("2d");
     new Chart(cityCtx, {
         type: "bar",
         data: {
-            labels: dashboardData.challenge.cityLabels,
+            labels: activeCityLabels,
             datasets: [{
-                label: "Challenges",
-                data: dashboardData.challenge.cityCounts,
+                label: "Active Challenges",
+                data: activeCityCounts,
                 backgroundColor: "#6366f1"
             }]
         }
     });
+
 
     const catCtx = document.getElementById("challengeCatChart").getContext("2d");
     new Chart(catCtx, {
@@ -838,8 +923,8 @@ function initChallengeTab() {
         },
         options: { indexAxis: "y" }
     });
-
 }
+
 
 
 
@@ -878,28 +963,80 @@ document.getElementById('kpiDenied').innerText = dashboardData.submissionCounts.
   window.submissionCharts.trend = new Chart(ctxTrend, {
     type: 'line',
     data: {
-      labels,
-      datasets:[
-        { label:'Pending', data: pending, borderColor:'#FBBF24', fill:true, backgroundColor:'rgba(251,191,36,0.12)' },
-        { label:'Approved', data: approved, borderColor:'#22C55E', fill:true, backgroundColor:'rgba(34,197,94,0.12)' },
-        { label:'Denied', data: denied, borderColor:'#EF4444', fill:true, backgroundColor:'rgba(239,68,68,0.12)' }
-      ]
+        labels,
+        datasets:[
+            { label:'Pending', data: pending, borderColor:'#FBBF24', fill:true, backgroundColor:'rgba(251,191,36,0.12)', tension:0.3 },
+            { label:'Approved', data: approved, borderColor:'#22C55E', fill:true, backgroundColor:'rgba(34,197,94,0.12)', tension:0.3 },
+            { label:'Denied', data: denied, borderColor:'#EF4444', fill:true, backgroundColor:'rgba(239,68,68,0.12)', tension:0.3 }
+        ]
     },
-    options: { responsive:true, maintainAspectRatio:false }
-  });
+    options: { 
+        responsive:true, 
+        maintainAspectRatio:false,
+        layout: {
+            padding: {
+                left: 20,
+                right: 20,
+                top: 10,
+                bottom: 20
+            }
+        },
+        scales: {
+            x: {
+                offset: true,  
+                grid: { display:false }
+            },
+            y: {
+                beginAtZero: true,
+                grace: 1       
+            }
+        }
+    }
+});
 
-  // ---- Top Category Chart ----
-  const ctxCat = document.getElementById('topCategoriesChart').getContext('2d');
-  window.submissionCharts.cat = new Chart(ctxCat, {
-    type:'bar',
-    data:{
-      labels: (dashboardData.topCategories||[]).map(c=>c.category),
-      datasets:[
-        { label:'Submissions', data:(dashboardData.topCategories||[]).map(c=>c.cnt), backgroundColor:'#3B82F6' }
-      ]
+// ---- Top Categories Doughnut Chart ----
+const ctxCat = document.getElementById("topCategoriesChart").getContext("2d");
+
+const catLabels = (dashboardData.topCategories || []).map(r => r.category);
+const catCounts = (dashboardData.topCategories || []).map(r => r.cnt);
+
+window.submissionCharts.cat = new Chart(ctxCat, {
+    type: "bar",
+    data: {
+        labels: catLabels,
+        datasets: [{
+            label: "Submissions",
+            data: catCounts,
+            backgroundColor: "#6366F1",
+            borderRadius: 6,
+            barThickness: 12,       // ⭐ 控制每条的高度（变细）
+            maxBarThickness: 14     // ⭐ 避免太粗
+        }]
     },
-    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false }
-  });
+    options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: { 
+                beginAtZero: false, 
+                grid: { display: false }
+            },
+            y: { 
+                grid: { display: false },
+                ticks: { padding: 6 }
+            }
+        },
+        plugins: {
+            legend: { display: false }
+        }
+    }
+});
+
+
+
+
+
 }
 
 /* Users charts */
@@ -968,14 +1105,50 @@ function initRewardTab(){
   });
 
   // redemptions trend (reuse submissionTrend.approved as approximation)
-  const trendCtx = document.getElementById('redemptionsTrendChart').getContext('2d');
-  const labels = (dashboardData.submissionTrend || []).map(d=>d.day);
-  const redData = (dashboardData.submissionTrend || []).map(d=>d.approved || 0);
-  window.rewardCharts.trend = new Chart(trendCtx, {
-    type:'line',
-    data:{ labels, datasets:[{ label:'Redemptions', data:redData, borderColor:'#16A34A', fill:true, backgroundColor:'rgba(34,197,94,0.12)'}] },
-    options:{ responsive:true, maintainAspectRatio:false }
-  });
+// ------ REAL REDEMPTIONS TREND ------
+const redeemTrend = dashboardData.redeemTrend || [];
+
+const redeemLabels = redeemTrend.map(r => r.day);
+const redeemValues = redeemTrend.map(r => r.cnt || 0);
+
+const trendCtx = document.getElementById("redemptionsTrendChart").getContext("2d");
+
+window.rewardCharts.trend = new Chart(trendCtx, {
+    type: "line",
+    data: {
+        labels: redeemLabels,
+        datasets: [{
+            label: "Redeemed Items",
+            data: redeemValues,
+            borderColor: "#0EA5E9",
+            backgroundColor: "rgba(14,165,233,0.15)",
+            fill: true,
+            tension: 0.35,
+            borderWidth: 2,
+            pointRadius: 3,
+            pointBackgroundColor: "#0284C7"
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+
+        // Better spacing
+        layout: { padding: { left: 15, right: 15, top: 10, bottom: 10 }},
+
+        scales: {
+            x: { 
+                offset: true,
+                grid: { display: false }
+            },
+            y: {
+                beginAtZero: true,
+                grace: 1
+            }
+        }
+    }
+});
+
 }
 </script>
 

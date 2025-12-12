@@ -406,9 +406,9 @@ if (isset($conn) && $conn->ping()) {
                     </div>
                 </div>
 
-                                <div class="bg-white rounded-2xl shadow-lg p-6">
+                <div class="bg-white rounded-2xl shadow-lg p-6">
 
-                                    <div class="flex border-b border-light-2 mb-6 space-x-6">
+                    <div class="flex border-b border-light-2 mb-6 space-x-6">
 
                         <button class="py-3 px-4 text-sm font-semibold text-primary border-b-2 border-primary transition-all" onclick="showTab('charts')" id="tab-charts"> Overview </button>
                         <button class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('user')" id="tab-user"> My Submissions </button>
@@ -500,21 +500,24 @@ if (isset($conn) && $conn->ping()) {
                         <div id="rewardBarChart" style="height: 250px;"></div>
                     </div>
 
-                                    <div class="bg-white shadow rounded p-4">
-                        <h3 class="text-lg font-semibold text-dark mb-4">Claimed Rewards</h3>
-                        <div id="claimedRewardsList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <?php if (empty($claimedRewards)): ?>
-                                <div class="col-span-3 text-center p-4 text-gray-400">No claimed rewards found.</div>
-                            <?php else: ?>
-                                <?php foreach ($claimedRewards as $reward): ?>
-                                    <div class="bg-light-1 p-4 rounded shadow text-center">
-                                        <div class="font-medium text-dark"><?= htmlspecialchars($reward['name']); ?></div>
-                                        <div class="text-sm text-dark-2 mt-1">Claimed on: <?= htmlspecialchars($reward['date']); ?></div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
+                  <div class="bg-white shadow rounded p-6">
+                    <h3 class="text-lg font-semibold text-dark mb-4">Claimed Rewards</h3>
+
+                    <?php if (empty($claimedRewards)): ?>
+                        <p class="text-center text-gray-400 py-4">No claimed rewards found.</p>
+                    <?php else: ?>
+                        <div class="relative border-l-2 border-gray-200 ml-4">
+                        <?php foreach ($claimedRewards as $reward): ?>
+                            <div class="mb-6 ml-4">
+                                <div class="absolute w-3 h-3 bg-primary rounded-full -left-[7px] mt-1.5"></div>
+                                <p class="text-dark font-medium"><?= htmlspecialchars($reward['name']); ?></p>
+                                <p class="text-sm text-dark-2">Claimed on: <?= htmlspecialchars($reward['date']); ?></p>
+                            </div>
+                        <?php endforeach; ?>
                         </div>
-                    </div>
+                    <?php endif; ?>
+                </div>
+
 
                 </div>
 
@@ -634,21 +637,50 @@ document.addEventListener('DOMContentLoaded', function () {
             const rewardChartEl = document.getElementById('rewardChart');
             if(rewardChartEl){
                 window.rewardChart = echarts.init(rewardChartEl);
-                window.rewardChart.setOption({
-                    title: { text: 'Points Usage', left: 'center', textStyle:{fontSize:14} },
-                    tooltip: { trigger: 'item', formatter: '{b}: {c} points ({d}%)' },
-                    legend: { bottom: 0 },
-                    series: [{
-                        type: 'pie',
-                        radius: ['40%', '70%'],
-                        label: { show: true, formatter: '{b}: {c}' },
-                        data: [
-                            { value: <?= (int)$usedPoints; ?>, name: 'Used Points' },
-                            { value: <?= (int)$availablePoints; ?>, name: 'Available Points' }
-                        ],
-                        color: ['#3b82f6', '#22c55e']
-                    }]
-                });
+
+const totalUserPoints = <?= (int)($usedPoints + $availablePoints); ?>;
+
+window.rewardChart.setOption({
+    title: {
+        text: totalUserPoints,
+        subtext: 'Total Points',
+        left: 'center',
+        top: '36%', 
+        textStyle: {
+            fontSize: 26,
+            fontWeight: 'bold',
+            color: '#1f2937'
+        },
+        subtextStyle: {
+            fontSize: 12,
+            color: '#6b7280'
+        }
+    },
+    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+    legend: {
+        bottom: 0,
+        itemWidth: 12,
+        itemHeight: 12,
+        textStyle: { color: '#374151' }
+    },
+    series: [{
+        type: 'pie',
+        radius: ['55%', '75%'],
+         center: ['50%', '48%'], 
+        avoidLabelOverlap: true,
+        label: { show: false },
+        labelLine: { show: false },
+        itemStyle: {
+            borderWidth: 3,
+            borderColor: '#fff'
+        },
+        data: [
+            { value: <?= $usedPoints ?>, name: 'Used Points', itemStyle:{color:'#60a5fa'} },
+            { value: <?= $availablePoints ?>, name: 'Available Points', itemStyle:{color:'#34d399'} }
+        ]
+    }]
+});
+
                 window.rewardChart.resize();
             }
 
@@ -696,23 +728,40 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const submissionStatusData = [
-        { name:'Approved', value: <?= (int)$approvedCount; ?>, itemStyle:{color:'#22c55e'} },
-        { name:'Pending', value: <?= (int)$pendingCount; ?>, itemStyle:{color:'#facc15'} },
-        { name:'Denied', value: <?= (int)$deniedCount; ?>, itemStyle:{color:'#ef4444'} }
-    ].filter(item=>item.value>0);
+    { name:'Approved', value: <?= (int)$approvedCount; ?>, itemStyle:{color:'#22c55e'} },
+    { name:'Pending', value: <?= (int)$pendingCount; ?>, itemStyle:{color:'#facc15'} },
+    { name:'Denied', value: <?= (int)$deniedCount; ?>, itemStyle:{color:'#ef4444'} }
+].filter(item => item.value > 0);
 
-    const submissionStatusChart = echarts.init(document.getElementById('submissionStatusChart'));
-    submissionStatusChart.setOption({
-        tooltip:{ trigger:'item', formatter:'{b}: {c}' },
-        legend:{ bottom:0 },
-        series:[{
-            type:'pie',
-            radius:['40%','70%'],
-            label:{ show:true, formatter:'{b}: {c}' },
-            data: submissionStatusData,
-            color: submissionStatusData.map(i=>i.itemStyle.color)
-        }]
-    });
+const submissionStatusChart = echarts.init(document.getElementById('submissionStatusChart'));
+
+submissionStatusChart.setOption({
+    tooltip: { trigger: 'item' },
+    legend: { show: false },
+    series: [{
+        type: 'pie',
+        radius: ['40%', '75%'],
+        center: ['50%', '50%'],
+        minAngle: 5,
+        label: {
+            position: 'right',
+            alignTo: 'labelLine',
+            formatter: '{b}: {c} ({d}%)',
+            fontSize: 12
+        },
+        labelLine: {
+            length: 15,
+            length2: 5,
+            maxSurfaceAngle: 120
+        },
+        data: [
+            {value: <?= $approvedCount ?>, name:'Approved', itemStyle:{color:'#22c55e'}},
+            {value: <?= $pendingCount ?>, name:'Pending', itemStyle:{color:'#eab308'}},
+            {value: <?= $deniedCount ?>, name:'Denied', itemStyle:{color:'#ef4444'}}
+        ]
+    }]
+});
+
 
     // ---------- 自适应 ----------
     window.addEventListener('resize', function(){
