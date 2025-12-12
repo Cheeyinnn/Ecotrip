@@ -455,66 +455,36 @@ if (isset($conn) && $conn->ping()) {
             }
         </script>
 
-    <?php else: ?>
-        <div class="text-center py-16 text-gray-400">
-            <i class="fas fa-users-slash text-4xl mb-4"></i>
-            <p class="text-lg font-medium"><?= $teamRankMessage ?></p>
+        <?php else: ?>
+            <div class="text-center py-16 text-gray-400">
+                <i class="fas fa-users-slash text-4xl mb-4"></i>
+                <p class="text-lg font-medium"><?= $teamRankMessage ?></p>
+            </div>
+            <?php endif; ?>
         </div>
-    <?php endif; ?>
-</div>
 
 
-                                    <div class="bg-white shadow rounded p-4">
+                      <div class="bg-white shadow rounded p-4">
                         <div class="text-gray-500 mb-2">Recent Submissions</div>
                         <div id="submissionStatusChart" style="height: 250px;"></div>
                     </div>
                 </div>
 
+                <div>
                    <div id="user" class="tab-content hidden p-4 space-y-6">
                     
-                          《div class="bg-white shadow rounded p-4">
+                        div class="bg-white shadow rounded p-4">
                         <div class="text-gray-500 mb-2">Submission Status Overview</div>
                         <div id="submissionStatusBarChart" style="height: 250px;"></div>
                     </div>
 
                 </div>
 
-                                <div id="tables" class="tab-content hidden p-4">
+                <div id="tables" class="tab-content hidden p-4">
                     <h3 class="text-lg font-semibold text-dark mb-4">My Challenges</h3>
 
-                    <div id="challengeList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <?php if (empty($userChallenges)): ?>
-                            <div class="col-span-3 text-center p-8 text-gray-400">No challenge records found.</div>
-                        <?php else: ?>
-                            <?php foreach ($userChallenges as $ch): 
-                                $statusClass = 'text-dark-2';
-                                if ($ch['status'] === 'Completed') {
-                                    $statusClass = 'text-success';
-                                } elseif ($ch['status'] === 'In Review') {
-                                    $statusClass = 'text-warning';
-                                } elseif ($ch['status'] === 'Denied/Try Again') {
-                                    $statusClass = 'text-danger';
-                                }
-                            ?>
-                            <div class="bg-white shadow rounded-2xl p-4 hover:shadow-xl transition-all flex flex-col justify-between">
-                                <div>
-                                    <h4 class="text-md font-semibold text-dark mb-1"><?= htmlspecialchars($ch['name']); ?></h4>
-                                    <p class="text-sm text-dark-2 mb-2"><?= htmlspecialchars($ch['description']); ?></p>
-                                    <span class="inline-block bg-light-2 text-dark px-2 py-1 rounded text-xs font-medium">Award: <?= $ch['points']; ?> Points</span>
-                                </div>
-                                <div class="mt-4 flex flex-col gap-2">
-                                    <span class="inline-block text-xs font-semibold <?= $statusClass; ?>">
-                                        <?= htmlspecialchars($ch['status']); ?><?= $ch['last'] ? " (Last Sub: {$ch['last']})" : '' ?>
-                                        (Submissions: <?= $ch['times']; ?>)
-                                    </span>
-                                    <button class="w-full bg-primary text-white py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
-                                        <?= ($ch['status'] === 'Completed') ? 'View Submission' : 'Start/Re-submit' ?>
-                                    </button>
-                                </div>
-                            </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
+                    <div id="challengeChart" style="height: 300px;"></div>
+
                 </div>
 
 
@@ -553,34 +523,10 @@ if (isset($conn) && $conn->ping()) {
     </div>
 
 <script>
-
-// Submission Stats for Charts
-const approvedCountData = <?= (int)$approvedCount; ?>;
-const pendingCountData = <?= (int)$pendingCount; ?>;
-const deniedCountData = <?= (int)$deniedCount; ?>;
-
-// Submission Status Array (for ECharts Pie/Bar)
-const rawSubmissionStatusData = [
-    { name: 'Approved', value: approvedCountData, itemStyle: { color: '#22c55e' } },
-    { name: 'Pending', value: pendingCountData, itemStyle: { color: '#facc15' } },
-    { name: 'Denied', value: deniedCountData, itemStyle: { color: '#ef4444' } }
-];
-const submissionStatusData = rawSubmissionStatusData.filter(item => item.value > 0);
-const pieChartColors = submissionStatusData.map(item => item.itemStyle.color);
-
-
-// Reward Data
-const myTotalPoints = <?= (int)$myPoints; ?>;
-const usedPointsData = <?= (int)$usedPoints; ?>;
-const availablePointsData = <?= (int)$availablePoints; ?>;
-const availableRewardsData = <?= json_encode($availableRewards); ?>;
-
-
 document.addEventListener('DOMContentLoaded', function () {
 
     // ---------- Tab 切换函数 ----------
     function showTab(tabId) {
-
         // 隐藏所有 tab-content
         document.querySelectorAll('.tab-content').forEach(tc => tc.classList.add('hidden'));
 
@@ -595,23 +541,22 @@ document.addEventListener('DOMContentLoaded', function () {
         if(tab) tab.classList.remove('hidden');
 
         // 高亮选中按钮
-        const btn = document.querySelector([onclick="showTab('${tabId}')"]);
+        const btn = document.querySelector(`[onclick="showTab('${tabId}')"]`);
         if(btn){
             btn.classList.add('text-primary','border-b-2','border-primary');
             btn.classList.remove('text-dark-2','hover:text-dark','hover:border-dark/20');
         }
 
-        // ---------- My Submissions 图表 (Bar Chart) ----------
-        // 确保在 Tab 显示时初始化图表
+        // ---------- My Submissions 图表 ----------
         if(tabId === 'user' && !window.userChartInitialized){
             const userChartEl = document.getElementById('submissionStatusBarChart');
             if(userChartEl){
                 window.userChart = echarts.init(userChartEl);
 
                 const statusCounts = {
-                    'Approved': approvedCountData, 
-                    'Pending': pendingCountData, 
-                    'Denied': deniedCountData
+                    'Approved': <?= (int)$approvedCount; ?>,
+                    'Pending': <?= (int)$pendingCount; ?>,
+                    'Denied': <?= (int)$deniedCount; ?>
                 };
 
                 window.userChart.setOption({
@@ -627,7 +572,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                 const name = Object.keys(statusCounts)[params.dataIndex];
                                 return name==='Approved' ? '#22c55e' : name==='Pending' ? '#facc15' : '#ef4444';
                             }
-                        }
+                        },
+                        label: { show: true, position: 'top' }
                     }]
                 });
 
@@ -636,11 +582,44 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
+        // ---------- My Challenges 图表 ----------
+        if(tabId === 'tables' && !window.challengeChartInitialized){
+            const challengeEl = document.getElementById('challengeChart');
+            if(challengeEl){
+                const challengeData = <?php echo json_encode($userChallenges); ?>;
+                const names = challengeData.map(c => c.name);
+                const points = challengeData.map(c => c.points);
+                const times = challengeData.map(c => c.times);
+                const statusColors = challengeData.map(c => 
+                    c.status === 'Completed' ? '#22c55e' :
+                    c.status === 'In Review' ? '#facc15' :
+                    c.status === 'Denied/Try Again' ? '#ef4444' : '#9ca3af'
+                );
+
+                window.challengeChart = echarts.init(challengeEl);
+                window.challengeChart.setOption({
+                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    xAxis: { type: 'category', data: names, axisLabel:{interval:0, rotate:30} },
+                    yAxis: { type: 'value', name: 'Points / Times' },
+                    series: [{
+                        type: 'bar',
+                        data: points.map((p,i)=>({
+                            value: p,
+                            itemStyle: { color: statusColors[i] },
+                            label: { show: true, position: 'top', formatter: times[i] + ' times' }
+                        }))
+                    }]
+                });
+
+                window.challengeChartInitialized = true;
+                window.challengeChart.resize();
+            }
+        }
+
         // ---------- Reward Tab 图表 ----------
-        // 确保在 Tab 显示时初始化图表
         if(tabId === 'reward' && !window.rewardChartInitialized){
-            // 积分饼图
-            var rewardChartEl = document.getElementById('rewardChart');
+            // Points Overview 饼图
+            const rewardChartEl = document.getElementById('rewardChart');
             if(rewardChartEl){
                 window.rewardChart = echarts.init(rewardChartEl);
                 window.rewardChart.setOption({
@@ -652,90 +631,92 @@ document.addEventListener('DOMContentLoaded', function () {
                         radius: ['40%', '70%'],
                         label: { show: true, formatter: '{b}: {c}' },
                         data: [
-                            // 使用 PHP 注入的数据
-                            { value: usedPointsData, name: 'Used Points' },
-                            { value: availablePointsData, name: 'Available Points' }
+                            { value: <?= (int)$usedPoints; ?>, name: 'Used Points' },
+                            { value: <?= (int)$availablePoints; ?>, name: 'Available Points' }
                         ],
                         color: ['#3b82f6', '#22c55e']
                     }]
                 });
-                window.rewardChart.resize(); 
+                window.rewardChart.resize();
             }
 
-            // 可兑换奖励柱状图
-            var rewardBarEl = document.getElementById('rewardBarChart');
+            // Available Rewards 柱状图
+            const rewardBarEl = document.getElementById('rewardBarChart');
             if(rewardBarEl){
+                const rewardsData = <?= json_encode($availableRewards); ?>;
                 window.rewardBarChart = echarts.init(rewardBarEl);
                 window.rewardBarChart.setOption({
                     title: { text: 'Available Rewards', left: 'center', textStyle:{fontSize:14} },
                     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                    xAxis: { 
-                        type: 'category', 
-                        data: availableRewardsData.map(r=>r.name), 
-                        axisLabel:{interval:0, rotate: 30} 
-                    },
-                    yAxis: { type: 'value', name: 'Points Required' },
+                    xAxis: { type:'category', data: rewardsData.map(r=>r.name), axisLabel:{interval:0, rotate:30} },
+                    yAxis: { type:'value', name:'Points Required' },
                     series: [{
-                        type: 'bar',
-                        data: availableRewardsData.map(r => ({
-                            value: r.points,
-                            itemStyle: { color: r.status === 'available' ? '#22c55e' : '#9ca3af' }
-                        })),
-                        label: { show: true, position: 'top' }
+                        type:'bar',
+                        data: rewardsData.map(r=>({ value:r.points, itemStyle:{ color: r.status==='available' ? '#22c55e':'#9ca3af' } })),
+                        label: { show:true, position:'top' }
                     }]
                 });
-                window.rewardBarChart.resize(); 
+                window.rewardBarChart.resize();
             }
-            
+
             window.rewardChartInitialized = true;
         }
     }
 
     window.showTab = showTab;
 
+    // ---------- Overview Tab 初始化 ----------
+    const teamRankData = <?= json_encode($teamRank); ?>;
+    if(teamRankData.length>0){
+        const teamRankChart = echarts.init(document.getElementById('teamRankChart'));
+        const yMin = Math.max(0, Math.min(...teamRankData.map(t=>t.value))-100);
+        teamRankChart.setOption({
+            title:{ text:'Team & Personal Rank', left:'center', textStyle:{fontSize:14} },
+            xAxis:{ type:'category', data:teamRankData.map(t=>t.name), axisLabel:{interval:0} },
+            yAxis:{ type:'value', min:yMin, name:'Total Points' },
+            series:[{
+                type:'bar',
+                data:teamRankData.map(t=>t.value),
+                itemStyle:{ color: params => params.name==='You'?'#3b82f6':'#9ca3af' },
+                label:{ show:true, position:'top' }
+            }]
+        });
+    }
 
- // ---------- Overview 图表 (初始化) ----------
-    var teamRankChart = echarts.init(document.getElementById('teamRankChart'));
+    const submissionStatusData = [
+        { name:'Approved', value: <?= (int)$approvedCount; ?>, itemStyle:{color:'#22c55e'} },
+        { name:'Pending', value: <?= (int)$pendingCount; ?>, itemStyle:{color:'#facc15'} },
+        { name:'Denied', value: <?= (int)$deniedCount; ?>, itemStyle:{color:'#ef4444'} }
+    ].filter(item=>item.value>0);
 
-    
-    var submissionStatusChart = echarts.init(document.getElementById('submissionStatusChart'));
-
-    // --- 动态计算 Y 轴最小值 (已优化) ---
-
-
-// ----------------------------------------
- 
-// Team Rank Chart
-
-
-    // Submission Status Pie Chart
-submissionStatusChart.setOption({
-        tooltip: { trigger: 'item', formatter: '{b}: {c}' },
-        legend: { bottom: 0 },
-        series: [{
-            type: 'pie',
-            radius: ['40%', '70%'],
-            label: { show: true, formatter: '{b}: {c}' },
-            data: submissionStatusData, // 使用过滤后的数据
-            color: pieChartColors       // 使用过滤后的颜色
+    const submissionStatusChart = echarts.init(document.getElementById('submissionStatusChart'));
+    submissionStatusChart.setOption({
+        tooltip:{ trigger:'item', formatter:'{b}: {c}' },
+        legend:{ bottom:0 },
+        series:[{
+            type:'pie',
+            radius:['40%','70%'],
+            label:{ show:true, formatter:'{b}: {c}' },
+            data: submissionStatusData,
+            color: submissionStatusData.map(i=>i.itemStyle.color)
         }]
     });
 
-
     // ---------- 自适应 ----------
-        window.addEventListener('resize', function() {
-        teamRankChart.resize();
-        submissionStatusChart.resize();
+    window.addEventListener('resize', function(){
+        if(teamRankChart) teamRankChart.resize();
+        if(submissionStatusChart) submissionStatusChart.resize();
         if(window.userChart) window.userChart.resize();
+        if(window.challengeChart) window.challengeChart.resize();
         if(window.rewardChart) window.rewardChart.resize();
         if(window.rewardBarChart) window.rewardBarChart.resize();
     });
 
     // 默认显示 Overview Tab
     showTab('charts');
-
 });
 </script>
+
 
 </body>
 </html>
