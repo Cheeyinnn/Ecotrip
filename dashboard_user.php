@@ -1,19 +1,36 @@
 <?php
-// 假设用户已登录，获取 userID。请根据您的实际会话/认证逻辑进行调整。
-session_start();
-// 暂时硬编码 userID 为 1，实际应用中应从 session 获取
-$userID = $_SESSION['userID'] ?? 1;
 
-require 'db_connect.php'; // 确保 db_connect.php 路径正确且能建立 $conn 连接
+session_start();
+include("db_connect.php");
+require_once "includes/auth.php";  // <--- REQUIRED FIRST
+
+if (!isset($_SESSION['userID'])) {
+    header("Location: login.php");
+    exit;
+}
+
 
 // --- 1. 获取用户总积分 (My Points) ---
-$sql_points = "SELECT SUM(pointsTransaction) AS totalPoints FROM pointtransaction WHERE userID = ?";
+// --- Fetch User Points Safely ---
+$sql_points = "SELECT walletPoint AS totalPoints FROM user WHERE userID = ?";
 $stmt_points = $conn->prepare($sql_points);
-$stmt_points->bind_param("i", $userID);
-$stmt_points->execute();
-$res_points = $stmt_points->get_result()->fetch_assoc();
-$myPoints = $res_points['totalPoints'] ?? 0;
-$stmt_points->close();
+
+if ($stmt_points) {
+    $stmt_points->bind_param("i", $userID);
+    $stmt_points->execute();
+    $result = $stmt_points->get_result();
+
+    $myPoints = 0; // default
+
+    if ($result && $row = $result->fetch_assoc()) {
+        $myPoints = (int)$row['totalPoints'];
+    }
+
+    $stmt_points->close();
+} else {
+    // fallback if prepare fails
+    $myPoints = 0;
+}
 
 // --- 2. 获取 Submission 统计 (Approved, Pending, Denied) ---
 $sql_subs = "
@@ -152,30 +169,66 @@ while($row = $res_claimed->fetch_assoc()){
 $stmt_claimed->close();
 
 // --- 6. 获取团队排名数据 (简化版：获取个人积分排名 Top 5) ---
-$teamRank = []; 
-$sql_leaderboard = "
-    SELECT 
-        u.userID, u.firstName, u.lastName, SUM(pt.pointsTransaction) AS totalPoints
-    FROM user u
-    LEFT JOIN pointtransaction pt ON u.userID = pt.userID
-    GROUP BY u.userID, u.firstName, u.lastName
-    ORDER BY totalPoints DESC
-    LIMIT 5
-";
-$res_leaderboard = $conn->query($sql_leaderboard);
+$userHasTeam = false;
+$teamRankMessage = '';
+$teamRank = [];
+$personalRank = null;
 
-while($row = $res_leaderboard->fetch_assoc()){
-    // 使用更独特的名称：FirstName + LastName的首字母
-    $fullName = $row['firstName'] . ' ' . substr($row['lastName'], 0, 1) . '.'; 
-    
-    // 逻辑：如果当前行是登录用户，标记为 'You'
-    $name = ($row['userID'] == $userID) ? 'You' : $fullName;
+// Step 1: 获取当前用户的 teamID
+$sql_team_id = "SELECT teamID FROM user WHERE userID = ?";
+$stmt = $conn->prepare($sql_team_id);
+$stmt->bind_param("i", $userID);
+$stmt->execute();
+$userTeam = $stmt->get_result()->fetch_assoc();
+$stmt->close();
 
-    $teamRank[] = [
-        'name' => $name,
-        'value' => (int)($row['totalPoints'] ?? 0) // 确保积分是整数
-    ];
+$teamID = $userTeam['teamID'] ?? null;
+
+if ($teamID === null) {
+    // 用户没有团队
+    $teamRankMessage = "You are not part of any team yet. Join a team to see your rank!";
+} else {
+    $userHasTeam = true;
+
+    // Step 2: 获取该团队内所有成员积分排行
+    $sql_leaderboard = "
+        SELECT 
+            u.userID,
+            u.firstName,
+            u.lastName,
+            SUM(pt.pointsTransaction) AS totalPoints
+        FROM user u
+        LEFT JOIN pointtransaction pt ON u.userID = pt.userID
+        WHERE u.teamID = ?
+        GROUP BY u.userID, u.firstName, u.lastName
+        ORDER BY totalPoints DESC
+    ";
+
+    $stmt2 = $conn->prepare($sql_leaderboard);
+    $stmt2->bind_param("i", $teamID);
+    $stmt2->execute();
+    $res = $stmt2->get_result();
+
+    $rankCounter = 1;
+    while($row = $res->fetch_assoc()){
+        $fullName = $row['firstName'] . ' ' . substr($row['lastName'], 0, 1) . '.';
+        $name = ($row['userID'] == $userID) ? 'You' : $fullName;
+
+        $teamRank[] = [
+            'name' => $name,
+            'value' => (int)($row['totalPoints'] ?? 0)
+        ];
+
+        // 记录当前用户的个人排名
+        if ($row['userID'] == $userID) {
+            $personalRank = $rankCounter;
+        }
+        $rankCounter++;
+    }
+
+    $stmt2->close();
 }
+
 
 // 关闭连接
 if (isset($conn) && $conn->ping()) {
@@ -365,13 +418,51 @@ if (isset($conn) && $conn->ping()) {
 
                     </div>
 
-                                <div id="charts" class="tab-content p-4 space-y-6">
-                                
-
-                                    <div class="bg-white shadow rounded p-4">
-                        <div class="text-gray-500 mb-2">Team & Personal Rank</div>
+                    <div id="charts" class="tab-content p-4 space-y-6">                            
+                  <div class="bg-white shadow rounded p-4">
+                    <div class="text-gray-500 mb-2">Team & Personal Rank</div>
+                    
+                    <?php if ($userHasTeam && !empty($teamRank)) : ?>
                         <div id="teamRankChart" style="height: 200px;"></div>
-                    </div>
+                        <p class="text-sm mt-2 text-gray-500">Your Personal Rank: <?= $personalRank ?></p>
+
+                        <script>
+                            const teamRankData = <?= json_encode($teamRank) ?>;
+
+                            if (teamRankData.length > 0) {
+                                let minRankValue = Math.min(...teamRankData.map(item => item.value));
+                                const yAxisMin = Math.max(0, minRankValue - 100);
+
+                                const chart = echarts.init(document.getElementById('teamRankChart'));
+                                const option = {
+                                    title: { text: 'Team & Personal Rank', left: 'center', textStyle:{fontSize:14} },
+                                    xAxis: { type: 'category', data: teamRankData.map(t => t.name), axisLabel: { interval:0 } },
+                                    yAxis: { 
+                                        type: 'value',
+                                        min: yAxisMin,
+                                        name: 'Total Points'
+                                    },
+                                    series: [{
+                                        type: 'bar',
+                                        data: teamRankData.map(t => t.value),
+                                        itemStyle: {
+                                            color: params => params.name==='You' ? '#3b82f6' : '#9ca3af'
+                                        },
+                                        label: { show: true, position: 'top' }
+                                    }]
+                                };
+                chart.setOption(option);
+            }
+        </script>
+
+    <?php else: ?>
+        <div class="text-center py-16 text-gray-400">
+            <i class="fas fa-users-slash text-4xl mb-4"></i>
+            <p class="text-lg font-medium"><?= $teamRankMessage ?></p>
+        </div>
+    <?php endif; ?>
+</div>
+
 
                                     <div class="bg-white shadow rounded p-4">
                         <div class="text-gray-500 mb-2">Recent Submissions</div>
@@ -379,56 +470,13 @@ if (isset($conn) && $conn->ping()) {
                     </div>
                 </div>
 
-                                <div id="user" class="tab-content hidden p-4 space-y-6">
+                   <div id="user" class="tab-content hidden p-4 space-y-6">
                     
-                                    <div class="bg-white shadow rounded p-4">
+                          《div class="bg-white shadow rounded p-4">
                         <div class="text-gray-500 mb-2">Submission Status Overview</div>
                         <div id="submissionStatusBarChart" style="height: 250px;"></div>
                     </div>
 
-                                    <div class="bg-white shadow rounded p-4 overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Challenge</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Moderator Note</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Points Earned</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Submission Date</th>
-                                </tr>
-                            </thead>
-                            <tbody id="submissionTableBody" class="bg-white divide-y divide-gray-200">
-                                <?php if (empty($submissionDetails)): ?>
-                                    <tr><td colspan="5" class="px-4 py-4 text-center text-gray-400">No submission records found.</td></tr>
-                                <?php else: ?>
-                                    <?php foreach ($submissionDetails as $sub): ?>
-                                    <tr>
-                                        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-dark"><?= htmlspecialchars($sub['challengeTitle']); ?></td>
-                                        <td class="px-4 py-4 whitespace-nowrap text-sm">
-                                            <?php
-                                                $status = strtolower($sub['status']);
-                                                $color = 'text-dark-2';
-                                                if ($status === 'approved') {
-                                                    $color = 'text-success';
-                                                } elseif ($status === 'pending') {
-                                                    $color = 'text-warning';
-                                                } elseif ($status === 'denied') {
-                                                    $color = 'text-danger';
-                                                }
-                                            ?>
-                                            <span class="<?= $color; ?> font-semibold"><?= htmlspecialchars(ucfirst($status)); ?></span>
-                                        </td>
-                                        <td class="px-4 py-4 text-sm text-dark-2 max-w-xs truncate" title="<?= htmlspecialchars($sub['reviewNote'] ?? ''); ?>">
-                                            <?= htmlspecialchars($sub['reviewNote'] ?? 'N/A'); ?>
-                                        </td>
-                                        <td class="px-4 py-4 whitespace-nowrap text-sm text-dark-2"><?= htmlspecialchars($sub['pointEarned'] ?? 0); ?></td>
-                                        <td class="px-4 py-4 whitespace-nowrap text-sm text-dark-2"><?= date('Y-m-d H:i', strtotime($sub['uploaded_at'])); ?></td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
                 </div>
 
                                 <div id="tables" class="tab-content hidden p-4">
@@ -520,8 +568,6 @@ const rawSubmissionStatusData = [
 const submissionStatusData = rawSubmissionStatusData.filter(item => item.value > 0);
 const pieChartColors = submissionStatusData.map(item => item.itemStyle.color);
 
-// Team Rank Data
-const teamRankData = <?= json_encode($teamRank); ?>;
 
 // Reward Data
 const myTotalPoints = <?= (int)$myPoints; ?>;
@@ -650,40 +696,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
  // ---------- Overview 图表 (初始化) ----------
     var teamRankChart = echarts.init(document.getElementById('teamRankChart'));
+
+    
     var submissionStatusChart = echarts.init(document.getElementById('submissionStatusChart'));
 
     // --- 动态计算 Y 轴最小值 (已优化) ---
-    let minRankValue = teamRankData.length > 0 ? teamRankData[0].value : 0;
-    teamRankData.forEach(item => {
-        if (item.value < minRankValue) {
-            minRankValue = item.value;
-        }
-    });
 
-    const yAxisMin = Math.max(0, minRankValue - 100);
+
 // ----------------------------------------
  
 // Team Rank Chart
-teamRankChart.setOption({
-        title: { text: 'Team & Personal Rank', left: 'center', textStyle:{fontSize:14} },
-        xAxis: { type: 'category', data: teamRankData.map(t => t.name), axisLabel: { interval:0 } },
-        yAxis: { 
-            type: 'value',
-            min: yAxisMin, // 动态设置 Y 轴起始值
-            name: 'Total Points', 
-            axisLabel: {
-                formatter: function (value) { return value; }
-            }
-        },
-        series: [{
-            type: 'bar',
-            data: teamRankData.map(t => t.value),
-            itemStyle: {
-                color: params => params.name==='You' ? '#3b82f6' : '#9ca3af'
-            },
-            label: { show: true, position: 'top' } // 显示数值
-        }]
-    });
+
 
     // Submission Status Pie Chart
 submissionStatusChart.setOption({
