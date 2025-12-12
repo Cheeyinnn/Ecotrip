@@ -327,35 +327,19 @@ if (isset($conn) && $conn->ping()) {
                         </h2>
                         <p class="text-dark-2 mt-1">View all current data</p>
                     </div>
-                    <div class="flex flex-wrap gap-3">
-                        <div class="flex items-center space-x-3">
-                            <input 
-                                type="date" 
-                                class="bg-white border border-light-2 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                                id="startDate"
-                            >
+                     <div class="flex items-center gap-3">
+                        <label class="text-sm text-gray-700">Filter:</label>
+                        <select id="statusFilter" class="border rounded px-2 py-1" onchange="applyFilter()">
+                            <option value="all" <?= $statusFilter === 'all' ? 'selected' : '' ?>>All</option>
+                            <option value="pending" <?= $statusFilter === 'pending' ? 'selected' : '' ?>>Pending</option>
+                            <option value="approved" <?= $statusFilter === 'approved' ? 'selected' : '' ?>>Approved</option>
+                            <option value="denied" <?= $statusFilter === 'denied' ? 'selected' : '' ?>>Denied</option>
+                        </select>
 
-                            <span class="text-dark-2 text-sm"> to </span>
-
-                            <input 
-                                type="date" 
-                                class="bg-white border border-light-2 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                                id="endDate"
-                            >
+                        <button onclick="window.location.reload()" class="bg-primary text-white px-3 py-1 rounded shadow">
+                            <i class="fas fa-refresh"></i> Refresh
+                        </button>
                         </div>
-                        <button
-                            class="bg-white border border-light-2 rounded-lg py-2 px-4 text-sm font-medium flex items-center gap-2 hover:bg-gray-50 transition-colors"
-                        >
-                            <i class="fas fa-download text-dark-2"> </i>
-                            <span> Print Report </span>
-                        </button>
-                        <button
-                            class="bg-primary text-white rounded-lg py-2 px-4 text-sm font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors shadow-sm"
-                        >
-                            <i class="fas fa-refresh"> </i>
-                            <span> Refresh </span>
-                        </button>
-                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
