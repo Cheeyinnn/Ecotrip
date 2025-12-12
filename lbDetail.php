@@ -15,52 +15,56 @@ if ($id === 0) {
 $history = [];
 $breakdown = [];
 
+// Helper function to handle SQL errors
+function handleSqlError($stmt, $conn) {
+    if (!$stmt) {
+        echo json_encode(['error' => 'SQL Prepare Error: ' . $conn->error]);
+        exit;
+    }
+}
+
 // Prepare query based on User or Team
 if ($type === 'user') {
-    // Get transaction history for a single user
-    // Link path: pointtransaction -> submissions -> challenges
+    // UPDATED NAMES based on your specific instructions:
+    // Table: challenge (singular), PK: challengeID, Title: challengeTitle
+    // Table: sub, PK: submissionID
+    // Table: pointtransaction, FK: submissionID
     $query = "SELECT 
                 pt.pointsTransaction, 
                 pt.generate_at, 
                 pt.transactionType, 
-                COALESCE(c.title, 'General Activity') as source_name 
+                COALESCE(c.challengeTitle, 'General Activity') as source_name 
               FROM pointtransaction pt 
-              LEFT JOIN submissions s ON pt.submissionID = s.id
-              LEFT JOIN challenges c ON s.challenge_id = c.id
+              LEFT JOIN sub s ON pt.submissionID = s.submissionID
+              LEFT JOIN challenge c ON s.challengeID = c.challengeID
               WHERE pt.userID = ? AND pt.transactionType = 'earn' 
               ORDER BY pt.generate_at ASC";
               
     $stmt = $conn->prepare($query);
-    if (!$stmt) {
-        echo json_encode(['error' => 'Prepare failed: ' . $conn->error]);
-        exit;
-    }
+    handleSqlError($stmt, $conn);
     $stmt->bind_param("i", $id);
 } else {
-    // Get transaction history for the whole team
+    // Team Query
     $query = "SELECT 
                 pt.pointsTransaction, 
                 pt.generate_at, 
                 pt.transactionType, 
-                u.firstName as user_name,
-                COALESCE(c.title, 'General Activity') as challenge_name
+                CONCAT(u.firstName, ' ', u.lastName) as user_name,
+                COALESCE(c.challengeTitle, 'General Activity') as challenge_name
               FROM pointtransaction pt 
               JOIN user u ON pt.userID = u.userID 
-              LEFT JOIN submissions s ON pt.submissionID = s.id
-              LEFT JOIN challenges c ON s.challenge_id = c.id
+              LEFT JOIN sub s ON pt.submissionID = s.submissionID
+              LEFT JOIN challenge c ON s.challengeID = c.challengeID
               WHERE u.teamID = ? AND pt.transactionType = 'earn' 
               ORDER BY pt.generate_at ASC";
               
     $stmt = $conn->prepare($query);
-    if (!$stmt) {
-        echo json_encode(['error' => 'Prepare failed: ' . $conn->error]);
-        exit;
-    }
+    handleSqlError($stmt, $conn);
     $stmt->bind_param("i", $id);
 }
 
 if (!$stmt->execute()) {
-    echo json_encode(['error' => 'Execute failed: ' . $stmt->error]);
+    echo json_encode(['error' => 'SQL Execute Error: ' . $stmt->error]);
     exit;
 }
 
