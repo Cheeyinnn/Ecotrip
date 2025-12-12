@@ -202,7 +202,6 @@ include "includes/layout_start.php";
     </style>
 </head>
 <body>
-
         <div class="content-wrapper">
             <?php if ($msg): ?><div class="alert alert-<?php echo $msgType; ?> alert-dismissible fade show"><?php echo $msg; ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div><?php endif; ?>
             

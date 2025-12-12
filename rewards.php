@@ -509,7 +509,5 @@ include "includes/layout_start.php";
     }
     applyFilters(); 
 </script>
-
-<?php include "includes/layout_end.php"; ?>
 </body>
 </html>

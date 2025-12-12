@@ -106,12 +106,13 @@ if (!isset($pageTitle)) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css"
           rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
+    
 
     <!-- Layout CSS -->
     <link rel="stylesheet" href="includes/layout.css">
 </head>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
 
 </head>
 <body>
