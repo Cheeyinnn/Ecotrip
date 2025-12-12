@@ -185,8 +185,8 @@ include "includes/layout_start.php";
                     </div>
                     
                     <div class="col-md-6">
-                        <label class="form-label text-success">Or Create New Category</label>
-                        <input type="text" name="newCategory" class="form-control border-success" placeholder="e.g. Solar Energy">
+                        <label class="form-label">Create New Category</label>
+                        <input type="text" name="newCategory" class="form-control " placeholder="e.g. Solar Energy">
                     </div>
                 </div>
 

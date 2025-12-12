@@ -227,6 +227,7 @@ include "includes/layout_start.php";
     }
 </style>
 
+
 <div class="hero-wrapper">
     <div class="hero-bg">
         <div class="hero-overlay">
@@ -307,9 +308,36 @@ include "includes/layout_start.php";
                 <h4 class="fw-bold mb-3 text-dark">Join the Movement</h4>
                 <p class="text-muted small mb-4">Complete this challenge, upload your proof, and earn points towards your eco-goal.</p>
 
-                <a href="submissionform.php" class="btn-submit">
-                    <i class="bi bi-camera me-2"></i> Submit Proof
-                </a>
+                <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
+                    
+                    <div class="d-grid gap-2">
+                        <a href="challenge_edit.php?id=<?= $challenge['challengeID'] ?>" 
+                           class="btn btn-primary fw-bold py-2 rounded-3 text-white text-decoration-none">
+                            <i class="bi bi-pencil-square me-2"></i> Edit Challenge
+                        </a>
+
+                        <a href="challenge_end.php?id=<?= $challenge['challengeID'] ?>" 
+                           onclick="return confirm('Are you sure you want to end this challenge immediately?');"
+                           class="btn btn-danger fw-bold py-2 rounded-3 text-white text-decoration-none">
+                            <i class="bi bi-stop-circle-fill me-2"></i> End Challenge
+                        </a>
+                    </div>
+
+                <?php elseif (isset($_SESSION['role']) && $_SESSION['role'] === 'moderator'): ?>
+
+                    <a href="moderator.php" 
+                       class="btn btn-warning fw-bold py-3 w-100 rounded-3 text-dark text-decoration-none">
+                        <i class="bi bi-card-checklist me-2"></i> View All Submissions
+                    </a>
+                    <p class="text-muted small mt-2 mb-0">Review user proofs for this challenge.</p>
+
+                <?php else: ?>
+
+                    <a href="submissionform.php" class="btn-submit">
+                        <i class="bi bi-camera me-2"></i> Submit Proof
+                    </a>
+
+                <?php endif; ?>
 
                 <div class="mt-4 pt-4 border-top">
                     <div class="d-flex justify-content-between mb-2">
