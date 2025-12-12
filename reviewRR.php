@@ -8,6 +8,7 @@ if (!isset($_SESSION['userID'])) {
     exit;
 }
 $userID = $_SESSION['userID'];
+$pageTitle = "Review Redemption Requests";
 
 // Fetch Current User Info
 $stmt = $conn->prepare("SELECT firstName, lastName, email, role, avatarURL FROM user WHERE userID = ?");
@@ -124,6 +125,8 @@ $stmt = $conn->prepare($sql);
 if (!empty($params)) $stmt->bind_param($types, ...$params);
 $stmt->execute();
 $requests = $stmt->get_result();
+
+include 'includes/layout_start.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -191,39 +194,6 @@ $requests = $stmt->get_result();
     </style>
 </head>
 <body>
-<div class="layout-wrapper">
-    <aside class="sidebar">
-        <div class="sidebar-brand"><iconify-icon icon="solar:shop-2-line-duotone"></iconify-icon><span>EcoTrip Dashboard</span></div>
-        <div class="sidebar-nav-title">Dashboards</div>
-        <ul class="sidebar-nav">
-            <li class="sidebar-item"><a href="index.php" class="sidebar-link"><iconify-icon icon="solar:bag-4-line-duotone"></iconify-icon><span>eCommerce</span></a></li>
-            <li class="sidebar-item"><a href="#" class="sidebar-link"><iconify-icon icon="solar:chart-square-line-duotone"></iconify-icon><span>Analytics</span></a></li>
-        </ul>
-        <div class="sidebar-nav-title">EcoTrip</div>
-        <ul class="sidebar-nav">
-            <li class="sidebar-item"><a href="team.php" class="sidebar-link"><iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon><span>My Team</span></a></li>
-            <li class="sidebar-item"><a href="create_team.php" class="sidebar-link"><iconify-icon icon="solar:user-plus-rounded-line-duotone"></iconify-icon><span>Create Team</span></a></li>
-            <li class="sidebar-item"><a href="join_team.php" class="sidebar-link"><iconify-icon icon="solar:login-3-line-duotone"></iconify-icon><span>Join Team</span></a></li>
-            <li class="sidebar-item"><a href="view.php" class="sidebar-link"><iconify-icon icon="solar:list-check-line-duotone"></iconify-icon><span>View Challenges</span></a></li>
-            <li class="sidebar-item"><a href="manage.php" class="sidebar-link"><iconify-icon icon="solar:pen-new-round-line-duotone"></iconify-icon><span>Manage Challenges</span></a></li>
-            <li class="sidebar-item"><a href="profile.php" class="sidebar-link"><iconify-icon icon="solar:user-circle-line-duotone"></iconify-icon><span>User Profile</span></a></li>
-            <li class="sidebar-item"><a href="rewards.php" class="sidebar-link"><iconify-icon icon="solar:gift-line-duotone"></iconify-icon><span>Reward</span></a></li>
-            <li class="sidebar-item"><a href="rewardAdmin.php" class="sidebar-link"><iconify-icon icon="solar:settings-minimalistic-line-duotone"></iconify-icon><span>RewardAdmin</span></a></li>
-            <li class="sidebar-item"><a href="leaderboard.php" class="sidebar-link"><iconify-icon icon="solar:cup-star-line-duotone"></iconify-icon><span>Leaderboard</span></a></li>
-            <li class="sidebar-item"><a href="reviewRR.php" class="sidebar-link active"><iconify-icon icon="solar:clipboard-check-line-duotone"></iconify-icon><span>ReviewRR</span></a></li>
-            <li class="sidebar-item"><a href="manage_user.php" class="sidebar-link"><iconify-icon icon="solar:users-group-rounded-line-duotone"></iconify-icon><span>Manage Users</span></a></li>
-            <li class="sidebar-item"><a href="manage_team.php" class="sidebar-link"><iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon><span>Manage Teams</span></a></li>
-        </ul>
-        <div class="sidebar-footer mt-auto">Logged in as:<br><strong><?php echo htmlspecialchars($currentUser['firstName']); ?></strong></div>
-    </aside>
-
-    <div class="main-content">
-        <div class="topbar">
-            <div class="topbar-title">Review Redemption Requests</div>
-            <div class="dropdown d-inline-block">
-                <a href="#" class="d-flex align-items-center text-decoration-none"><img src="<?php echo htmlspecialchars($avatarPath); ?>" class="nav-avatar me-1"></a>
-            </div>
-        </div>
         <div class="content-wrapper">
             <div class="stats-row">
                 <a href="reviewRR.php" class="stat-card <?php echo ($filterStatus == '') ? 'active' : ''; ?>"><div><div class="stat-title">Total Requests</div><div class="stat-value"><?php echo $stats['total']; ?></div></div><div class="stat-icon bg-blue-light"><iconify-icon icon="solar:clipboard-list-bold-duotone"></iconify-icon></div></a>
@@ -309,5 +279,7 @@ $requests = $stmt->get_result();
         shippingModal.show();
     }
 </script>
+
+<?php include "includes/layout_end.php"; ?>
 </body>
 </html>
