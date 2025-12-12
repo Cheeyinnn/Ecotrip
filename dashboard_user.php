@@ -1,0 +1,718 @@
+<?php
+// 假设用户已登录，获取 userID。请根据您的实际会话/认证逻辑进行调整。
+session_start();
+// 暂时硬编码 userID 为 1，实际应用中应从 session 获取
+$userID = $_SESSION['userID'] ?? 1;
+
+require 'db_connect.php'; // 确保 db_connect.php 路径正确且能建立 $conn 连接
+
+// --- 1. 获取用户总积分 (My Points) ---
+$sql_points = "SELECT SUM(pointsTransaction) AS totalPoints FROM pointtransaction WHERE userID = ?";
+$stmt_points = $conn->prepare($sql_points);
+$stmt_points->bind_param("i", $userID);
+$stmt_points->execute();
+$res_points = $stmt_points->get_result()->fetch_assoc();
+$myPoints = $res_points['totalPoints'] ?? 0;
+$stmt_points->close();
+
+// --- 2. 获取 Submission 统计 (Approved, Pending, Denied) ---
+$sql_subs = "
+    SELECT 
+        SUM(CASE WHEN status = 'Approved' THEN 1 ELSE 0 END) AS approvedCount,
+        SUM(CASE WHEN status = 'Pending' THEN 1 ELSE 0 END) AS pendingCount,
+        SUM(CASE WHEN status = 'Denied' THEN 1 ELSE 0 END) AS deniedCount,
+        COUNT(submissionID) AS totalSubmission
+    FROM sub
+    WHERE userID = ?
+";
+$stmt_subs = $conn->prepare($sql_subs);
+$stmt_subs->bind_param("i", $userID);
+$stmt_subs->execute();
+$res_subs = $stmt_subs->get_result()->fetch_assoc();
+
+$approvedCount = $res_subs['approvedCount'] ?? 0;
+$pendingCount = $res_subs['pendingCount'] ?? 0;
+$deniedCount = $res_subs['deniedCount'] ?? 0;
+$totalSubmission = $res_subs['totalSubmission'] ?? 0;
+$stmt_subs->close();
+
+// --- 3. 获取 Submission 详情 (用于 My Submissions Tab: Table) ---
+$submissionDetails = [];
+$sql_sub_details = "
+    SELECT 
+        s.status, s.pointEarned, s.reviewNote, s.uploaded_at, c.challengeTitle 
+    FROM sub s
+    JOIN challenge c ON s.challengeID = c.challengeID
+    WHERE s.userID = ?
+    ORDER BY s.uploaded_at DESC
+    LIMIT 20
+";
+$stmt_sub_details = $conn->prepare($sql_sub_details);
+$stmt_sub_details->bind_param("i", $userID);
+$stmt_sub_details->execute();
+$res_sub_details = $stmt_sub_details->get_result();
+while($row = $res_sub_details->fetch_assoc()){
+    $submissionDetails[] = $row;
+}
+$stmt_sub_details->close();
+
+// --- 4. 获取用户挑战列表 (My Challenges Tab) ---
+// ... (使用 INNER JOIN 逻辑保持不变，确保只显示有提交记录的挑战) ...
+$userChallenges = [];
+$sql_challenges = "
+    SELECT 
+        c.challengeID, c.challengeTitle, c.description, c.pointAward,
+        MAX(s.uploaded_at) AS lastSubmitted,
+        GROUP_CONCAT(s.status) AS all_statuses,
+        COUNT(s.submissionID) AS submissionCount
+    FROM challenge c
+    INNER JOIN sub s ON c.challengeID = s.challengeID AND s.userID = ?
+    GROUP BY c.challengeID, c.challengeTitle, c.description, c.pointAward
+    ORDER BY lastSubmitted DESC
+";
+$stmt_challenges = $conn->prepare($sql_challenges);
+$stmt_challenges->bind_param("i", $userID);
+$stmt_challenges->execute();
+$res_challenges = $stmt_challenges->get_result();
+
+while($row = $res_challenges->fetch_assoc()){
+    $status = 'Not Started'; 
+    $allStatuses = (string)($row['all_statuses'] ?? '');
+
+    if ($row['lastSubmitted'] !== null) {
+        if (strpos($allStatuses, 'Pending') !== false) {
+            $status = 'In Review';
+        } elseif (strpos($allStatuses, 'Approved') !== false) {
+            $status = 'Completed';
+        } elseif (strpos($allStatuses, 'Denied') !== false) {
+             $status = 'Denied/Try Again';
+        }
+    }
+    
+    $userChallenges[] = [
+        'id' => $row['challengeID'],
+        'name' => $row['challengeTitle'],
+        'description' => $row['description'],
+        'points' => $row['pointAward'],
+        'times' => $row['submissionCount'],
+        'status' => $status,
+        'last' => $row['lastSubmitted'] ? date('Y-m-d', strtotime($row['lastSubmitted'])) : null
+    ];
+}
+$stmt_challenges->close();
+
+// --- 5. 获取奖励数据 (Rewards Tab) ---
+// a) 奖励列表 (可兑换)
+$availableRewards = [];
+$sql_rewards = "SELECT rewardName, description, pointRequired FROM reward ORDER BY pointRequired ASC";
+$res_rewards = $conn->query($sql_rewards);
+while($row = $res_rewards->fetch_assoc()){
+    $availableRewards[] = [
+        'name' => $row['rewardName'],
+        'points' => $row['pointRequired'],
+        'status' => ($myPoints >= $row['pointRequired']) ? 'available' : 'locked' // 根据用户积分判断
+    ];
+}
+
+// b) 已使用的积分 (用于 Points Overview 饼图)
+$sql_used_points = "SELECT SUM(r.pointRequired) AS usedPoints 
+                    FROM redemptionrequest rr
+                    JOIN reward r ON rr.rewardID = r.rewardID
+                    WHERE rr.userID = ? AND rr.status = 'Approved'"; // 假设只有 Approved 的兑换才算 used
+$stmt_used = $conn->prepare($sql_used_points);
+$stmt_used->bind_param("i", $userID);
+$stmt_used->execute();
+$res_used = $stmt_used->get_result()->fetch_assoc();
+$usedPoints = $res_used['usedPoints'] ?? 0;
+$stmt_used->close();
+
+$availablePoints = $myPoints - $usedPoints; // 剩余积分
+
+// c) 已领取的奖励 (Claimed Rewards)
+$claimedRewards = [];
+$sql_claimed = "
+    SELECT r.rewardName, rr.requested_at
+    FROM redemptionrequest rr
+    JOIN reward r ON rr.rewardID = r.rewardID
+    WHERE rr.userID = ? AND rr.status = 'Approved'
+    ORDER BY rr.requested_at DESC
+";
+$stmt_claimed = $conn->prepare($sql_claimed);
+$stmt_claimed->bind_param("i", $userID);
+$stmt_claimed->execute();
+$res_claimed = $stmt_claimed->get_result();
+
+while($row = $res_claimed->fetch_assoc()){
+    // 注意: 数据库字段为 requested_at
+    $claimedRewards[] = [
+        'name' => $row['rewardName'],
+        'date' => date('Y-m-d', strtotime($row['requested_at'])) 
+    ];
+}
+$stmt_claimed->close();
+
+// --- 6. 获取团队排名数据 (简化版：获取个人积分排名 Top 5) ---
+$teamRank = []; 
+$sql_leaderboard = "
+    SELECT 
+        u.userID, u.firstName, u.lastName, SUM(pt.pointsTransaction) AS totalPoints
+    FROM user u
+    LEFT JOIN pointtransaction pt ON u.userID = pt.userID
+    GROUP BY u.userID, u.firstName, u.lastName
+    ORDER BY totalPoints DESC
+    LIMIT 5
+";
+$res_leaderboard = $conn->query($sql_leaderboard);
+
+while($row = $res_leaderboard->fetch_assoc()){
+    // 使用更独特的名称：FirstName + LastName的首字母
+    $fullName = $row['firstName'] . ' ' . substr($row['lastName'], 0, 1) . '.'; 
+    
+    // 逻辑：如果当前行是登录用户，标记为 'You'
+    $name = ($row['userID'] == $userID) ? 'You' : $fullName;
+
+    $teamRank[] = [
+        'name' => $name,
+        'value' => (int)($row['totalPoints'] ?? 0) // 确保积分是整数
+    ];
+}
+
+// 关闭连接
+if (isset($conn) && $conn->ping()) {
+    $conn->close();
+}
+
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Member Dashboard</title>
+    <script src="https://res.gemcoder.com/js/reload.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: '#165DFF',
+              secondary: '#36CBCB',
+              success: '#52C41A',
+              warning: '#FAAD14',
+              danger: '#FF4D4F',
+              info: '#1890FF',
+              dark: '#1D2129',
+              'dark-2': '#4E5969',
+              'light-1': '#F2F3F5',
+              'light-2': '#E5E6EB',
+              'light-3': '#C9CDD4'
+            },
+            fontFamily: {
+              inter: ['Inter', 'sans-serif']
+            },
+            spacing: {
+              '128': '32rem'
+            },
+            boxShadow: {
+              'card': '0 4px 20px 0 rgba(0, 0, 0, 0.05)',
+              'card-hover': '0 8px 30px 0 rgba(0, 0, 0, 0.1)'
+            }
+          }
+        }
+      };
+    </script>
+    <style type="text/tailwindcss">
+      @layer utilities {
+          .content-auto {
+              content-visibility: auto;
+          }
+          .scrollbar-hide {
+              -ms-overflow-style: none;
+              scrollbar-width: none;
+          }
+          .scrollbar-hide::-webkit-scrollbar {
+              display: none;
+          }
+          .card-transition {
+              transition: all 0.3s ease;
+          }
+          .nav-item-active {
+              @apply bg-primary/10 text-primary border-l-4 border-primary;
+          }
+          .stat-card-value {
+              @apply text-[clamp(1.5rem,3vw,2.5rem)] font-bold text-dark;
+          }
+          .stat-card-label {
+              @apply text-dark-2 text-sm font-medium;
+          }
+          .stat-card-change {
+              @apply text-xs font-medium;
+          }
+      }
+    </style>
+  </head>
+<body class="font-inter bg-gray-50 text-dark min-h-screen flex flex-col">
+    
+    
+    
+    <div class="flex flex-1 overflow-hidden">
+    
+        <main class="flex-1 overflow-y-auto bg-gray-50 p-6 lg:p-10">
+            <div id="dashboard-page" class="max-w-7xl mx-auto space-y-10">
+
+                <div class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+
+                    <div>
+                        <h2 class="text-[clamp(1.5rem,3vw,2rem)] font-bold text-dark">
+                            Member Dashboard
+                        </h2>
+                        <p class="text-dark-2 mt-1">View all current data</p>
+                    </div>
+                    <div class="flex flex-wrap gap-3">
+                        <div class="flex items-center space-x-3">
+                            <input 
+                                type="date" 
+                                class="bg-white border border-light-2 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                                id="startDate"
+                            >
+
+                            <span class="text-dark-2 text-sm"> to </span>
+
+                            <input 
+                                type="date" 
+                                class="bg-white border border-light-2 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                                id="endDate"
+                            >
+                        </div>
+                        <button
+                            class="bg-white border border-light-2 rounded-lg py-2 px-4 text-sm font-medium flex items-center gap-2 hover:bg-gray-50 transition-colors"
+                        >
+                            <i class="fas fa-download text-dark-2"> </i>
+                            <span> Print Report </span>
+                        </button>
+                        <button
+                            class="bg-primary text-white rounded-lg py-2 px-4 text-sm font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors shadow-sm"
+                        >
+                            <i class="fas fa-refresh"> </i>
+                            <span> Refresh </span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+
+                                            <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="stat-card-label"> My Points</p>
+                                <h3 class="stat-card-value mt-1"><?= number_format($myPoints); ?></h3>
+                            </div>
+                            <div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                <i class="fas fa-coins text-xl"> </i> 
+                            </div>
+                        </div>
+                    </div>
+                                            <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="stat-card-label">Approved Submission</p>
+                                <h3 class="stat-card-value mt-1"><?= number_format($approvedCount); ?></h3>
+                            </div>
+                            <div class="w-12 h-12 rounded-lg bg-secondary/10 flex items-center justify-center text-secondary">
+                                <i class="fas fa-check-circle text-xl"> </i>
+                            </div>
+                        </div>
+                    </div>
+                                            <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="stat-card-label"> Pending Submission </p>
+                                <h3 class="stat-card-value mt-1"><?= number_format($pendingCount); ?></h3>
+                            </div>
+
+                            <div class="w-12 h-12 rounded-lg bg-warning/10 flex items-center justify-center text-warning">
+                                <i class="fas fa-hourglass-half text-xl"> </i>
+                            </div>
+                        </div>
+                    </div>
+                                            <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="stat-card-label">Total Submission</p>
+                                <h3 class="stat-card-value mt-1"><?= number_format($totalSubmission); ?></h3>
+                            </div>
+                            <div class="w-12 h-12 rounded-lg bg-info/10 flex items-center justify-center text-info">
+                                <i class="fas fa-list-alt text-xl"> </i> 
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                                <div class="bg-white rounded-2xl shadow-lg p-6">
+
+                                    <div class="flex border-b border-light-2 mb-6 space-x-6">
+
+                        <button class="py-3 px-4 text-sm font-semibold text-primary border-b-2 border-primary transition-all" onclick="showTab('charts')" id="tab-charts"> Overview </button>
+                        <button class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('user')" id="tab-user"> My Submissions </button>
+                        <button class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('tables')" id="tab-tables"> My Challenges</button>
+                        <button class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('reward')" id="tab-reward"> Rewards </button>
+
+                    </div>
+
+                                <div id="charts" class="tab-content p-4 space-y-6">
+                                
+
+                                    <div class="bg-white shadow rounded p-4">
+                        <div class="text-gray-500 mb-2">Team & Personal Rank</div>
+                        <div id="teamRankChart" style="height: 200px;"></div>
+                    </div>
+
+                                    <div class="bg-white shadow rounded p-4">
+                        <div class="text-gray-500 mb-2">Recent Submissions</div>
+                        <div id="submissionStatusChart" style="height: 250px;"></div>
+                    </div>
+                </div>
+
+                                <div id="user" class="tab-content hidden p-4 space-y-6">
+                    
+                                    <div class="bg-white shadow rounded p-4">
+                        <div class="text-gray-500 mb-2">Submission Status Overview</div>
+                        <div id="submissionStatusBarChart" style="height: 250px;"></div>
+                    </div>
+
+                                    <div class="bg-white shadow rounded p-4 overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Challenge</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Moderator Note</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Points Earned</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Submission Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="submissionTableBody" class="bg-white divide-y divide-gray-200">
+                                <?php if (empty($submissionDetails)): ?>
+                                    <tr><td colspan="5" class="px-4 py-4 text-center text-gray-400">No submission records found.</td></tr>
+                                <?php else: ?>
+                                    <?php foreach ($submissionDetails as $sub): ?>
+                                    <tr>
+                                        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-dark"><?= htmlspecialchars($sub['challengeTitle']); ?></td>
+                                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                                            <?php
+                                                $status = strtolower($sub['status']);
+                                                $color = 'text-dark-2';
+                                                if ($status === 'approved') {
+                                                    $color = 'text-success';
+                                                } elseif ($status === 'pending') {
+                                                    $color = 'text-warning';
+                                                } elseif ($status === 'denied') {
+                                                    $color = 'text-danger';
+                                                }
+                                            ?>
+                                            <span class="<?= $color; ?> font-semibold"><?= htmlspecialchars(ucfirst($status)); ?></span>
+                                        </td>
+                                        <td class="px-4 py-4 text-sm text-dark-2 max-w-xs truncate" title="<?= htmlspecialchars($sub['reviewNote'] ?? ''); ?>">
+                                            <?= htmlspecialchars($sub['reviewNote'] ?? 'N/A'); ?>
+                                        </td>
+                                        <td class="px-4 py-4 whitespace-nowrap text-sm text-dark-2"><?= htmlspecialchars($sub['pointEarned'] ?? 0); ?></td>
+                                        <td class="px-4 py-4 whitespace-nowrap text-sm text-dark-2"><?= date('Y-m-d H:i', strtotime($sub['uploaded_at'])); ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                                <div id="tables" class="tab-content hidden p-4">
+                    <h3 class="text-lg font-semibold text-dark mb-4">My Challenges</h3>
+
+                    <div id="challengeList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <?php if (empty($userChallenges)): ?>
+                            <div class="col-span-3 text-center p-8 text-gray-400">No challenge records found.</div>
+                        <?php else: ?>
+                            <?php foreach ($userChallenges as $ch): 
+                                $statusClass = 'text-dark-2';
+                                if ($ch['status'] === 'Completed') {
+                                    $statusClass = 'text-success';
+                                } elseif ($ch['status'] === 'In Review') {
+                                    $statusClass = 'text-warning';
+                                } elseif ($ch['status'] === 'Denied/Try Again') {
+                                    $statusClass = 'text-danger';
+                                }
+                            ?>
+                            <div class="bg-white shadow rounded-2xl p-4 hover:shadow-xl transition-all flex flex-col justify-between">
+                                <div>
+                                    <h4 class="text-md font-semibold text-dark mb-1"><?= htmlspecialchars($ch['name']); ?></h4>
+                                    <p class="text-sm text-dark-2 mb-2"><?= htmlspecialchars($ch['description']); ?></p>
+                                    <span class="inline-block bg-light-2 text-dark px-2 py-1 rounded text-xs font-medium">Award: <?= $ch['points']; ?> Points</span>
+                                </div>
+                                <div class="mt-4 flex flex-col gap-2">
+                                    <span class="inline-block text-xs font-semibold <?= $statusClass; ?>">
+                                        <?= htmlspecialchars($ch['status']); ?><?= $ch['last'] ? " (Last Sub: {$ch['last']})" : '' ?>
+                                        (Submissions: <?= $ch['times']; ?>)
+                                    </span>
+                                    <button class="w-full bg-primary text-white py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+                                        <?= ($ch['status'] === 'Completed') ? 'View Submission' : 'Start/Re-submit' ?>
+                                    </button>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+
+                                <div id="reward" class="tab-content hidden p-4 space-y-6">
+
+                                    <div class="bg-white shadow rounded p-4">
+                        <div class="text-gray-500 mb-2">Points Overview</div>
+                        <div id="rewardChart" style="height: 250px;"></div>
+                    </div>
+
+                                    <div class="bg-white shadow rounded p-4">
+                        <h3 class="text-lg font-semibold text-dark mb-4">Available Rewards</h3>
+                        <div id="rewardBarChart" style="height: 250px;"></div>
+                    </div>
+
+                                    <div class="bg-white shadow rounded p-4">
+                        <h3 class="text-lg font-semibold text-dark mb-4">Claimed Rewards</h3>
+                        <div id="claimedRewardsList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <?php if (empty($claimedRewards)): ?>
+                                <div class="col-span-3 text-center p-4 text-gray-400">No claimed rewards found.</div>
+                            <?php else: ?>
+                                <?php foreach ($claimedRewards as $reward): ?>
+                                    <div class="bg-light-1 p-4 rounded shadow text-center">
+                                        <div class="font-medium text-dark"><?= htmlspecialchars($reward['name']); ?></div>
+                                        <div class="text-sm text-dark-2 mt-1">Claimed on: <?= htmlspecialchars($reward['date']); ?></div>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+<script>
+
+// Submission Stats for Charts
+const approvedCountData = <?= (int)$approvedCount; ?>;
+const pendingCountData = <?= (int)$pendingCount; ?>;
+const deniedCountData = <?= (int)$deniedCount; ?>;
+
+// Submission Status Array (for ECharts Pie/Bar)
+const rawSubmissionStatusData = [
+    { name: 'Approved', value: approvedCountData, itemStyle: { color: '#22c55e' } },
+    { name: 'Pending', value: pendingCountData, itemStyle: { color: '#facc15' } },
+    { name: 'Denied', value: deniedCountData, itemStyle: { color: '#ef4444' } }
+];
+const submissionStatusData = rawSubmissionStatusData.filter(item => item.value > 0);
+const pieChartColors = submissionStatusData.map(item => item.itemStyle.color);
+
+// Team Rank Data
+const teamRankData = <?= json_encode($teamRank); ?>;
+
+// Reward Data
+const myTotalPoints = <?= (int)$myPoints; ?>;
+const usedPointsData = <?= (int)$usedPoints; ?>;
+const availablePointsData = <?= (int)$availablePoints; ?>;
+const availableRewardsData = <?= json_encode($availableRewards); ?>;
+
+
+document.addEventListener('DOMContentLoaded', function () {
+
+    // ---------- Tab 切换函数 ----------
+    function showTab(tabId) {
+
+        // 隐藏所有 tab-content
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.add('hidden'));
+
+        // 移除所有 tab 按钮高亮
+        document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+            btn.classList.remove('text-primary','border-b-2','border-primary');
+            btn.classList.add('text-dark-2','hover:text-dark','hover:border-dark/20');
+        });
+
+        // 显示选中的 tab
+        const tab = document.getElementById(tabId);
+        if(tab) tab.classList.remove('hidden');
+
+        // 高亮选中按钮
+        const btn = document.querySelector([onclick="showTab('${tabId}')"]);
+        if(btn){
+            btn.classList.add('text-primary','border-b-2','border-primary');
+            btn.classList.remove('text-dark-2','hover:text-dark','hover:border-dark/20');
+        }
+
+        // ---------- My Submissions 图表 (Bar Chart) ----------
+        // 确保在 Tab 显示时初始化图表
+        if(tabId === 'user' && !window.userChartInitialized){
+            const userChartEl = document.getElementById('submissionStatusBarChart');
+            if(userChartEl){
+                window.userChart = echarts.init(userChartEl);
+
+                const statusCounts = {
+                    'Approved': approvedCountData, 
+                    'Pending': pendingCountData, 
+                    'Denied': deniedCountData
+                };
+
+                window.userChart.setOption({
+                    title: { text: 'Submission Status Overview', left: 'center', textStyle:{fontSize:14} },
+                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    xAxis: { type:'category', data: Object.keys(statusCounts) },
+                    yAxis: { type:'value' },
+                    series: [{
+                        type:'bar',
+                        data: Object.values(statusCounts),
+                        itemStyle: {
+                            color: params => {
+                                const name = Object.keys(statusCounts)[params.dataIndex];
+                                return name==='Approved' ? '#22c55e' : name==='Pending' ? '#facc15' : '#ef4444';
+                            }
+                        }
+                    }]
+                });
+
+                window.userChartInitialized = true;
+                window.userChart.resize(); 
+            }
+        }
+
+        // ---------- Reward Tab 图表 ----------
+        // 确保在 Tab 显示时初始化图表
+        if(tabId === 'reward' && !window.rewardChartInitialized){
+            // 积分饼图
+            var rewardChartEl = document.getElementById('rewardChart');
+            if(rewardChartEl){
+                window.rewardChart = echarts.init(rewardChartEl);
+                window.rewardChart.setOption({
+                    title: { text: 'Points Usage', left: 'center', textStyle:{fontSize:14} },
+                    tooltip: { trigger: 'item', formatter: '{b}: {c} points ({d}%)' },
+                    legend: { bottom: 0 },
+                    series: [{
+                        type: 'pie',
+                        radius: ['40%', '70%'],
+                        label: { show: true, formatter: '{b}: {c}' },
+                        data: [
+                            // 使用 PHP 注入的数据
+                            { value: usedPointsData, name: 'Used Points' },
+                            { value: availablePointsData, name: 'Available Points' }
+                        ],
+                        color: ['#3b82f6', '#22c55e']
+                    }]
+                });
+                window.rewardChart.resize(); 
+            }
+
+            // 可兑换奖励柱状图
+            var rewardBarEl = document.getElementById('rewardBarChart');
+            if(rewardBarEl){
+                window.rewardBarChart = echarts.init(rewardBarEl);
+                window.rewardBarChart.setOption({
+                    title: { text: 'Available Rewards', left: 'center', textStyle:{fontSize:14} },
+                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    xAxis: { 
+                        type: 'category', 
+                        data: availableRewardsData.map(r=>r.name), 
+                        axisLabel:{interval:0, rotate: 30} 
+                    },
+                    yAxis: { type: 'value', name: 'Points Required' },
+                    series: [{
+                        type: 'bar',
+                        data: availableRewardsData.map(r => ({
+                            value: r.points,
+                            itemStyle: { color: r.status === 'available' ? '#22c55e' : '#9ca3af' }
+                        })),
+                        label: { show: true, position: 'top' }
+                    }]
+                });
+                window.rewardBarChart.resize(); 
+            }
+            
+            window.rewardChartInitialized = true;
+        }
+    }
+
+    window.showTab = showTab;
+
+
+ // ---------- Overview 图表 (初始化) ----------
+    var teamRankChart = echarts.init(document.getElementById('teamRankChart'));
+    var submissionStatusChart = echarts.init(document.getElementById('submissionStatusChart'));
+
+    // --- 动态计算 Y 轴最小值 (已优化) ---
+    let minRankValue = teamRankData.length > 0 ? teamRankData[0].value : 0;
+    teamRankData.forEach(item => {
+        if (item.value < minRankValue) {
+            minRankValue = item.value;
+        }
+    });
+
+    const yAxisMin = Math.max(0, minRankValue - 100);
+// ----------------------------------------
+ 
+// Team Rank Chart
+teamRankChart.setOption({
+        title: { text: 'Team & Personal Rank', left: 'center', textStyle:{fontSize:14} },
+        xAxis: { type: 'category', data: teamRankData.map(t => t.name), axisLabel: { interval:0 } },
+        yAxis: { 
+            type: 'value',
+            min: yAxisMin, // 动态设置 Y 轴起始值
+            name: 'Total Points', 
+            axisLabel: {
+                formatter: function (value) { return value; }
+            }
+        },
+        series: [{
+            type: 'bar',
+            data: teamRankData.map(t => t.value),
+            itemStyle: {
+                color: params => params.name==='You' ? '#3b82f6' : '#9ca3af'
+            },
+            label: { show: true, position: 'top' } // 显示数值
+        }]
+    });
+
+    // Submission Status Pie Chart
+submissionStatusChart.setOption({
+        tooltip: { trigger: 'item', formatter: '{b}: {c}' },
+        legend: { bottom: 0 },
+        series: [{
+            type: 'pie',
+            radius: ['40%', '70%'],
+            label: { show: true, formatter: '{b}: {c}' },
+            data: submissionStatusData, // 使用过滤后的数据
+            color: pieChartColors       // 使用过滤后的颜色
+        }]
+    });
+
+
+    // ---------- 自适应 ----------
+        window.addEventListener('resize', function() {
+        teamRankChart.resize();
+        submissionStatusChart.resize();
+        if(window.userChart) window.userChart.resize();
+        if(window.rewardChart) window.rewardChart.resize();
+        if(window.rewardBarChart) window.rewardBarChart.resize();
+    });
+
+    // 默认显示 Overview Tab
+    showTab('charts');
+
+});
+</script>
+
+</body>
+</html>

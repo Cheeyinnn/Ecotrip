@@ -48,9 +48,9 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
 
             <div class="sidebar-nav-title">Dashboards</div>
 
-            <a href="index.php" class="sidebar-link <?= isActive('index.php') ?>">
+            <a href="dashboard_admin.php" class="sidebar-link <?= isActive('dashboard_admin.php') ?>">
                 <iconify-icon icon="solar:bag-4-line-duotone"></iconify-icon>
-                Dashboard
+                Admin Dashboard
             </a>
 
             <div class="sidebar-nav-title">EcoTrip</div>
@@ -83,9 +83,9 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
 
             <div class="sidebar-nav-title">Dashboard</div>
 
-            <a href="index.php" class="sidebar-link <?= isActive('index.php') ?>">
+            <a href="dashboard_moderator.php" class="sidebar-link <?= isActive('dashboard_moderator.php') ?>">
                 <iconify-icon icon="solar:list-check-line-duotone"></iconify-icon>
-                Dashboard
+                Moderator Dashboard
             </a>
 
             <div class="sidebar-nav-title">Moderator Panel</div>
@@ -109,14 +109,14 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
 
             <div class="sidebar-nav-title">Dashboard</div>
 
-            <a href="index.php" class="sidebar-link <?= isActive('index.php') ?>">
+            <a href="dashboard_user.php" class="sidebar-link <?= isActive('dashboard_user.php') ?>">
                 <iconify-icon icon="solar:list-check-line-duotone"></iconify-icon>
-                Dashboard
+                User Dashboard
             </a>
 
             <a href="userdashboard.php" class="sidebar-link <?= isActive('userdashboard.php') ?>">
                 <iconify-icon icon="solar:list-check-line-duotone"></iconify-icon>
-                User Dashboard
+                Submission Dashboard
             </a>
 
             <div class="sidebar-nav-title">EcoTrip</div>
