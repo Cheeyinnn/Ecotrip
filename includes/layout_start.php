@@ -112,10 +112,6 @@ if (!isset($pageTitle)) {
     <link rel="stylesheet" href="includes/layout.css">
 </head>
 
-
-
-</head>
-<body>
 <body>
 
 <div class="layout-wrapper">
