@@ -139,21 +139,6 @@ include 'includes/layout_start.php';
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         body { margin: 0; background: #f5f7fb; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .layout-wrapper { display: flex; min-height: 100vh; }
-        .sidebar { width: 260px; background: #ffffff; border-right: 1px solid #e5e9f2; padding: 20px 16px; display: flex; flex-direction: column; }
-        .sidebar-brand { font-size: 20px; font-weight: 700; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
-        .sidebar-brand iconify-icon { font-size: 24px; color: #2563eb; }
-        .sidebar-nav-title { font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 10px; margin-bottom: 4px; }
-        .sidebar-nav { list-style: none; padding-left: 0; margin: 0; flex-grow: 1; }
-        .sidebar-item { margin-bottom: 4px; }
-        .sidebar-link { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 999px; text-decoration: none; font-size: 14px; color: #4b5563; transition: background 0.15s ease, color 0.15s ease; font-weight: 500; }
-        .sidebar-link:hover { background: #eef2ff; color: #2563eb; }
-        .sidebar-link.active { background: #e0ecff; color: #1d4ed8; font-weight: 600; }
-        .sidebar-footer { font-size: 12px; color: #6b7280; border-top: 1px solid #e5e9f2; padding-top: 10px; margin-top: 12px; }
-        .main-content { flex: 1; display: flex; flex-direction: column; }
-        .topbar { background: #f5f7fb; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e5e9f2; }
-        .nav-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
-        .topbar-icon-btn { width: 34px; height: 34px; border-radius: 50%; border: none; background: #ffffff; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12); cursor: pointer; }
         .content-wrapper { padding: 15px 24px; } 
         .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
         .stat-card { background: white; padding: 15px; border-radius: 12px; border: 1px solid #e5e9f2; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.02); text-decoration: none; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; cursor: pointer; }

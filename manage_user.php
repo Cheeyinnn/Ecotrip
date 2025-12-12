@@ -396,7 +396,7 @@ include "includes/layout_start.php";
 
         <h5 class="fw-bold mb-2">User List</h5>
         <p class="text-muted small mb-4">
-            Manage user accounts, roles, and view details. ok test
+            Manage user accounts, roles, and view details.
             <?php if ($totalRows > 0): ?>
                 <span class="ms-2">(<?= $totalRows ?> user<?= $totalRows>1?'s':'' ?> found)</span>
             <?php endif; ?>
