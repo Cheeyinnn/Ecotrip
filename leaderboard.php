@@ -163,8 +163,6 @@ include "includes/layout_start.php";
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
         body { margin: 0; background: #f5f7fb; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; }
         
         .content-wrapper { padding: 20px 24px 24px; }
