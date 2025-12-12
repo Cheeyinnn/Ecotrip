@@ -2,6 +2,7 @@
 session_start();
 date_default_timezone_set('Asia/Kuala_Lumpur'); // for timing
 require 'db_connect.php';
+require_once "includes/auth.php";  // <--- REQUIRED FIRST
 
 // moderator_id
 $moderatorId = $_SESSION['userID'] ?? 6;
@@ -434,13 +435,23 @@ include "includes/layout_start.php";
                     </div>
                     <div class="flex-1 overflow-y-auto scrollbar-hide p-4">
 
-           <?php if (empty($pendingList)): ?>
+           
+            <?php if (empty($pendingList) && empty($approvedList) && empty($deniedList)): ?>
+                <!-- No submissions at all -->
+                <div class="p-8 text-center text-neutral-500">
+                    <i class="fas fa-inbox text-5xl mb-4 text-neutral-300"></i>
+                    <p class="text-lg font-medium">No Submissions Found</p>
+                    <p class="text-sm">Either the search yielded no results, or there are no submissions to review.</p>
+                </div>
+            <?php elseif (empty($pendingList)): ?>
+                <!-- Pending empty but others exist -->
                 <div class="p-8 text-center text-neutral-500">
                     <i class="fas fa-check-circle text-5xl mb-4 text-green-400"></i>
                     <p class="text-lg font-bold">All Submissions Reviewed</p>
                     <p class="text-sm">There are no more pending submissions to review.</p>
                 </div>
             <?php elseif (is_null($currentSubmission)): ?>
+                <!-- Search found nothing -->
                 <div class="p-8 text-center text-neutral-500">
                     <i class="fas fa-inbox text-5xl mb-4 text-neutral-300"></i>
                     <p class="text-lg font-medium">No Submissions Found</p>

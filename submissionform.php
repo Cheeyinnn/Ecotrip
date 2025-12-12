@@ -2,6 +2,7 @@
 
 session_start();
 include("db_connect.php");
+require_once "includes/auth.php";  // <--- REQUIRED FIRST
 
 if (!isset($_SESSION['userID'])) {
     header("Location: login.php");
