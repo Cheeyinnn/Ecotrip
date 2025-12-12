@@ -1,5 +1,5 @@
 <?php
-require "db.php";
+require "db_connect.php";
 header('Content-Type: application/json');
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;

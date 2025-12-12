@@ -1,6 +1,6 @@
 <?php    
 session_start();
-include 'db.php';
+include 'db_connect.php';
 
 // 1. Authentication
 if (!isset($_SESSION['userID'])) {
