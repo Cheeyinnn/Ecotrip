@@ -294,38 +294,44 @@ const dashboardData = {
     </div>
 
     <!-- tables tab -->
-    <div id="tables" class="tab-content hidden">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div class="bg-white rounded-xl p-4 shadow-card text-center">
-          <p class="text-sm text-gray-600">Total Submissions</p>
-          <p class="text-2xl font-bold" id="totalSubmissions">0</p>
-        </div>
-        <div class="bg-white rounded-xl p-4 shadow-card text-center">
-          <p class="text-sm text-gray-600">Pending</p>
-          <p class="text-2xl font-bold text-yellow-500" id="pendingSubmissions">0</p>
-        </div>
-        <div class="bg-white rounded-xl p-4 shadow-card text-center">
-          <p class="text-sm text-gray-600">Approved</p>
-          <p class="text-2xl font-bold text-green-500" id="approvedSubmissions">0</p>
-        </div>
-        <div class="bg-white rounded-xl p-4 shadow-card text-center">
-          <p class="text-sm text-gray-600">Denied</p>
-          <p class="text-2xl font-bold text-red-500" id="deniedSubmissions">0</p>
-        </div>
-      </div>
+<!-- Submission tab (NO TABLE VERSION) -->
+<div id="tables" class="tab-content hidden">
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div class="bg-white p-5 rounded-xl shadow-card">
-          <h3 class="font-semibold mb-4">Submission Trend (Last 30 Days)</h3>
-          <canvas id="submissionTrendChart" class="w-full h-64"></canvas>
-        </div>
-        <div class="bg-white p-5 rounded-xl shadow-card">
-          <h3 class="font-semibold mb-4">Top Submission Categories</h3>
-          <canvas id="topCategoriesChart" class="w-full h-64"></canvas>
-        </div>
-      </div>
->
+  <!-- KPI -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-xl p-4 shadow-card text-center">
+      <p class="text-sm text-gray-600">Total Submissions</p>
+      <p class="text-2xl font-bold" id="totalSubmissions">0</p>
     </div>
+    <div class="bg-white rounded-xl p-4 shadow-card text-center">
+      <p class="text-sm text-gray-600">Pending</p>
+      <p class="text-2xl font-bold text-yellow-500" id="pendingSubmissions">0</p>
+    </div>
+    <div class="bg-white rounded-xl p-4 shadow-card text-center">
+      <p class="text-sm text-gray-600">Approved</p>
+      <p class="text-2xl font-bold text-green-500" id="approvedSubmissions">0</p>
+    </div>
+    <div class="bg-white rounded-xl p-4 shadow-card text-center">
+      <p class="text-sm text-gray-600">Denied</p>
+      <p class="text-2xl font-bold text-red-500" id="deniedSubmissions">0</p>
+    </div>
+  </div>
+
+  <!-- Graph only -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <div class="bg-white p-5 rounded-xl shadow-card">
+      <h3 class="font-semibold mb-4">Submission Trend</h3>
+      <canvas id="submissionTrendChart" class="w-full h-64"></canvas>
+    </div>
+
+    <div class="bg-white p-5 rounded-xl shadow-card">
+      <h3 class="font-semibold mb-4">Top Submission Categories</h3>
+      <canvas id="topCategoriesChart" class="w-full h-64"></canvas>
+    </div>
+  </div>
+
+</div>
+
 
     <!-- users tab -->
     <div id="user" class="tab-content hidden">
@@ -351,35 +357,44 @@ const dashboardData = {
     </div>
 
     <!-- reward tab -->
-    <div id="reward" class="tab-content hidden">
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <div class="bg-white p-5 rounded-xl shadow-card text-center">
-          <p class="text-sm text-gray-600">Total Rewards Redeemed</p>
-          <p id="totalRewardsRedeemed" class="text-2xl font-bold mt-2">0</p>
-        </div>
-        <div class="bg-white p-5 rounded-xl shadow-card text-center">
-          <p class="text-sm text-gray-600">Total Rewards Stock</p>
-          <p id="totalRewardsStock" class="text-2xl font-bold mt-2">0</p>
-        </div>
-        <div class="bg-white p-5 rounded-xl shadow-card text-center">
-          <p class="text-sm text-gray-600">Low Stock Alerts</p>
-          <p id="lowStockCount" class="text-2xl font-bold text-red-500 mt-2">0</p>
-        </div>
-      </div>
+<!-- Reward Tab (NO TABLE VERSION) -->
+<div id="reward" class="tab-content hidden">
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="bg-white p-5 rounded-xl shadow-card h-[350px]">
-          <h3 class="font-semibold mb-4">Redeemed by Type</h3>
-          <canvas id="redeemedByTypeChart" class="w-full h-full"></canvas>
-        </div>
-        <div class="bg-white p-5 rounded-xl shadow-card h-[350px]">
-          <h3 class="font-semibold mb-4">Redemptions Trend</h3>
-          <canvas id="redemptionsTrendChart" class="w-full h-full"></canvas>
-        </div>
-      </div>
-
-
+  <!-- KPI cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+    <div class="bg-white p-5 rounded-xl shadow-card text-center">
+      <p class="text-sm text-gray-600">Total Rewards Redeemed</p>
+      <p id="totalRewardsRedeemed" class="text-2xl font-bold mt-2"></p>
     </div>
+
+    <div class="bg-white p-5 rounded-xl shadow-card text-center">
+      <p class="text-sm text-gray-600">Total Rewards Stock</p>
+      <p id="totalRewardsStock" class="text-2xl font-bold mt-2"></p>
+    </div>
+
+    <div class="bg-white p-5 rounded-xl shadow-card text-center">
+      <p class="text-sm text-gray-600">Low Stock Alerts</p>
+      <p id="lowStockCount" class="text-2xl font-bold text-red-500 mt-2"></p>
+    </div>
+  </div>
+
+  <!-- Graph -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+    <div class="bg-white p-5 rounded-xl shadow-card h-[350px]">
+      <h3 class="font-semibold mb-4">Redeemed by Type</h3>
+      <canvas id="redeemedByTypeChart" class="w-full h-full"></canvas>
+    </div>
+
+    <div class="bg-white p-5 rounded-xl shadow-card h-[350px]">
+      <h3 class="font-semibold mb-4">Redemptions Trend</h3>
+      <canvas id="redemptionsTrendChart" class="w-full h-full"></canvas>
+    </div>
+
+  </div>
+
+</div>
+
 
   </div>
 </div>
@@ -406,34 +421,29 @@ loadSummaryCards();
 // Tab controller & lazy init
 const tabInitialized = { charts:false, user:false, tables:false, reward:false };
 
-function showTab(tab){
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-  document.getElementById(tab).classList.remove('hidden');
+function showTab(tab) {
 
-  // header active btn
-  ['charts','user','tables','reward'].forEach(t=>{
-    const btn = document.getElementById('tab-' + t);
-    if(!btn) return;
-    if(t===tab){ btn.classList.add('border-b-2','border-blue-600'); btn.classList.remove('text-gray-600'); btn.classList.add('text-blue-600'); }
-    else { btn.classList.remove('border-b-2','border-blue-600','text-blue-600'); btn.classList.add('text-gray-600'); }
-  });
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.getElementById(tab).classList.remove('hidden');
 
-  if(!tabInitialized[tab]){
-    if(tab==='charts') initGrowthChart();
-    if(tab==='user') initUsersTab();
-    if(tab==='tables') initSubmissionTab();
-    if(tab==='reward') initRewardTab();
-    tabInitialized[tab] = true;
-  }
+    if (!tabInitialized[tab]) {
+        if (tab === 'charts') initGrowthChart();
+        if (tab === 'user') initUsersTab();
+        if (tab === 'tables') initSubmissionTab();
+        if (tab === 'reward') initRewardTab();
 
-  // resize charts slightly later
-  setTimeout(()=> {
-    if(window.dashboardCharts?.growth) window.dashboardCharts.growth.resize?.();
-    Object.values(window.usersCharts || {}).forEach(c => c.resize?.());
-    Object.values(window.submissionCharts || {}).forEach(c => c.resize?.());
-    Object.values(window.rewardCharts || {}).forEach(c => c.resize?.());
-  }, 100);
+        tabInitialized[tab] = true;
+    }
+
+    // ⭐关键补充：Chart.js 必须强制 resize 才能显示
+    setTimeout(() => {
+        if (tab === 'tables') {
+            if (window.submissionCharts?.trend) window.submissionCharts.trend.resize();
+            if (window.submissionCharts?.cat) window.submissionCharts.cat.resize();
+        }
+    }, 200);
 }
+
 
 // default open
 showTab('charts');
@@ -499,22 +509,7 @@ function initSubmissionTab(){
   document.getElementById('approvedSubmissions').innerText = dashboardData.submissionCounts?.Approved ?? 0;
   document.getElementById('deniedSubmissions').innerText = dashboardData.submissionCounts?.Denied ?? 0;
 
-  // recent submissions table
-  const tbody = document.getElementById('recentSubmissionsBody');
-  tbody.innerHTML = '';
-  (dashboardData.recentSubmissions || []).forEach(sub => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="px-4 py-2">${sub.username ?? '-'}</td>
-      <td class="px-4 py-2">${sub.teamName ?? '-'}</td>
-      <td class="px-4 py-2">${sub.challengeTitle ?? '-'}</td>
-      <td class="px-4 py-2">${sub.status ?? '-'}</td>
-      <td class="px-4 py-2">${sub.uploaded_at ?? sub.uploadedAt ?? '-'}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  // submission trend chart
+  // Trend Chart
   const ctxTrend = document.getElementById('submissionTrendChart').getContext('2d');
   const labels = (dashboardData.submissionTrend || []).map(d => d.day);
   const pending = (dashboardData.submissionTrend || []).map(d => d.pending || 0);
@@ -524,25 +519,33 @@ function initSubmissionTab(){
   window.submissionCharts = {};
   window.submissionCharts.trend = new Chart(ctxTrend, {
     type: 'line',
-    data: { labels, datasets:[
-      { label:'Pending', data: pending, borderColor:'#FBBF24', fill:true, backgroundColor:'rgba(251,191,36,0.15)' },
-      { label:'Approved', data: approved, borderColor:'#22C55E', fill:true, backgroundColor:'rgba(34,197,94,0.12)' },
-      { label:'Denied', data: denied, borderColor:'#EF4444', fill:true, backgroundColor:'rgba(239,68,68,0.12)' }
-    ]},
-    options: { responsive:true }
+    data: {
+      labels,
+      datasets: [
+        { label:'Pending', data: pending, borderColor:'#FBBF24', fill:true },
+        { label:'Approved', data: approved, borderColor:'#22C55E', fill:true },
+        { label:'Denied', data: denied, borderColor:'#EF4444', fill:true }
+      ]
+    },
+    options:{ responsive:true }
   });
 
-  // top categories
+  // Category Chart
   const ctxCat = document.getElementById('topCategoriesChart').getContext('2d');
   window.submissionCharts.cat = new Chart(ctxCat, {
     type:'bar',
     data:{
       labels: (dashboardData.topCategories||[]).map(c=>c.category),
-      datasets:[{ label:'Submissions', data:(dashboardData.topCategories||[]).map(c=>c.cnt), backgroundColor:'#3B82F6' }]
+      datasets:[{
+        label:'Submissions',
+        data:(dashboardData.topCategories||[]).map(c=>c.cnt),
+        backgroundColor:'#3B82F6'
+      }]
     },
     options:{ indexAxis:'y', responsive:true }
   });
 }
+
 
 /* ===========================
    Users Tab
@@ -615,28 +618,13 @@ function initUsersTab(){
    Reward Tab
    =========================== */
 function initRewardTab(){
-  window.rewardCharts = {};
-
   document.getElementById('totalRewardsRedeemed').innerText = dashboardData.totalRedeemed ?? 0;
   document.getElementById('totalRewardsStock').innerText = dashboardData.totalStock ?? 0;
   document.getElementById('lowStockCount').innerText = (dashboardData.lowStockRewards||[]).length;
 
-  // populate top redeemers
-  const topTable = document.getElementById('topRedeemersTable');
-  topTable.innerHTML = '';
-  (dashboardData.topRedeemers || []).forEach(r => {
-    topTable.innerHTML += `<tr><td class="px-4 py-2 border">${r.firstName}</td><td class="px-4 py-2 border">${r.cnt}</td></tr>`;
-  });
-
-  // low stock table
-  const lowTable = document.getElementById('lowStockTable');
-  lowTable.innerHTML = '';
-  (dashboardData.lowStockRewards || []).forEach(r => {
-    lowTable.innerHTML += `<tr><td class="px-4 py-2 border">${r.rewardName}</td><td class="px-4 py-2 border text-red-500 font-bold">${r.stockQuantity}</td></tr>`;
-  });
-
-  // redeemed by type chart
+  // Donut chart
   const doughCtx = document.getElementById('redeemedByTypeChart').getContext('2d');
+  window.rewardCharts = {};
   window.rewardCharts.type = new Chart(doughCtx, {
     type:'doughnut',
     data:{
@@ -646,16 +634,19 @@ function initRewardTab(){
     options:{ responsive:true }
   });
 
-  // redemptions trend (placeholder: reuse submissionTrend.approved)
+  // Redemption trend chart
   const trendCtx = document.getElementById('redemptionsTrendChart').getContext('2d');
   const labels = (dashboardData.submissionTrend || []).map(d=>d.day);
   const redData = (dashboardData.submissionTrend || []).map(d=>d.approved || 0);
+
   window.rewardCharts.trend = new Chart(trendCtx, {
     type:'line',
     data:{ labels, datasets:[{ label:'Redemptions', data:redData, borderColor:'#16A34A', fill:true }]},
     options:{ responsive:true }
   });
 }
+
+
 </script>
 
 </body>
