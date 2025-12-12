@@ -43,7 +43,7 @@ while($row = $statQuery->fetch_assoc()){
 }
 
 // --- PAGINATION & FILTER LOGIC ---
-$limit = 10;
+$limit = 10; // Requirement 2: 10 rewards per page
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $offset = ($page - 1) * $limit;
 
@@ -73,10 +73,21 @@ if (!empty($filterCat)) {
     $params[] = $filterCat;
 }
 
+// UPDATED FILTER LOGIC HERE
 if (!empty($filterStat)) {
-    if ($filterStat == 'low_stock') { $cond = " AND stockQuantity < 5"; $sql .= $cond; $countSql .= $cond; } 
-    elseif ($filterStat == 'active') { $cond = " AND is_active = 1"; $sql .= $cond; $countSql .= $cond; } 
-    elseif ($filterStat == 'inactive') { $cond = " AND is_active = 0"; $sql .= $cond; $countSql .= $cond; }
+    if ($filterStat == 'low_stock') { 
+        $cond = " AND stockQuantity < 5"; 
+        $sql .= $cond; 
+        $countSql .= $cond; 
+    } elseif ($filterStat == 'active') { 
+        $cond = " AND is_active = 1"; 
+        $sql .= $cond; 
+        $countSql .= $cond; 
+    } elseif ($filterStat == 'inactive') { 
+        $cond = " AND is_active = 0"; 
+        $sql .= $cond; 
+        $countSql .= $cond; 
+    }
 }
 
 $sql .= " ORDER BY rewardID DESC LIMIT ?, ?";
@@ -86,9 +97,12 @@ $params[] = $limit;
 
 $stmtCount = $conn->prepare($countSql);
 if (!empty($types)) {
-    $countTypes = substr($types, 0, -2);
-    $countParams = array_slice($params, 0, -2);
-    if (!empty($countTypes)) $stmtCount->bind_param($countTypes, ...$countParams);
+    $countTypesLength = strlen($types) - 2;
+    if ($countTypesLength > 0) {
+        $countTypes = substr($types, 0, $countTypesLength);
+        $countParams = array_slice($params, 0, count($params) - 2);
+        $stmtCount->bind_param($countTypes, ...$countParams);
+    }
 }
 $stmtCount->execute();
 $totalRecords = $stmtCount->get_result()->fetch_assoc()['total'];
@@ -187,9 +201,10 @@ include "includes/layout_start.php";
         .bg-blue-light { background: #eff6ff; color: #2563eb; }
         .bg-red-light { background: #fef2f2; color: #ef4444; }
         .bg-green-light { background: #f0fdf4; color: #16a34a; }
+        .bg-gray-light { background: #f3f4f6; color: #6b7280; }
 
-        th { font-weight: 600; color: #6b7280; font-size: 13px; text-transform: uppercase; border-bottom: 2px solid #e5e9f2; padding: 12px 8px; }
-        td { font-size: 14px; vertical-align: middle; padding: 8px; border-bottom: 1px solid #f8fafc; }
+        th { font-weight: 600; color: #6b7280; font-size: 13px; text-transform: uppercase; border-bottom: 2px solid #e5e9f2; padding: 12px 8px; white-space: nowrap; }
+        td { font-size: 14px; vertical-align: middle; padding: 12px 8px; border-bottom: 1px solid #f8fafc; }
         .reward-img-preview { width: 50px; height: 50px; border-radius: 8px; object-fit: cover; border: 1px solid #e2e8f0; }
         .hidden { display: none !important; }
         .low-stock-row { background-color: #fff1f2; }
@@ -198,6 +213,139 @@ include "includes/layout_start.php";
         .search-bar iconify-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
         .pagination .page-item.active .page-link { background-color: #2563eb; border-color: #2563eb; }
         .pagination .page-link { color: #64748b; font-size: 14px; }
+        
+        /* New Styling for Add Reward Form */
+        .fancy-form-container {
+            background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+            border: 1px solid #e2e8f0;
+        }
+        .form-section-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #475569;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .fancy-input {
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            padding: 10px 15px;
+            transition: all 0.3s;
+        }
+        .fancy-input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        .fancy-label {
+            font-weight: 600;
+            color: #64748b;
+            margin-bottom: 5px;
+            display: block;
+        }
+        .upload-box {
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            background: #f8fafc;
+            transition: all 0.3s;
+            cursor: pointer;
+            position: relative;
+        }
+        .upload-box:hover {
+            border-color: #2563eb;
+            background: #eff6ff;
+        }
+        .upload-box iconify-icon {
+            font-size: 32px;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+        .upload-box span {
+            font-size: 12px;
+            color: #64748b;
+            display: block;
+        }
+        .upload-box input[type="file"] {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 24px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #cbd5e1;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #22c55e;
+        }
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+        .btn-create {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+        }
+        .btn-create:hover {
+            background: #1d4ed8;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+        }
+        /* Add Reward Card */
+        .add-reward-card {
+            background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+            border: 2px dashed #3b82f6;
+            color: #2563eb;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 20px;
+        }
+        .add-reward-card:hover {
+            background: #dbeafe;
+            transform: translateY(-2px);
+        }
     </style>
 </head>
 <body>
@@ -217,36 +365,15 @@ include "includes/layout_start.php";
                     <div><div class="stat-label">Active Items</div><div class="stat-val text-success"><?php echo $stats['active']; ?></div></div>
                     <div class="stat-icon bg-green-light"><iconify-icon icon="solar:check-circle-bold-duotone"></iconify-icon></div>
                 </a>
+                <a href="rewardAdmin.php?filter=inactive" class="stat-card <?php echo ($filterStat == 'inactive') ? 'active' : ''; ?>">
+                    <div><div class="stat-label">Inactive Items</div><div class="stat-val text-secondary"><?php echo $stats['inactive']; ?></div></div>
+                    <div class="stat-icon bg-gray-light"><iconify-icon icon="solar:forbidden-circle-bold-duotone"></iconify-icon></div>
+                </a>
             </div>
 
-            <!-- 4. UPDATED "ADD REWARD" FORM -->
-            <div class="card-box">
-                <h4 class="mb-3">Add New Reward</h4>
-                <form action="" method="POST" enctype="multipart/form-data" class="row g-3">
-                    <div class="col-md-5"><label class="form-label small">Reward Name</label><input type="text" name="rewardName" class="form-control form-control-sm" required></div>
-                    <div class="col-md-7"><label class="form-label small">Description</label><input type="text" name="description" class="form-control form-control-sm" required></div>
-                    <div class="col-md-2"><label class="form-label small">Stock</label><input type="number" name="stockQuantity" class="form-control form-control-sm" required></div>
-                    <div class="col-md-2"><label class="form-label small">Points</label><input type="number" name="pointRequired" class="form-control form-control-sm" required></div>
-                    
-                    <!-- Updated Category Logic -->
-                    <div class="col-md-2">
-                        <label class="form-label small">Category</label>
-                        <select name="category" class="form-select form-select-sm" required onchange="togglePrefixField('add', this.value)">
-                            <option value="product">Product</option>
-                            <option value="voucher">Voucher</option>
-                        </select>
-                    </div>
-                    
-                    <div class="col-md-3"><label class="form-label small">Image</label><input type="file" name="rewardImage" class="form-control form-control-sm" accept="image/*"></div>
-                    
-                    <!-- 5. NEW PREFIX FIELD (Replaces Barcode Upload) -->
-                    <div class="col-md-3 hidden" id="addPrefixField">
-                        <label class="form-label small text-primary">Voucher Prefix</label>
-                        <input type="text" name="prefix" class="form-control form-control-sm border-primary" placeholder="e.g. NK-ECO-" title="Sets the barcode prefix for this voucher">
-                    </div>
-                    
-                    <div class="col-12 d-flex align-items-center gap-3"><div class="form-check"><input class="form-check-input" type="checkbox" name="is_active" value="1" checked><label class="form-check-label small">Active</label></div><button type="submit" name="addReward" class="btn btn-primary btn-sm ms-auto px-4">Create Reward</button></div>
-                </form>
+            <!-- "Add New Reward" Trigger Card -->
+            <div class="add-reward-card" data-bs-toggle="modal" data-bs-target="#addRewardModal">
+                <iconify-icon icon="solar:add-circle-bold" style="font-size: 24px;" class="me-2"></iconify-icon> Add New Reward
             </div>
 
             <div class="card-box">
@@ -262,7 +389,8 @@ include "includes/layout_start.php";
 
                 <div class="table-responsive">
                     <table class="table table-hover align-middle">
-                        <thead><tr><th style="width: 60px;">Img</th><th>ID</th><th>Name / Desc</th><th>Stock</th><th>Points</th><th>Cat</th><th>Options</th><th>Status</th><th style="min-width: 140px;">Action</th></tr></thead>
+                        <!-- Updated widths -->
+                        <thead><tr><th style="width: 50px;">Img</th><th style="width: 50px;">ID</th><th>Name / Desc</th><th style="width: 70px;">Stock</th><th style="width: 80px;">Points</th><th style="width: 100px;">Cat</th><th style="width: 130px;">Options</th><th style="width: 60px;">Status</th><th style="width: 80px;">Action</th></tr></thead>
                         <tbody>
                             <?php if ($rewards->num_rows > 0) { while ($row = $rewards->fetch_assoc()) { 
                                 $imgSrc = !empty($row['imageURL']) ? $row['imageURL'] : 'upload/reward_placeholder.png';
@@ -272,31 +400,34 @@ include "includes/layout_start.php";
                                     <td><img src="<?php echo htmlspecialchars($imgSrc); ?>" class="reward-img-preview" alt="Img"></td>
                                     <td><small class="text-muted">#<?php echo $row['rewardID']; ?></small></td>
                                     <form action="" method="POST" enctype="multipart/form-data">
+                                        <!-- Reduced width for Name/Desc Column by using styles directly if needed, but table handles dynamic width -->
                                         <td>
                                             <input type="hidden" name="rewardID" value="<?php echo $row['rewardID']; ?>">
                                             <input type="text" name="rewardName" class="form-control form-control-sm mb-1 fw-bold" value="<?php echo htmlspecialchars($row['rewardName']); ?>" required>
                                             <input type="text" name="description" class="form-control form-control-sm text-muted" value="<?php echo htmlspecialchars($row['description']); ?>" required>
                                         </td>
-                                        <td><input type="number" name="stockQuantity" class="form-control form-control-sm <?php echo $lowStockClass ? 'border-danger text-danger' : ''; ?>" value="<?php echo $row['stockQuantity']; ?>" style="width: 60px;" required></td>
-                                        <td><input type="number" name="pointRequired" class="form-control form-control-sm" value="<?php echo $row['pointRequired']; ?>" style="width: 60px;" required></td>
-                                        <td><select name="category" class="form-select form-select-sm" style="width: 85px;" required><option value="product" <?php echo ($row['category'] == 'product') ? 'selected' : ''; ?>>Prod</option><option value="voucher" <?php echo ($row['category'] == 'voucher') ? 'selected' : ''; ?>>Vouch</option></select></td>
+                                        <td><input type="number" name="stockQuantity" class="form-control form-control-sm <?php echo $lowStockClass ? 'border-danger text-danger' : ''; ?>" value="<?php echo $row['stockQuantity']; ?>" required></td>
+                                        <td><input type="number" name="pointRequired" class="form-control form-control-sm" value="<?php echo $row['pointRequired']; ?>" required></td>
+                                        <!-- Width set to 110px to fit 'Product'/'Voucher' -->
+                                        <td><select name="category" class="form-select form-select-sm" style="width: 110px;" required><option value="product" <?php echo ($row['category'] == 'product') ? 'selected' : ''; ?>>Product</option><option value="voucher" <?php echo ($row['category'] == 'voucher') ? 'selected' : ''; ?>>Voucher</option></select></td>
                                         <td>
                                             <div class="d-flex flex-column gap-1">
-                                                <input type="file" name="rewardImage" class="form-control form-control-sm" style="width: 130px; font-size:10px;">
+                                                <input type="file" name="rewardImage" class="form-control form-control-sm" style="font-size:10px;">
                                                 
                                                 <!-- 6. EDIT PREFIX (Replaces Barcode Upload) -->
                                                 <?php if($row['category'] == 'voucher'): ?>
                                                     <input type="text" name="prefix" class="form-control form-control-sm border-primary" 
-                                                           style="width: 130px; font-size:11px;" 
+                                                           style="font-size:11px;" 
                                                            value="<?php echo !empty($row['prefix']) ? htmlspecialchars($row['prefix']) : ''; ?>" 
-                                                           placeholder="Prefix (e.g. NK-)">
+                                                           placeholder="Prefix">
                                                 <?php endif; ?>
                                             </div>
                                         </td>
                                         <td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="is_active" value="1" <?php echo $row['is_active'] ? 'checked' : ''; ?>></div></td>
                                         <td>
                                             <div class="d-flex gap-2" style="white-space: nowrap;">
-                                                <button type="submit" name="editReward" class="btn btn-sm btn-light border" title="Save"><iconify-icon icon="solar:disk-bold-duotone" class="text-success"></iconify-icon> Save</button> 
+                                                <!-- Made button width auto and removed icon-only style to show 'Save' -->
+                                                <button type="submit" name="editReward" class="btn btn-sm btn-light border px-3" title="Save"><iconify-icon icon="solar:disk-bold-duotone" class="text-success me-1"></iconify-icon> Save</button> 
                                                 <a href="?deleteRewardID=<?php echo $row['rewardID']; ?>" onclick="return confirm('Delete?')" class="btn btn-sm btn-light border text-danger" title="Delete"><iconify-icon icon="solar:trash-bin-trash-bold-duotone"></iconify-icon></a>
                                             </div>
                                         </td>
@@ -319,8 +450,105 @@ include "includes/layout_start.php";
                 <?php endif; ?>
             </div>
         </div>
+
+<!-- Add Reward Modal -->
+<div class="modal fade" id="addRewardModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content fancy-form-container border-0 shadow-lg">
+      <div class="modal-header border-0 pb-0">
+        <div class="d-flex align-items-center">
+            <div class="bg-blue-light p-2 rounded-3 me-3"><iconify-icon icon="solar:add-circle-bold-duotone" style="font-size: 24px;"></iconify-icon></div>
+            <h5 class="modal-title fw-bold text-dark">Add New Reward</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-4">
+        <form action="" method="POST" enctype="multipart/form-data">
+            <div class="row g-4">
+                <!-- Left Column: Image Upload -->
+                <div class="col-md-4">
+                    <label class="fancy-label">Reward Image</label>
+                    <div class="upload-box" id="uploadBox">
+                        <input type="file" name="rewardImage" accept="image/*" onchange="previewImage(this)">
+                        <div id="uploadPlaceholder">
+                            <iconify-icon icon="solar:camera-add-linear"></iconify-icon>
+                            <span>Click or Drop Image</span>
+                        </div>
+                        <img id="imagePreview" src="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px; display: none;">
+                    </div>
+                </div>
+
+                <!-- Right Column: Details -->
+                <div class="col-md-8">
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <div class="form-section-title mt-0">Basic Info</div>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="fancy-label">Reward Name</label>
+                            <input type="text" name="rewardName" class="form-control fancy-input" placeholder="e.g. Eco-Friendly Water Bottle" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="fancy-label">Category</label>
+                            <select name="category" class="form-select fancy-input" required onchange="togglePrefixField('add', this.value)">
+                                <option value="product">Product</option>
+                                <option value="voucher">Voucher</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-12">
+                            <label class="fancy-label">Description</label>
+                            <textarea name="description" class="form-control fancy-input" rows="2" placeholder="Brief description..." required></textarea>
+                        </div>
+
+                        <div class="col-md-12 mt-3">
+                            <div class="form-section-title">Inventory & Value</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="fancy-label">Stock Quantity</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0" style="border-radius: 10px 0 0 10px; border-color: #cbd5e1;"><iconify-icon icon="solar:box-linear"></iconify-icon></span>
+                                <input type="number" name="stockQuantity" class="form-control fancy-input border-start-0" style="border-radius: 0 10px 10px 0;" placeholder="0" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="fancy-label">Points Required</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0" style="border-radius: 10px 0 0 10px; border-color: #cbd5e1;"><iconify-icon icon="solar:star-linear" class="text-warning"></iconify-icon></span>
+                                <input type="number" name="pointRequired" class="form-control fancy-input border-start-0" style="border-radius: 0 10px 10px 0;" placeholder="0" required>
+                            </div>
+                        </div>
+                        
+                        <!-- Voucher Prefix Field -->
+                        <div class="col-md-6 hidden" id="addPrefixField">
+                            <label class="fancy-label text-primary">Voucher Prefix</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-blue-light border-end-0" style="border-radius: 10px 0 0 10px; border-color: #cbd5e1;">#</span>
+                                <input type="text" name="prefix" class="form-control fancy-input border-start-0" style="border-radius: 0 10px 10px 0;" placeholder="e.g. NK-ECO-">
+                            </div>
+                        </div>
+
+                        <div class="col-12 mt-4 d-flex align-items-center justify-content-between border-top pt-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="is_active" value="1" checked>
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="text-muted small fw-bold">Active</span>
+                            </div>
+                            <button type="submit" name="addReward" class="btn-create">
+                                <iconify-icon icon="solar:add-circle-bold" class="me-1"></iconify-icon> Create
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+      </div>
     </div>
+  </div>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <!-- 7. Updated JS to toggle Prefix field instead of Barcode -->
 <script>
@@ -329,6 +557,17 @@ function togglePrefixField(t,v){
         const f=document.getElementById('addPrefixField');
         if(v.toLowerCase()==='voucher') f.classList.remove('hidden');
         else f.classList.add('hidden');
+    }
+}
+function previewImage(input) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('imagePreview').src = e.target.result;
+            document.getElementById('imagePreview').style.display = 'block';
+            document.getElementById('uploadPlaceholder').style.display = 'none';
+        }
+        reader.readAsDataURL(input.files[0]);
     }
 }
 </script>
