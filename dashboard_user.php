@@ -10,6 +10,20 @@ if (!isset($_SESSION['userID'])) {
 }
 
 
+$timeFilter = $_GET['time'] ?? 'all';
+$timeSQL = ""; 
+
+if ($timeFilter === '7') {
+    $timeSQL = " AND uploaded_at >= NOW() - INTERVAL 7 DAY ";
+}
+elseif ($timeFilter === '30') {
+    $timeSQL = " AND uploaded_at >= NOW() - INTERVAL 30 DAY ";
+}
+
+
+
+
+
 // --- 1. 获取用户总积分 (My Points) ---
 // --- Fetch User Points Safely ---
 $sql_points = "SELECT walletPoint AS totalPoints FROM user WHERE userID = ?";
@@ -40,8 +54,9 @@ $sql_subs = "
         SUM(CASE WHEN status = 'Denied' THEN 1 ELSE 0 END) AS deniedCount,
         COUNT(submissionID) AS totalSubmission
     FROM sub
-    WHERE userID = ?
+    WHERE userID = ? $timeSQL
 ";
+
 $stmt_subs = $conn->prepare($sql_subs);
 $stmt_subs->bind_param("i", $userID);
 $stmt_subs->execute();
@@ -53,17 +68,18 @@ $deniedCount = $res_subs['deniedCount'] ?? 0;
 $totalSubmission = $res_subs['totalSubmission'] ?? 0;
 $stmt_subs->close();
 
+
 // --- 3. 获取 Submission 详情 (用于 My Submissions Tab: Table) ---
 $submissionDetails = [];
 $sql_sub_details = "
-    SELECT 
-        s.status, s.pointEarned, s.reviewNote, s.uploaded_at, c.challengeTitle 
+    SELECT s.status, s.pointEarned, s.reviewNote, s.uploaded_at, c.challengeTitle
     FROM sub s
     JOIN challenge c ON s.challengeID = c.challengeID
-    WHERE s.userID = ?
+    WHERE s.userID = ? $timeSQL
     ORDER BY s.uploaded_at DESC
     LIMIT 20
 ";
+
 $stmt_sub_details = $conn->prepare($sql_sub_details);
 $stmt_sub_details->bind_param("i", $userID);
 $stmt_sub_details->execute();
@@ -329,11 +345,10 @@ if (isset($conn) && $conn->ping()) {
                     </div>
                      <div class="flex items-center gap-3">
                         <label class="text-sm text-gray-700">Filter:</label>
-                        <select id="statusFilter" class="border rounded px-2 py-1" onchange="applyFilter()">
-                            <option value="all" <?= $statusFilter === 'all' ? 'selected' : '' ?>>All</option>
-                            <option value="pending" <?= $statusFilter === 'pending' ? 'selected' : '' ?>>Pending</option>
-                            <option value="approved" <?= $statusFilter === 'approved' ? 'selected' : '' ?>>Approved</option>
-                            <option value="denied" <?= $statusFilter === 'denied' ? 'selected' : '' ?>>Denied</option>
+                        <select id="timeFilter" class="border rounded px-2 py-1" onchange="applyTimeFilter()">
+                            <option value="all" <?= $timeFilter === 'all' ? 'selected' : '' ?>>All</option>
+                            <option value="7" <?= $timeFilter === '7' ? 'selected' : '' ?>>Last 7 Days</option>
+                            <option value="30" <?= $timeFilter === '30' ? 'selected' : '' ?>>Last 30 Days</option>
                         </select>
 
                         <button onclick="window.location.reload()" class="bg-primary text-white px-3 py-1 rounded shadow">
@@ -403,7 +418,8 @@ if (isset($conn) && $conn->ping()) {
                     </div>
 
                     <div id="charts" class="tab-content p-4 space-y-6">                            
-                  <div class="bg-white shadow rounded p-4">
+                    <div class="bg-white shadow rounded p-4">
+                        
                     <div class="text-gray-500 mb-2">Team & Personal Rank</div>
                     
                     <?php if ($userHasTeam && !empty($teamRank)) : ?>
@@ -457,7 +473,7 @@ if (isset($conn) && $conn->ping()) {
                 <div>
                    <div id="user" class="tab-content hidden p-4 space-y-6">
                     
-                        div class="bg-white shadow rounded p-4">
+                        <div class="bg-white shadow rounded p-4">
                         <div class="text-gray-500 mb-2">Submission Status Overview</div>
                         <div id="submissionStatusBarChart" style="height: 250px;"></div>
                     </div>
@@ -507,6 +523,18 @@ if (isset($conn) && $conn->ping()) {
     </div>
 
 <script>
+
+    // apply time filter by reloading with ?time=
+function applyTimeFilter(){
+  const val = document.getElementById('timeFilter').value;
+  const url = new URL(window.location.href);
+  url.searchParams.set('time', val);
+  // preserve other query params if you want (e.g., status) - currently only time is used
+  window.location.href = url.toString();
+}
+
+
+
 document.addEventListener('DOMContentLoaded', function () {
 
     // ---------- Tab 切换函数 ----------
