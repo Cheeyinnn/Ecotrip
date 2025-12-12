@@ -53,7 +53,7 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
                 Admin Dashboard
             </a>
 
-            <div class="sidebar-nav-title">EcoTrip</div>
+            <div class="sidebar-nav-title">Challenge</div>
 
             <a href="view.php" class="sidebar-link <?= isActive('view.php') ?>">
                 <iconify-icon icon="solar:list-check-line-duotone"></iconify-icon>
