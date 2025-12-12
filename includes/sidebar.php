@@ -77,6 +77,31 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
                 Manage Teams
             </a>
 
+            <a href="leaderboard.php" class="sidebar-link <?= isActive('leaderboard.php') ?>">
+                <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
+                Leaderboard
+            </a>
+
+            <a href="LbDetail.php" class="sidebar-link <?= isActive('LbDetail.php') ?>">
+                <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
+                lbdetail
+            </a>
+
+            <a href="rewardAdmin.php" class="sidebar-link <?= isActive('rewardAdmin.php') ?>">
+                <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
+                rewardAdmin
+            </a>
+
+            <a href="reviewRR.php" class="sidebar-link <?= isActive('reviewRR.php') ?>">
+                <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
+                reviewRR
+            </a>
+
+            <a href="rewards.php" class="sidebar-link <?= isActive('rewards.php') ?>">
+                <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
+                rewards
+            </a>
+
         <?php endif; ?>
 
         <?php if ($role === 'moderator'): ?>
