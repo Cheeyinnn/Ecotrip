@@ -359,7 +359,7 @@ include "includes/layout_start.php";
 
     <div class="card shadow-sm p-4">
         <h5 class="card-title fw-bold">Team List</h5>
-        <p class="text-muted small mb-3">Manage teams, filter by size and sort them. aaaaa</p>
+        <p class="text-muted small mb-3">Manage teams, filter by size and sort them.</p>
 
         <!-- FILTER BAR (ADVANCED) -->
         <form method="get" class="row g-2 align-items-end mb-3">
