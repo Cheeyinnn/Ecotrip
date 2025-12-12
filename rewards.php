@@ -157,12 +157,6 @@ $requests_result = $conn->query("SELECT rr.redemptionID, rw.rewardName, rr.quant
 
 include "includes/layout_start.php";
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Rewards - EcoTrip</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
@@ -236,7 +230,6 @@ include "includes/layout_start.php";
 
         .hidden { display: none !important; }
     </style>
-</head>
 <body>
 
         <div class="content-wrapper">

@@ -128,12 +128,6 @@ $requests = $stmt->get_result();
 
 include 'includes/layout_start.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Review Requests - EcoTrip</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
     <style>
@@ -176,7 +170,6 @@ include 'includes/layout_start.php';
         .cat-voucher { background: #f3e8ff; color: #7e22ce; }
         h4.card-title { margin-bottom: 15px !important; font-size: 1.1rem; }
     </style>
-</head>
 <body>
         <div class="content-wrapper">
             <div class="stats-row">
