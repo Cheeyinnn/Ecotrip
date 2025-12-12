@@ -1,445 +1,799 @@
 <?php
-require "db.php"; // Include the database connection file
+session_start();
+require "db.php";
 
-/* -----------------------------
-   1. GET SCOPE (all, weekly, monthly)
------------------------------- */
-$scope = isset($_GET['scope']) ? $_GET['scope'] : 'all'; // Default to 'all' if no scope is selected
+if (!isset($_SESSION['userID'])) {
+    header("Location: login.php");
+    exit;
+}
+$userID = $_SESSION['userID'];
 
-// New parameters for monthly filter
-$currentMonth = date('m');
+// Fetch Current User
+$stmt = $conn->prepare("SELECT firstName, lastName, email, role, avatarURL, teamID FROM user WHERE userID = ?");
+$stmt->bind_param("i", $userID);
+$stmt->execute();
+$result = $stmt->get_result();
+$currentUser = $result->fetch_assoc();
+$userTeamID = $currentUser['teamID']; // Store for team rank check
+
+$avatarPath = 'upload/default.png';
+if (!file_exists(__DIR__ . '/' . $avatarPath)) {
+    if (file_exists(__DIR__ . '/uploads/default.png')) $avatarPath = 'uploads/default.png';
+}
+if (!empty($currentUser['avatarURL']) && file_exists(__DIR__ . '/' . $currentUser['avatarURL'])) {
+    $avatarPath = $currentUser['avatarURL'];
+}
+
+// --- LEADERBOARD LOGIC ---
+
+// 1. Handle Scope (Time)
+$scope = isset($_GET['scope']) ? $_GET['scope'] : 'all';
+$currentMonth = date('m'); 
 $currentYear = date('Y');
 $selectedMonth = isset($_GET['month']) ? (int)$_GET['month'] : $currentMonth;
 $selectedYear = isset($_GET['year']) ? (int)$_GET['year'] : $currentYear;
 
-// Date Filters initialization
-$dateFilterUser = "";
-$dateFilterTeam = ""; 
-$scopeDescription = "";
+// 2. Handle View (Users vs Teams)
+$activeView = isset($_GET['view']) && $_GET['view'] === 'teams' ? 'teams' : 'users';
 
-// weekly = last 7 days
+$dateCondition = ""; // Used for SQL injection in Calculated Path
+
 if ($scope == "weekly") {
-    $dateFilterUser = "AND t.generate_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)";
-    $dateFilterTeam = "AND t2.generate_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)";
-    $scopeDescription = "Week";
+    // Current Week (Monday - Sunday)
+    $dateCondition = "AND pt.generate_at >= DATE_SUB(NOW(), INTERVAL WEEKDAY(NOW()) DAY)";
 }
-
-// monthly = specific month chosen by user
 if ($scope == "monthly") {
-    // Calculate the start and end timestamps for the selected month/year
+    // Selected Month Logic
     $startDate = date('Y-m-01', mktime(0, 0, 0, $selectedMonth, 1, $selectedYear));
-    $endDate = date('Y-m-t', mktime(0, 0, 0, $selectedMonth, 1, $selectedYear)); // 't' gives number of days in the month
-
-    // Adjust SQL filters to use the specific month range
-    $dateFilterUser = "AND t.generate_at BETWEEN '$startDate 00:00:00' AND '$endDate 23:59:59'";
-    $dateFilterTeam = "AND t2.generate_at BETWEEN '$startDate 00:00:00' AND '$endDate 23:59:59'";
-    
-    // Set description for the header
-    $scopeDescription = date('F Y', mktime(0, 0, 0, $selectedMonth, 1, $selectedYear));
+    $endDate = date('Y-m-t', mktime(0, 0, 0, $selectedMonth, 1, $selectedYear));
+    $dateCondition = "AND pt.generate_at BETWEEN '$startDate 00:00:00' AND '$endDate 23:59:59'";
 }
 
-/* -----------------------------
-   2. USER LEADERBOARD (SUM BY TRANSACTIONS OR TOTAL POINTS)
------------------------------- */
+// --- USER LEADERBOARD QUERY ---
 if ($scope == "all") {
-    // Overall Leaderboard based on totalPoints in the user table
-    $user_sql = "
-        SELECT 
-            u.userID,
-            u.firstName,
-            u.avatarURL,
-            u.totalPoints,
-            team.teamName
-        FROM user u
-        LEFT JOIN team team ON u.teamID = team.teamID
-        WHERE u.role = 'member'
-        ORDER BY u.totalPoints DESC -- Order by totalPoints from the user table
-    ";
+    // FAST PATH: Use 'scorePoint' column directly
+    $user_sql = "SELECT 
+                    u.userID, 
+                    u.firstName, 
+                    u.avatarURL, 
+                    u.scorePoint, 
+                    team.teamName 
+                 FROM user u 
+                 LEFT JOIN team team ON u.teamID = team.teamID 
+                 WHERE u.role = 'member' AND u.scorePoint > 0
+                 ORDER BY u.scorePoint DESC";
 } else {
-    // Weekly and Monthly Leaderboards based on points earned in pointtransaction table
-    $user_sql = "
-        SELECT 
-            u.userID,
-            u.firstName,
-            u.avatarURL,
-            COALESCE(SUM(t.pointsTransaction), 0) AS totalPoints,
-            team.teamName
-        FROM user u
-        LEFT JOIN pointtransaction t ON u.userID = t.userID AND t.transactionType = 'earn'
-        LEFT JOIN team team ON u.teamID = team.teamID
-        WHERE u.role = 'member'
-            $dateFilterUser
-        GROUP BY u.userID, u.firstName, u.avatarURL, team.teamName
-        ORDER BY totalPoints DESC -- Order by totalPoints from the pointtransaction table
-    ";
+    // CALCULATED PATH: Use 'pointtransaction' history
+    // FIX: Added "AND pt.transactionType = 'earn'" to ensure we only sum EARNINGS
+    $user_sql = "SELECT 
+                    u.userID, 
+                    u.firstName, 
+                    u.avatarURL, 
+                    COALESCE(SUM(pt.pointsTransaction), 0) AS scorePoint, 
+                    team.teamName 
+                 FROM user u 
+                 LEFT JOIN pointtransaction pt ON u.userID = pt.userID AND pt.transactionType = 'earn' $dateCondition
+                 LEFT JOIN team team ON u.teamID = team.teamID 
+                 WHERE u.role = 'member' 
+                 GROUP BY u.userID, u.firstName, u.avatarURL, team.teamName 
+                 HAVING scorePoint > 0
+                 ORDER BY scorePoint DESC";
 }
+
 $user_result = $conn->query($user_sql);
-
-// Separate top 3 users from the rest
-$top3Users = [];
-$remainingUsers = [];
+$top3Users = []; 
+$remainingUsers = []; 
 $rank = 1;
-while($row = $user_result->fetch_assoc()) {
-    if ($rank <= 3) {
-        $top3Users[] = $row;
-    } else {
-        $remainingUsers[] = $row;
+$myUserRank = 0; 
+$myUserPoints = 0;
+
+if ($user_result) {
+    while($row = $user_result->fetch_assoc()) { 
+        if ($row['userID'] == $userID) {
+            $myUserRank = $rank;
+            $myUserPoints = $row['scorePoint'];
+        }
+        if ($rank <= 3) $top3Users[] = $row; 
+        else $remainingUsers[] = $row; 
+        $rank++; 
     }
-    $rank++;
 }
 
-
-/* -----------------------------
-   3. TEAM LEADERBOARD (SUM OF MEMBERS’ POINTS)
------------------------------- */
+// --- TEAM LEADERBOARD QUERY ---
 if ($scope == "all") {
-    // Overall Team Leaderboard based on totalPoints in the user table
-    $team_sql = "
-        SELECT 
-            t.teamID,
-            t.teamName,
-            COALESCE(SUM(u.totalPoints), 0) AS teamTotalPoints,
-            COUNT(DISTINCT u.userID) AS memberCount -- Total number of members in the team
-        FROM team t
-        LEFT JOIN user u ON u.teamID = t.teamID
-        WHERE u.role = 'member'
-        GROUP BY t.teamID, t.teamName
-        ORDER BY teamTotalPoints DESC -- Order by totalPoints of all members in the team
-    ";
+    // FAST PATH: Sum of members' 'scorePoint'
+    $team_sql = "SELECT 
+                    t.teamID, 
+                    t.teamName, 
+                    COALESCE(SUM(u.scorePoint), 0) AS scorePoint, 
+                    COUNT(DISTINCT u.userID) AS memberCount 
+                 FROM team t 
+                 LEFT JOIN user u ON u.teamID = t.teamID 
+                 WHERE u.role = 'member' 
+                 GROUP BY t.teamID, t.teamName 
+                 HAVING scorePoint > 0
+                 ORDER BY scorePoint DESC";
 } else {
-    // Weekly or Monthly Team Leaderboard
-    $team_sql = "
-        SELECT 
-            t.teamID,
-            t.teamName,
-            COALESCE(SUM(t2.pointsTransaction), 0) AS teamTotalPoints,
-            
-            -- FIX 1: Use a subquery to get the TOTAL member count (unfiltered by transaction date)
-            (
-                SELECT COUNT(u_sub.userID) 
-                FROM user u_sub 
-                WHERE u_sub.teamID = t.teamID AND u_sub.role = 'member'
-            ) AS memberCount, 
-            
-            -- FIX 2: Active members are those who appear in the main filtered query
-            COUNT(DISTINCT u.userID) AS activeMemberCount 
-            
-        FROM team t
-        LEFT JOIN user u ON u.teamID = t.teamID
-        LEFT JOIN pointtransaction t2 ON t2.userID = u.userID AND t2.transactionType = 'earn'
-        
-        -- The WHERE clause filters transactions for the scope (weekly/monthly).
-        -- Because this WHERE clause filters on t2, it effectively makes the join for active members
-        -- and points calculation an INNER JOIN.
-        WHERE u.role = 'member'
-            $dateFilterTeam
-        GROUP BY t.teamID, t.teamName
-        ORDER BY teamTotalPoints DESC -- Order by total team points
-    ";
+    // CALCULATED PATH: Sum of members' transactions
+    // FIX: Added "AND pt.transactionType = 'earn'" here as well
+    $team_sql = "SELECT 
+                    t.teamID, 
+                    t.teamName, 
+                    COALESCE(SUM(pt.pointsTransaction), 0) AS scorePoint, 
+                    COUNT(DISTINCT u.userID) AS memberCount 
+                 FROM team t 
+                 LEFT JOIN user u ON u.teamID = t.teamID 
+                 LEFT JOIN pointtransaction pt ON pt.userID = u.userID AND pt.transactionType = 'earn' $dateCondition
+                 WHERE u.role = 'member' 
+                 GROUP BY t.teamID, t.teamName 
+                 HAVING scorePoint > 0
+                 ORDER BY scorePoint DESC";
 }
 
 $team_result = $conn->query($team_sql);
-
-// Separate top 3 teams from the rest
-$top3Teams = [];
-$remainingTeams = [];
+$top3Teams = []; 
+$remainingTeams = []; 
 $rank = 1;
-while($row = $team_result->fetch_assoc()) {
-    if ($rank <= 3) {
-        $top3Teams[] = $row;
-    } else {
-        $remainingTeams[] = $row;
+$myTeamRank = 0;
+$myTeamPoints = 0;
+$myTeamName = "";
+
+if ($team_result) {
+    while($row = $team_result->fetch_assoc()) { 
+        if ($userTeamID && $row['teamID'] == $userTeamID) {
+            $myTeamRank = $rank;
+            $myTeamPoints = $row['scorePoint'];
+            $myTeamName = $row['teamName'];
+        }
+        if ($rank <= 3) $top3Teams[] = $row; 
+        else $remainingTeams[] = $row; 
+        $rank++; 
     }
-    $rank++;
 }
 ?>
-
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Leaderboard</title>
+    <meta charset="UTF-8">
+    <title>Leaderboard - EcoTrip</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Chart.js Added -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; color: #333; }
-        .container {
-            width: 90%;
-            max-width: 1000px;
-            background: #fff;
-            margin: 30px auto;
-            padding: 25px;
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-        h2 { text-align: center; margin-bottom: 25px; color: #2c3e50; }
+        body { margin: 0; background: #f5f7fb; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; }
+        .layout-wrapper { display: flex; min-height: 100vh; }
+        .sidebar { width: 260px; background: #ffffff; border-right: 1px solid #e5e9f2; padding: 20px 16px; display: flex; flex-direction: column; }
+        .sidebar-brand { font-size: 20px; font-weight: 700; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
+        .sidebar-brand iconify-icon { font-size: 24px; color: #16a34a; } /* Eco Green */
+        .sidebar-nav-title { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 10px; margin-bottom: 4px; }
+        .sidebar-nav { list-style: none; padding-left: 0; margin: 0; flex-grow: 1; }
+        .sidebar-item { margin-bottom: 4px; }
+        .sidebar-link { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 999px; text-decoration: none; font-size: 14px; color: #475569; transition: background 0.15s ease, color 0.15s ease; font-weight: 500; }
+        .sidebar-link iconify-icon { font-size: 18px; }
+        .sidebar-link:hover { background: #f0fdf4; color: #16a34a; } /* Light Green Hover */
+        .sidebar-link.active { background: #dcfce7; color: #15803d; font-weight: 600; } /* Active Green */
+        .sidebar-footer { font-size: 12px; color: #64748b; border-top: 1px solid #e5e9f2; padding-top: 10px; margin-top: 12px; }
+        .main-content { flex: 1; display: flex; flex-direction: column; }
+        .topbar { background: #f5f7fb; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e5e9f2; }
+        .nav-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
+        .topbar-icon-btn { width: 34px; height: 34px; border-radius: 50%; border: none; background: #ffffff; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12); cursor: pointer; }
+        .content-wrapper { padding: 20px 24px 24px; }
+        .lb-container { background: #fff; padding: 25px; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); }
 
-        /* --- Filter & Tabs --- */
-        .filter-container { text-align: center; margin-bottom: 25px; }
-        .tab-btn, .filter-btn {
-            padding: 10px 20px;
-            cursor: pointer;
-            background: #e9ecef;
-            border: none;
-            margin: 0 5px;
-            border-radius: 25px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            color: #555;
-        }
-        .tab-btn:hover, .filter-btn:hover { background: #dbe2e8; }
-        .tab-btn.active, .filter-btn.active {
-            background: #3498db;
-            color: white;
-            box-shadow: 0 2px 5px rgba(52, 152, 219, 0.3);
-        }
-        .month-selector {
-            padding: 8px 12px;
-            border-radius: 20px;
-            border: 2px solid #e9ecef;
-            margin-left: 5px;
-            font-family: inherit;
-            color: #555;
-        }
-
-        /* --- Top 3 Podium Design --- */
-        .podium-container {
-            display: flex;
-            justify-content: center;
-            align-items: flex-end;
-            margin-bottom: 40px;
-            padding-top: 20px;
-        }
-        .podium-item {
-            text-align: center;
-            padding: 15px;
-            margin: 0 10px;
-            background: #fff;
-            border-radius: 15px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-            position: relative;
-            width: 130px;
-        }
-        .podium-item.rank-1 {
-            width: 150px;
-            padding-top: 25px;
-            z-index: 2;
-            background: linear-gradient(to bottom, #fff, #f9f9f9);
-            border: 2px solid #f1c40f; /* Gold border */
-        }
-        .podium-item.rank-2 { order: -1; border: 2px solid #bdc3c7; /* Silver border */ }
-        .podium-item.rank-3 { border: 2px solid #e67e22; /* Bronze border */ }
-
-        .podium-avatar-container {
-            position: relative;
-            width: 80px;
-            height: 80px;
-            margin: 0 auto 10px;
-        }
-        .rank-1 .podium-avatar-container { width: 100px; height: 100px; }
-        .podium-avatar {
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 3px solid #fff;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .rank-badge {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
+        /* HEADER CONTROLS STYLING */
+        .controls-header {
             display: flex;
             align-items: center;
-            justify-content: center;
-            color: #fff;
-            font-weight: bold;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            position: relative;
+        }
+        
+        /* IMPROVED SEGMENTED CONTROL */
+        .segmented-control {
+            display: inline-flex;
+            background: #f1f5f9; /* Light gray background */
+            padding: 5px;
+            border-radius: 50px; /* Pill shape */
+            gap: 0;
+            border: 1px solid #e2e8f0;
+        }
+        .segmented-btn {
+            padding: 8px 24px;
+            border: none;
+            background: transparent;
+            border-radius: 40px;
             font-size: 14px;
-            border: 2px solid #fff;
-        }
-        .rank-1 .rank-badge { background: #f1c40f; width: 35px; height: 35px; font-size: 16px; top: -8px; right: -8px; }
-        .rank-2 .rank-badge { background: #bdc3c7; }
-        .rank-3 .rank-badge { background: #e67e22; }
-
-        .podium-name { font-weight: bold; margin: 5px 0; font-size: 1.1em; }
-        .podium-points { color: #3498db; font-weight: bold; font-size: 1.2em; }
-        .podium-team { font-size: 0.9em; color: #7f8c8d; }
-
-        /* --- Leaderboard Table --- */
-        table { width: 100%; border-collapse: separate; border-spacing: 0 8px; margin-top: 10px; }
-        th {
-            text-align: left;
-            padding: 15px;
-            color: #7f8c8d;
             font-weight: 600;
-            border-bottom: 2px solid #e9ecef;
+            color: #64748b;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            text-decoration: none;
+            display: inline-block;
+            line-height: 1.5;
+            white-space: nowrap;
         }
-        td {
-            padding: 15px;
-            background: #fff;
-            vertical-align: middle;
+        .segmented-btn:hover {
+            color: #334155;
         }
-        tr { box-shadow: 0 2px 5px rgba(0,0,0,0.02); transition: transform 0.2s; }
-        tr:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
-        td:first-child { border-top-left-radius: 10px; border-bottom-left-radius: 10px; }
-        td:last-child { border-top-right-radius: 10px; border-bottom-right-radius: 10px; }
+        /* ACTIVE STATE - WHITE BG + GREEN TEXT */
+        .segmented-btn.active {
+            background: #ffffff;
+            color: #16a34a; /* Green text */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+            font-weight: 700;
+        }
+        
+        /* Leaderboard Title Design */
+        .title-wrapper {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .leaderboard-title {
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #0f172a 0%, #16a34a 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.03em;
+            margin: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .leaderboard-subtitle {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            margin-top: 5px;
+            font-weight: 500;
+        }
+        
+        /* Absolute center the date filters */
+        .date-filters-wrapper {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
 
-        .table-rank { font-weight: bold; color: #7f8c8d; text-align: center; }
-        .table-avatar { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; margin-right: 15px; vertical-align: middle; }
-        .table-name { font-weight: 600; }
-        .table-points { font-weight: bold; color: #3498db; }
-        .table-team { color: #7f8c8d; }
+        .podium-container { display: flex; justify-content: center; align-items: flex-end; margin-bottom: 40px; padding-top: 20px; }
+        .podium-item { 
+            text-align: center; 
+            padding: 15px; 
+            margin: 0 10px; 
+            background: #fff; 
+            border-radius: 20px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.03); 
+            position: relative; 
+            width: 140px; /* Standardized Width */
+            border: 1px solid #f1f5f9; 
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end; /* Align content to bottom of fixed height */
+            align-items: center; /* FIXED: Centers items horizontally in flex column */
+            min-height: 220px; /* Standardized Min-Height */
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .podium-item:hover {
+            transform: translateY(-5px);
+            border-color: #16a34a;
+        }
+        
+        /* Enforce Min-Heights for Podium Steps */
+        .podium-item.rank-1 { 
+            padding-top: 25px; /* Add padding to push rank 1 up */
+            z-index: 2; 
+            background: linear-gradient(to bottom, #ffffff, #f0fdf4); 
+            border: 2px solid #fbbf24; 
+        } 
+        .podium-item.rank-2 { 
+            order: -1; 
+            border: 2px solid #cbd5e1; 
+        } 
+        .podium-item.rank-3 { 
+            border: 2px solid #fdba74; 
+        } 
+
+        .podium-avatar { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 4px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 10px; }
+        .rank-1 .podium-avatar { width: 100px; height: 100px; }
+        
+        /* Text Truncation for Podium to prevent broken layout */
+        .podium-name {
+            font-weight: bold;
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 4px;
+        }
+        .podium-points {
+            color: #16a34a;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        .podium-sub {
+            color: #6b7280;
+            font-size: 12px;
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* MODIFIED: Rank Badges (Numbers) for Podium (No 1, 2, 3) 
+           Positioned to OVERLAP the bottom center of the avatar 
+        */
+        .rank-badge { 
+            position: absolute; 
+            bottom: -5px; /* Pull it up to overlap */
+            left: 50%; 
+            transform: translateX(-50%); 
+            width: 30px; 
+            height: 30px; 
+            border-radius: 50%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            color: #fff; 
+            font-weight: bold; 
+            border: 2px solid #fff; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+            font-size: 14px; 
+            z-index: 5;
+        }
+        .rank-1 .rank-badge { background: #fbbf24; font-size: 16px; width: 34px; height: 34px; bottom: -8px; }
+        .rank-2 .rank-badge { background: #94a3b8; }
+        .rank-3 .rank-badge { background: #f97316; }
+
+        .crown-icon { position: absolute; top: -40px; left: 50%; transform: translateX(-50%); font-size: 30px; z-index: 3; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); }
+        .rank-1 .crown-icon { color: #fbbf24; font-size: 38px; top: -48px; }
+        .rank-2 .crown-icon { color: #94a3b8; }
+        .rank-3 .crown-icon { color: #f97316; }
 
         .hidden { display: none; }
-    </style>
+        
+        .current-rank-bar {
+            background: linear-gradient(90deg, #22c55e, #15803d);
+            border-radius: 50px;
+            padding: 15px 25px;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 20px rgba(22, 163, 74, 0.25);
+            transition: transform 0.2s;
+            cursor: pointer; /* Added cursor pointer */
+        }
+        .current-rank-bar:hover {
+            transform: scale(1.005);
+        }
+        .cr-left { display: flex; align-items: center; gap: 15px; }
+        .cr-text { font-size: 16px; font-weight: 600; letter-spacing: 0.02em; }
+        .cr-rank { font-size: 28px; font-weight: 800; }
+        .cr-arrow { background: rgba(255,255,255,0.2); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 50%; margin-left: 10px; }
+        .cr-avatar { width: 45px; height: 45px; border-radius: 50%; border: 2px solid white; object-fit: cover; }
 
+        .leaderboard-list { display: flex; flex-direction: column; gap: 10px; }
+        
+        .leaderboard-header {
+            display: flex;
+            align-items: center;
+            padding: 0 25px 10px 25px; /* REVERTED PADDING */
+            color: #94a3b8;
+            font-weight: 700;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .leaderboard-card {
+            display: flex;
+            align-items: center;
+            background: #fff;
+            border: 1px solid #f1f5f9;
+            border-radius: 16px;
+            padding: 15px 25px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            /* REVERTED: Removed position relative */
+        }
+        .leaderboard-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.04);
+            border-color: #22c55e;
+        }
+
+        /* REVERTED: Standard Rank Styles for List Items */
+        .lb-col-rank { width: 60px; text-align: center; margin-right: 15px; font-weight: 800; font-style: italic; color: #1e293b; font-size: 24px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .leaderboard-header .lb-col-rank { font-size: 12px; font-style: normal; font-weight: 700; color: #94a3b8; }
+        
+        /* REVERTED: Standard Avatar Styles for List Items */
+        .lb-col-avatar { width: 75px; margin-right: 20px; display: flex; justify-content: center; }
+        .lb-avatar { width: 65px; height: 65px; border-radius: 50%; object-fit: cover; border: 2px solid #f8fafc; }
+        
+        /* REVERTED: Standard Name Styles for List Items */
+        .lb-col-name { flex: 2; font-weight: 700; color: #334155; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .leaderboard-header .lb-col-name { font-size: 12px; color: #94a3b8; }
+
+        .lb-col-team { flex: 1; color: #64748b; font-weight: 500; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .leaderboard-header .lb-col-team { font-size: 12px; color: #94a3b8; }
+
+        .lb-col-points { width: 140px; text-align: right; font-weight: 800; color: #1e293b; font-size: 20px; }
+        .leaderboard-header .lb-col-points { font-size: 12px; font-weight: 700; color: #94a3b8; }
+        .lb-points-label { font-size: 12px; font-weight: 600; color: #94a3b8; margin-left: 4px; }
+
+        @media (max-width: 992px) {
+            .controls-header { flex-direction: column; gap: 15px; }
+            .date-filters-wrapper { position: static; transform: none; }
+        }
+
+        @media (max-width: 768px) {
+            .lb-col-team { display: none; }
+            .leaderboard-header .lb-col-team { display: none; }
+        }
+        @media (max-width: 576px) {
+            .leaderboard-header { display: none; } 
+            .leaderboard-card { flex-wrap: wrap; justify-content: space-between; }
+            .lb-col-avatar { margin-right: 10px; width: 50px; }
+            .lb-col-name { min-width: 120px; }
+            .lb-col-rank { font-size: 20px; width: 40px; margin-right: 5px; }
+        }
+    </style>
     <script>
-        function showTab(tab) {
+        function showTab(view) {
             document.getElementById("userLeaderboard").classList.add("hidden");
             document.getElementById("teamLeaderboard").classList.add("hidden");
-            document.getElementById(tab).classList.remove("hidden");
+            
+            if (view === 'teams') {
+                document.getElementById("teamLeaderboard").classList.remove("hidden");
+            } else {
+                document.getElementById("userLeaderboard").classList.remove("hidden");
+            }
 
             document.getElementById("btnUsers").classList.remove("active");
             document.getElementById("btnTeams").classList.remove("active");
+            document.getElementById("btn" + view.charAt(0).toUpperCase() + view.slice(1)).classList.add("active");
 
-            document.getElementById("btn" + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add("active");
+            const url = new URL(window.location);
+            url.searchParams.set('view', view);
+            window.history.replaceState({}, '', url);
+
+            document.querySelectorAll('.date-filter-link').forEach(link => {
+                const currentHref = new URL(link.href, window.location.origin);
+                currentHref.searchParams.set('view', view);
+                link.href = currentHref.toString();
+            });
+
+            const viewInputs = document.querySelectorAll('.view-input-hidden');
+            viewInputs.forEach(input => input.value = view);
         }
+
+        // New function to scroll to rank
+        function scrollToRank(type, id) {
+            const selector = `[data-type="${type}"][data-id="${id}"]`;
+            const element = document.querySelector(selector);
+
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Optional: Add a highlight effect
+                element.style.transition = 'all 0.5s';
+                const originalTransform = element.style.transform;
+                element.style.transform = 'scale(1.05)';
+                element.style.boxShadow = '0 0 15px rgba(22, 163, 74, 0.5)';
+                setTimeout(() => {
+                    element.style.transform = originalTransform;
+                    element.style.boxShadow = ''; 
+                }, 1500);
+            } else {
+                console.log("Element not found for", selector);
+            }
+        }
+
+        // Logic for Detail Modal
+        document.addEventListener('DOMContentLoaded', function() {
+            let statsChart = null;
+
+            const modalElement = document.getElementById('detailModal');
+            const modal = new bootstrap.Modal(modalElement);
+
+            document.querySelectorAll('.podium-item, .leaderboard-card').forEach(item => {
+                item.addEventListener('click', function() {
+                    const id = this.getAttribute('data-id');
+                    const type = this.getAttribute('data-type');
+                    const name = this.getAttribute('data-name');
+                    
+                    document.getElementById('modalTitle').innerText = name + "'s Performance";
+                    
+                    // Fetch data - CHANGED FILENAME HERE
+                    fetch(`lbDetail.php?id=${id}&type=${type}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            // Update Chart
+                            const ctx = document.getElementById('statsChart').getContext('2d');
+                            if (statsChart) statsChart.destroy();
+                            
+                            statsChart = new Chart(ctx, {
+                                type: 'line',
+                                data: {
+                                    labels: data.labels,
+                                    datasets: [{
+                                        label: 'Cumulative Points',
+                                        data: data.data,
+                                        borderColor: '#16a34a',
+                                        backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                                        fill: true,
+                                        tension: 0.3
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    scales: { y: { beginAtZero: true } }
+                                }
+                            });
+
+                            // Update Breakdown Table
+                            const listBody = document.getElementById('breakdownList');
+                            listBody.innerHTML = '';
+                            data.breakdown.forEach(item => {
+                                const row = `
+                                    <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                                        <div>
+                                            <div class="fw-bold text-dark">${item.description}</div>
+                                            <div class="text-muted small">${item.date}</div>
+                                        </div>
+                                        <div class="fw-bold text-success">+${item.points} pts</div>
+                                    </div>
+                                `;
+                                listBody.innerHTML += row;
+                            });
+
+                            modal.show();
+                        });
+                });
+            });
+        });
     </script>
 </head>
 <body>
-
-<div class="container">
-    <h2>🏆 Leaderboard</h2>
-
-    <!-- FILTER BUTTONS -->
-    <div class="filter-container">
-        <a href="leaderboard.php?scope=all"><button class="filter-btn <?= $scope == 'all' ? 'active' : '' ?>">All-Time</button></a>
-        <a href="leaderboard.php?scope=weekly"><button class="filter-btn <?= $scope == 'weekly' ? 'active' : '' ?>">Weekly</button></a>
-        
-        <form method="get" action="leaderboard.php" style="display:inline-block;">
-            <input type="hidden" name="scope" value="monthly">
-            <button type="submit" class="filter-btn <?= $scope == 'monthly' ? 'active' : '' ?>">Monthly</button>
-            <?php if ($scope == 'monthly'): ?>
-                <select name="month" class="month-selector" onchange="this.form.submit()">
-                    <?php 
-                    $monthNames = [1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'May', 6 => 'Jun', 7 => 'Jul', 8 => 'Aug', 9 => 'Sep', 10 => 'Oct', 11 => 'Nov', 12 => 'Dec'];
-                    foreach ($monthNames as $num => $name): ?>
-                        <option value="<?= $num ?>" <?= $selectedMonth == $num ? 'selected' : '' ?>><?= $name ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <select name="year" class="month-selector" onchange="this.form.submit()">
-                    <?php 
-                    $yearRange = range(date('Y') - 1, date('Y')); // Last year and current year
-                    foreach ($yearRange as $yearOption): ?>
-                        <option value="<?= $yearOption ?>" <?= $selectedYear == $yearOption ? 'selected' : '' ?>><?= $yearOption ?></option>
-                    <?php endforeach; ?>
-                </select>
-            <?php endif; ?>
-        </form>
-    </div>
-
-    <!-- Tabs -->
-    <div style="text-align: center; margin-bottom: 30px;">
-        <button id="btnUsers" class="tab-btn active" onclick="showTab('userLeaderboard')">Users</button>
-        <button id="btnTeams" class="tab-btn" onclick="showTab('teamLeaderboard')">Teams</button>
-    </div>
-
-    <!-- USER LEADERBOARD -->
-    <div id="userLeaderboard">
-        <!-- Top 3 Podium -->
-        <div class="podium-container">
-            <?php 
-            // Display top 3 users (assuming they are sorted correctly by rank in $top3Users)
-            $rank = 1;
-            foreach ($top3Users as $user): ?>
-                <div class="podium-item rank-<?= $rank ?>">
-                    <div class="podium-avatar-container">
-                        <img src="<?= $user['avatarURL'] ?? 'default.jpg' ?>" class="podium-avatar">
-                        <div class="rank-badge"><?= $rank ?></div>
-                    </div>
-                    <div class="podium-name"><?= htmlspecialchars($user['firstName']) ?></div>
-                    <div class="podium-points"><?= number_format($user['totalPoints']) ?> pts</div>
-                    <div class="podium-team"><?= htmlspecialchars($user['teamName'] ?? 'No Team') ?></div>
-                </div>
-            <?php $rank++; endforeach; ?>
+<div class="layout-wrapper">
+    <!-- Same Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <iconify-icon icon="solar:shop-2-line-duotone"></iconify-icon>
+            <span>EcoTrip Dashboard</span>
         </div>
-
-        <!-- Remaining Users Table -->
-        <table>
-            <tr>
-                <th style="width: 60px; text-align: center;">Rank</th>
-                <th>User</th>
-                <th>Team</th>
-                <th style="text-align: right;">Points</th>
-            </tr>
-            <?php $rank = 4; ?>
-            <?php foreach ($remainingUsers as $user): ?>
-            <tr>
-                <td class="table-rank"><?= $rank ?></td>
-                <td>
-                    <img src="<?= $user['avatarURL'] ?? 'default.jpg' ?>" class="table-avatar">
-                    <span class="table-name"><?= htmlspecialchars($user['firstName']) ?></span>
-                </td>
-                <td class="table-team"><?= htmlspecialchars($user['teamName'] ?? 'No Team') ?></td>
-                <td class="table-points" style="text-align: right;"><?= number_format($user['totalPoints']) ?></td>
-            </tr>
-            <?php $rank++; endforeach; ?>
-        </table>
-    </div>
-
-    <!-- TEAM LEADERBOARD -->
-    <div id="teamLeaderboard" class="hidden">
-        <!-- Top 3 Podium for Teams -->
-        <div class="podium-container">
-            <?php 
-            $rank = 1;
-            foreach ($top3Teams as $team): ?>
-                <div class="podium-item rank-<?= $rank ?>">
-                    <div class="podium-avatar-container">
-                        <!-- You might want a team avatar here. Using a default icon for now. -->
-                        <img src="team_default.png" class="podium-avatar" style="background: #e9ecef; padding: 10px;">
-                        <div class="rank-badge"><?= $rank ?></div>
+        <div class="sidebar-nav-title">Dashboards</div>
+        <ul class="sidebar-nav">
+            <li class="sidebar-item"><a href="index.php" class="sidebar-link"><iconify-icon icon="solar:bag-4-line-duotone"></iconify-icon><span>eCommerce</span></a></li>
+            <li class="sidebar-item"><a href="#" class="sidebar-link"><iconify-icon icon="solar:chart-square-line-duotone"></iconify-icon><span>Analytics</span></a></li>
+        </ul>
+        <div class="sidebar-nav-title">EcoTrip</div>
+        <ul class="sidebar-nav">
+            <?php if ($_SESSION['role'] !== 'admin'): ?>
+                <li class="sidebar-item"><a href="team.php" class="sidebar-link"><iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon><span>My Team</span></a></li>
+                <li class="sidebar-item"><a href="create_team.php" class="sidebar-link"><iconify-icon icon="solar:user-plus-rounded-line-duotone"></iconify-icon><span>Create Team</span></a></li>
+                <li class="sidebar-item"><a href="join_team.php" class="sidebar-link"><iconify-icon icon="solar:login-3-line-duotone"></iconify-icon><span>Join Team</span></a></li>
+            <?php endif; ?>
+            <li class="sidebar-item"><a href="view.php" class="sidebar-link"><iconify-icon icon="solar:list-check-line-duotone"></iconify-icon><span>View Challenges</span></a></li>
+            <li class="sidebar-item"><a href="manage.php" class="sidebar-link"><iconify-icon icon="solar:pen-new-round-line-duotone"></iconify-icon><span>Manage Challenges</span></a></li>
+            <li class="sidebar-item"><a href="profile.php" class="sidebar-link"><iconify-icon icon="solar:user-circle-line-duotone"></iconify-icon><span>User Profile</span></a></li>
+            <li class="sidebar-item"><a href="rewards.php" class="sidebar-link"><iconify-icon icon="solar:gift-line-duotone"></iconify-icon><span>Reward</span></a></li>
+            <li class="sidebar-item"><a href="rewardAdmin.php" class="sidebar-link"><iconify-icon icon="solar:settings-minimalistic-line-duotone"></iconify-icon><span>RewardAdmin</span></a></li>
+            <li class="sidebar-item"><a href="leaderboard.php" class="sidebar-link active"><iconify-icon icon="solar:cup-star-line-duotone"></iconify-icon><span>Leaderboard</span></a></li>
+            <li class="sidebar-item"><a href="reviewRR.php" class="sidebar-link"><iconify-icon icon="solar:clipboard-check-line-duotone"></iconify-icon><span>ReviewRR</span></a></li>
+        </ul>
+        <?php if ($_SESSION['role'] === 'admin'): ?>
+            <div class="sidebar-nav-title">Admin</div>
+            <ul class="sidebar-nav">
+                <li class="sidebar-item"><a href="manage_user.php" class="sidebar-link"><iconify-icon icon="solar:users-group-rounded-line-duotone"></iconify-icon><span>Manage Users</span></a></li>
+                <li class="sidebar-item"><a href="manage_team.php" class="sidebar-link"><iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon><span>Manage Teams</span></a></li>
+            </ul>
+        <?php endif; ?>
+        <div class="sidebar-footer mt-auto">
+            Logged in as:<br>
+            <strong><?php echo htmlspecialchars($currentUser['firstName'] . ' ' . $currentUser['lastName']); ?></strong>
+            <br>(<?php echo htmlspecialchars($_SESSION['role']); ?>)
+        </div>
+    </aside>
+    <div class="main-content">
+        <div class="topbar">
+            <div class="topbar-title">Leaderboard</div>
+            <div>
+                <button class="topbar-icon-btn"><iconify-icon icon="solar:moon-line-duotone"></iconify-icon></button>
+                <button class="topbar-icon-btn"><iconify-icon icon="solar:bell-bing-line-duotone"></iconify-icon></button>
+                <div class="dropdown d-inline-block">
+                    <a href="#" class="d-flex align-items-center text-decoration-none" data-bs-toggle="dropdown"><img src="<?php echo htmlspecialchars($avatarPath); ?>" class="nav-avatar me-1"></a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="profile.php">Profile</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="logout.php">Logout</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="content-wrapper">
+            <div class="lb-container">
+                <div class="title-wrapper">
+                    <h2 class="leaderboard-title"><span>🏆</span> Leaderboard</h2>
+                    <div class="leaderboard-subtitle">Top performers in our eco-challenge community</div>
+                </div>
+                
+                <div class="controls-header">
+                    <div class="segmented-control">
+                        <button id="btnUsers" class="segmented-btn <?php echo $activeView !== 'teams' ? 'active' : ''; ?>" onclick="showTab('users')">Users</button>
+                        <button id="btnTeams" class="segmented-btn <?php echo $activeView === 'teams' ? 'active' : ''; ?>" onclick="showTab('teams')">Teams</button>
                     </div>
-                    <div class="podium-name"><?= htmlspecialchars($team['teamName']) ?></div>
-                    <div class="podium-points"><?= number_format($team['teamTotalPoints']) ?> pts</div>
-                    <div class="podium-team" style="font-size: 0.85em;">
-                        <i class="fas fa-users"></i> <?= $team['memberCount'] ?> Members
-                        <?php if ($scope != 'all'): ?>
-                            <br><span style="color: #27ae60;">(<?= $team['activeMemberCount'] ?> Active)</span>
+                    <div class="date-filters-wrapper">
+                        <div class="segmented-control">
+                            <a href="leaderboard.php?scope=all&view=<?php echo $activeView; ?>" class="segmented-btn date-filter-link <?= $scope == 'all' ? 'active' : '' ?>">All-Time</a>
+                            <a href="leaderboard.php?scope=weekly&view=<?php echo $activeView; ?>" class="segmented-btn date-filter-link <?= $scope == 'weekly' ? 'active' : '' ?>">Weekly</a>
+                            <a href="leaderboard.php?scope=monthly&view=<?php echo $activeView; ?>" class="segmented-btn date-filter-link <?= $scope == 'monthly' ? 'active' : '' ?>">Monthly</a>
+                        </div>
+                        <?php if ($scope == 'monthly'): ?>
+                            <form method="get" action="leaderboard.php" class="d-flex align-items-center gap-2">
+                                <input type="hidden" name="scope" value="monthly">
+                                <input type="hidden" name="view" class="view-input-hidden" value="<?php echo $activeView; ?>">
+                                <select name="month" class="form-select form-select-sm" style="width: auto; border-radius: 20px; border-color: #e2e8f0;" onchange="this.form.submit()">
+                                    <?php $monthNames = [1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'May', 6 => 'Jun', 7 => 'Jul', 8 => 'Aug', 9 => 'Sep', 10 => 'Oct', 11 => 'Nov', 12 => 'Dec']; foreach ($monthNames as $num => $name): ?>
+                                        <option value="<?= $num ?>" <?= $selectedMonth == $num ? 'selected' : '' ?>><?= $name ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <select name="year" class="form-select form-select-sm" style="width: auto; border-radius: 20px; border-color: #e2e8f0;" onchange="this.form.submit()">
+                                    <?php $yearRange = range(date('Y') - 1, date('Y')); foreach ($yearRange as $yearOption): ?>
+                                        <option value="<?= $yearOption ?>" <?= $selectedYear == $yearOption ? 'selected' : '' ?>><?= $yearOption ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </form>
                         <?php endif; ?>
                     </div>
+                    <div style="width: 100px;"></div>
                 </div>
-            <?php $rank++; endforeach; ?>
-        </div>
 
-        <!-- Remaining Teams Table -->
-        <table>
-            <tr>
-                <th style="width: 60px; text-align: center;">Rank</th>
-                <th>Team</th>
-                <th>Members</th>
-                <th style="text-align: right;">Total Points</th>
-            </tr>
-            <?php $rank = 4; ?>
-            <?php foreach ($remainingTeams as $team): ?>
-            <tr>
-                <td class="table-rank"><?= $rank ?></td>
-                <td><span class="table-name"><?= htmlspecialchars($team['teamName']) ?></span></td>
-                <td class="table-team">
-                    <i class="fas fa-users"></i> <?= $team['memberCount'] ?>
-                    <?php if ($scope != 'all'): ?>
-                        <span style="color: #27ae60; font-size: 0.9em;">(<?= $team['activeMemberCount'] ?> Active)</span>
+                <div id="userLeaderboard" class="<?php echo $activeView === 'teams' ? 'hidden' : ''; ?>">
+                    <div class="podium-container">
+                        <?php $rank = 1; foreach ($top3Users as $user): ?>
+                            <div class="podium-item rank-<?= $rank ?>" data-id="<?= $user['userID'] ?>" data-type="user" data-name="<?= htmlspecialchars($user['firstName']) ?>">
+                                <div class="position-relative d-inline-block mb-2">
+                                    <i class="fas fa-crown crown-icon"></i>
+                                    <img src="<?= $user['avatarURL'] ?? 'upload/default.png' ?>" class="podium-avatar">
+                                    <div class="rank-badge"><?= $rank ?></div>
+                                </div>
+                                <div class="podium-name"><?= htmlspecialchars($user['firstName']) ?></div>
+                                <div class="podium-points"><?= number_format($user['scorePoint']) ?> pts</div>
+                                <div class="podium-sub"><?= htmlspecialchars($user['teamName'] ?? '-') ?></div>
+                            </div>
+                        <?php $rank++; endforeach; ?>
+                    </div>
+
+                    <?php if ($myUserRank > 0): ?>
+                    <div class="current-rank-bar" onclick="scrollToRank('user', <?= $userID ?>)">
+                        <div class="cr-left">
+                            <img src="<?php echo htmlspecialchars($avatarPath); ?>" class="cr-avatar">
+                            <span class="cr-text">You Currently Rank</span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <span class="cr-text me-3" style="opacity:0.9;"><?php echo number_format($myUserPoints); ?> pts</span>
+                            <span class="cr-rank"><?php echo $myUserRank; ?></span>
+                            <div class="cr-arrow"><i class="fas fa-caret-up"></i></div>
+                        </div>
+                    </div>
                     <?php endif; ?>
-                </td>
-                <td class="table-points" style="text-align: right;"><?= number_format($team['teamTotalPoints']) ?></td>
-            </tr>
-            <?php $rank++; endforeach; ?>
-        </table>
-    </div>
 
+                    <div class="leaderboard-header">
+                        <div class="lb-col-rank">Rank</div>
+                        <div class="lb-col-avatar"></div>
+                        <div class="lb-col-name">User</div>
+                        <div class="lb-col-team">Team</div>
+                        <div class="lb-col-points text-end">Points</div>
+                    </div>
+
+                    <div class="leaderboard-list">
+                        <?php $rank = 4; foreach ($remainingUsers as $user): ?>
+                            <div class="leaderboard-card" data-id="<?= $user['userID'] ?>" data-type="user" data-name="<?= htmlspecialchars($user['firstName']) ?>">
+                                <div class="lb-col-rank"><?= $rank ?></div>
+                                <div class="lb-col-avatar">
+                                    <img src="<?= $user['avatarURL'] ?? 'upload/default.png' ?>" class="lb-avatar">
+                                </div>
+                                <div class="lb-col-name"><?= htmlspecialchars($user['firstName']) ?></div>
+                                <div class="lb-col-team"><?= htmlspecialchars($user['teamName'] ?? '-') ?></div>
+                                <div class="lb-col-points">
+                                    <?= number_format($user['scorePoint']) ?><span class="lb-points-label">pts</span>
+                                </div>
+                            </div>
+                        <?php $rank++; endforeach; ?>
+                    </div>
+                </div>
+
+                <div id="teamLeaderboard" class="<?php echo $activeView !== 'teams' ? 'hidden' : ''; ?>">
+                    <div class="podium-container">
+                        <?php $rank = 1; foreach ($top3Teams as $team): ?>
+                            <div class="podium-item rank-<?= $rank ?>" data-id="<?= $team['teamID'] ?>" data-type="team" data-name="<?= htmlspecialchars($team['teamName']) ?>">
+                                <div class="position-relative d-inline-block mb-2">
+                                    <i class="fas fa-crown crown-icon"></i>
+                                    <div class="podium-avatar d-flex align-items-center justify-content-center bg-light"><i class="fas fa-users fa-2x text-secondary"></i></div>
+                                    <div class="rank-badge"><?= $rank ?></div>
+                                </div>
+                                <div class="podium-name"><?= htmlspecialchars($team['teamName']) ?></div>
+                                <div class="podium-points"><?= number_format($team['scorePoint']) ?> pts</div>
+                                <div class="podium-sub"><?= $team['memberCount'] ?> Members</div>
+                            </div>
+                        <?php $rank++; endforeach; ?>
+                    </div>
+
+                    <?php if ($myTeamRank > 0): ?>
+                    <div class="current-rank-bar" style="background: linear-gradient(90deg, #ff8c00, #ff4500);" onclick="scrollToRank('team', <?= $userTeamID ?>)">
+                        <div class="cr-left">
+                            <div class="cr-avatar d-flex align-items-center justify-content-center bg-white text-dark"><i class="fas fa-users"></i></div>
+                            <span class="cr-text">Your Team Ranks</span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <span class="cr-text me-3" style="opacity:0.9;"><?php echo number_format($myTeamPoints); ?> pts</span>
+                            <span class="cr-rank"><?php echo $myTeamRank; ?></span>
+                            <div class="cr-arrow"><i class="fas fa-caret-up"></i></div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="leaderboard-header">
+                        <div class="lb-col-rank">Rank</div>
+                        <div class="lb-col-avatar"></div>
+                        <div class="lb-col-name">Team Name</div>
+                        <div class="lb-col-team">Members</div>
+                        <div class="lb-col-points text-end">Points</div>
+                    </div>
+
+                    <div class="leaderboard-list">
+                        <?php $rank = 4; foreach ($remainingTeams as $team): ?>
+                            <div class="leaderboard-card" data-id="<?= $team['teamID'] ?>" data-type="team" data-name="<?= htmlspecialchars($team['teamName']) ?>">
+                                <div class="lb-col-rank"><?= $rank ?></div>
+                                <div class="lb-col-avatar">
+                                    <div class="lb-avatar d-flex align-items-center justify-content-center bg-light" style="font-size: 24px;"><i class="fas fa-users text-secondary"></i></div>
+                                </div>
+                                <div class="lb-col-name"><?= htmlspecialchars($team['teamName']) ?></div>
+                                <div class="lb-col-team"><?= $team['memberCount'] ?> Members</div>
+                                <div class="lb-col-points">
+                                    <?= number_format($team['scorePoint']) ?><span class="lb-points-label">pts</span>
+                                </div>
+                            </div>
+                        <?php $rank++; endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
+<!-- Details Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+      <div class="modal-header border-0 bg-light rounded-top-4">
+        <h5 class="modal-title fw-bold" id="modalTitle">Performance</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        <h6 class="text-muted text-uppercase small fw-bold mb-3">Points Earned Over Time</h6>
+        <div style="height: 250px;" class="mb-4">
+            <canvas id="statsChart"></canvas>
+        </div>
+        
+        <h6 class="text-muted text-uppercase small fw-bold mb-3">Recent Activity Breakdown</h6>
+        <div id="breakdownList">
+            <!-- Items injected by JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
