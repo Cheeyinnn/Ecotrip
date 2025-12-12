@@ -44,6 +44,11 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
             My Profile
         </a>
 
+        <a href="index.php" class="sidebar-link <?= isActive('index.php') ?>">
+            <iconify-icon icon="solar:chart-square-line-duotone"></iconify-icon>
+            Dashboard
+        </a>
+
         <?php if ($role === 'admin'): ?>
 
             <div class="sidebar-nav-title">Dashboards</div>
@@ -78,7 +83,7 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
             </a>
 
             <a href="leaderboard.php" class="sidebar-link <?= isActive('leaderboard.php') ?>">
-                <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
+                <iconify-icon icon="solar:cup-star-line-duotone"></iconify-icon>
                 Leaderboard
             </a>
 
@@ -88,17 +93,17 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
             </a>
 
             <a href="rewardAdmin.php" class="sidebar-link <?= isActive('rewardAdmin.php') ?>">
-                <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
+                <iconify-icon icon="solar:settings-minimalistic-line-duotone"></iconify-icon>
                 rewardAdmin
             </a>
 
             <a href="reviewRR.php" class="sidebar-link <?= isActive('reviewRR.php') ?>">
-                <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
+                <iconify-icon icon="solar:clipboard-check-line-duotone"></iconify-icon>
                 reviewRR
             </a>
 
             <a href="rewards.php" class="sidebar-link <?= isActive('rewards.php') ?>">
-                <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
+                <iconify-icon icon="solar:gift-line-duotone"></iconify-icon>
                 rewards
             </a>
 

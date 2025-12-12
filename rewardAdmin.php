@@ -5,6 +5,8 @@ require "db_connect.php";
 if (!isset($_SESSION['userID'])) { header("Location: login.php"); exit(); }
 $userID = $_SESSION['userID'];
 
+$pageTitle = "Manage Rewards";
+
 // --- AUTOMATIC DATABASE FIX ---
 $checkCol = $conn->query("SHOW COLUMNS FROM reward LIKE 'imageURL'");
 if ($checkCol->num_rows == 0) {
@@ -173,7 +175,9 @@ include "includes/layout_start.php";
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         body { margin: 0; background: #f5f7fb; font-family: 'Plus Jakarta Sans', sans-serif; }
-        
+
+        .content-wrapper { padding: 20px 24px 24px; }
+        .card-box { background: #ffffff; border-radius: 18px; padding: 25px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); margin-bottom: 24px; }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 25px; }
         .stat-card { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 5px 15px rgba(0,0,0,0.04); display: flex; align-items: center; justify-content: space-between; text-decoration: none; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; border: 1px solid transparent; cursor: pointer; }
         .stat-card:hover, .stat-card.active { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(37, 99, 235, 0.1); border-color: #2563eb; }
@@ -199,7 +203,6 @@ include "includes/layout_start.php";
 </head>
 <body>
 
-        </div>
         <div class="content-wrapper">
             <?php if ($msg): ?><div class="alert alert-<?php echo $msgType; ?> alert-dismissible fade show"><?php echo $msg; ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div><?php endif; ?>
             

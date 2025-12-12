@@ -139,7 +139,7 @@ include 'includes/layout_start.php';
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         body { margin: 0; background: #f5f7fb; font-family: 'Plus Jakarta Sans', sans-serif; }
-         
+        .content-wrapper { padding: 15px 24px; } 
         .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
         .stat-card { background: white; padding: 15px; border-radius: 12px; border: 1px solid #e5e9f2; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.02); text-decoration: none; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; cursor: pointer; }
         .stat-card:hover, .stat-card.active { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(37, 99, 235, 0.1); border-color: #2563eb; }
