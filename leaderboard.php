@@ -2,6 +2,9 @@
 session_start();
 require "db_connect.php";
 
+// Enable error reporting for debugging
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
 if (!isset($_SESSION['userID'])) {
     header("Location: login.php");
     exit;
@@ -14,36 +17,35 @@ $stmt->bind_param("i", $userID);
 $stmt->execute();
 $result = $stmt->get_result();
 $currentUser = $result->fetch_assoc();
-$userTeamID = $currentUser['teamID']; // Store for team rank check
+$userTeamID = $currentUser['teamID'] ?? null; 
 
-$avatarPath = 'upload/default.png';
-if (!file_exists(__DIR__ . '/' . $avatarPath)) {
-    if (file_exists(__DIR__ . '/uploads/default.png')) $avatarPath = 'uploads/default.png';
-}
-if (!empty($currentUser['avatarURL']) && file_exists(__DIR__ . '/' . $currentUser['avatarURL'])) {
-    $avatarPath = $currentUser['avatarURL'];
+// Handle Avatar Path
+$avatarPath = 'uploads/default.png'; 
+if (!empty($currentUser['avatarURL'])) {
+    $rawPath = $currentUser['avatarURL'];
+    if (file_exists(__DIR__ . '/' . $rawPath)) {
+        $avatarPath = $rawPath;
+    } elseif (file_exists(__DIR__ . '/uploads/' . $rawPath)) {
+        $avatarPath = 'uploads/' . $rawPath;
+    }
 }
 
 // --- LEADERBOARD LOGIC ---
 
-// 1. Handle Scope (Time)
 $scope = isset($_GET['scope']) ? $_GET['scope'] : 'all';
 $currentMonth = date('m'); 
 $currentYear = date('Y');
 $selectedMonth = isset($_GET['month']) ? (int)$_GET['month'] : $currentMonth;
 $selectedYear = isset($_GET['year']) ? (int)$_GET['year'] : $currentYear;
 
-// 2. Handle View (Users vs Teams)
 $activeView = isset($_GET['view']) && $_GET['view'] === 'teams' ? 'teams' : 'users';
 
-$dateCondition = ""; // Used for SQL injection in Calculated Path
+$dateCondition = ""; 
 
 if ($scope == "weekly") {
-    // Current Week (Monday - Sunday)
     $dateCondition = "AND pt.generate_at >= DATE_SUB(NOW(), INTERVAL WEEKDAY(NOW()) DAY)";
 }
 if ($scope == "monthly") {
-    // Selected Month Logic
     $startDate = date('Y-m-01', mktime(0, 0, 0, $selectedMonth, 1, $selectedYear));
     $endDate = date('Y-m-t', mktime(0, 0, 0, $selectedMonth, 1, $selectedYear));
     $dateCondition = "AND pt.generate_at BETWEEN '$startDate 00:00:00' AND '$endDate 23:59:59'";
@@ -51,20 +53,21 @@ if ($scope == "monthly") {
 
 // --- USER LEADERBOARD QUERY ---
 if ($scope == "all") {
-    // FAST PATH: Use 'scorePoint' column directly
+    // DIRECT PATH: Read from user.scorePoint
+    // Removed specific role check strictly to 'member' to ensure data shows up for testing.
+    // If you need strictly members, change WHERE clause to: WHERE u.role = 'member' AND u.scorePoint > 0
     $user_sql = "SELECT 
                     u.userID, 
                     u.firstName, 
                     u.avatarURL, 
-                    u.scorePoint, 
+                    COALESCE(u.scorePoint, 0) AS scorePoint, 
                     team.teamName 
                  FROM user u 
                  LEFT JOIN team team ON u.teamID = team.teamID 
-                 WHERE u.role = 'member' AND u.scorePoint > 0
-                 ORDER BY u.scorePoint DESC";
+                 WHERE u.scorePoint > 0 
+                 ORDER BY scorePoint DESC, u.firstName ASC";
 } else {
-    // CALCULATED PATH: Use 'pointtransaction' history
-    // FIX: Added "AND pt.transactionType = 'earn'" to ensure we only sum EARNINGS
+    // CALCULATED PATH
     $user_sql = "SELECT 
                     u.userID, 
                     u.firstName, 
@@ -74,10 +77,9 @@ if ($scope == "all") {
                  FROM user u 
                  LEFT JOIN pointtransaction pt ON u.userID = pt.userID AND pt.transactionType = 'earn' $dateCondition
                  LEFT JOIN team team ON u.teamID = team.teamID 
-                 WHERE u.role = 'member' 
                  GROUP BY u.userID, u.firstName, u.avatarURL, team.teamName 
                  HAVING scorePoint > 0
-                 ORDER BY scorePoint DESC";
+                 ORDER BY scorePoint DESC, u.firstName ASC";
 }
 
 $user_result = $conn->query($user_sql);
@@ -101,30 +103,27 @@ if ($user_result) {
 
 // --- TEAM LEADERBOARD QUERY ---
 if ($scope == "all") {
-    // FAST PATH: Sum of members' 'scorePoint'
+    // DIRECT PATH: Sum of user.scorePoint
     $team_sql = "SELECT 
                     t.teamID, 
                     t.teamName, 
                     COALESCE(SUM(u.scorePoint), 0) AS scorePoint, 
                     COUNT(DISTINCT u.userID) AS memberCount 
                  FROM team t 
-                 LEFT JOIN user u ON u.teamID = t.teamID 
-                 WHERE u.role = 'member' 
+                 LEFT JOIN user u ON u.teamID = t.teamID
                  GROUP BY t.teamID, t.teamName 
                  HAVING scorePoint > 0
                  ORDER BY scorePoint DESC";
 } else {
-    // CALCULATED PATH: Sum of members' transactions
-    // FIX: Added "AND pt.transactionType = 'earn'" here as well
+    // CALCULATED PATH
     $team_sql = "SELECT 
                     t.teamID, 
                     t.teamName, 
                     COALESCE(SUM(pt.pointsTransaction), 0) AS scorePoint, 
                     COUNT(DISTINCT u.userID) AS memberCount 
                  FROM team t 
-                 LEFT JOIN user u ON u.teamID = t.teamID 
+                 LEFT JOIN user u ON u.teamID = t.teamID
                  LEFT JOIN pointtransaction pt ON pt.userID = u.userID AND pt.transactionType = 'earn' $dateCondition
-                 WHERE u.role = 'member' 
                  GROUP BY t.teamID, t.teamName 
                  HAVING scorePoint > 0
                  ORDER BY scorePoint DESC";
@@ -150,41 +149,20 @@ if ($team_result) {
         $rank++; 
     }
 }
+
+include "includes/layout_start.php";
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Leaderboard - EcoTrip</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Chart.js Added -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
         body { margin: 0; background: #f5f7fb; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; }
-        .layout-wrapper { display: flex; min-height: 100vh; }
-        .sidebar { width: 260px; background: #ffffff; border-right: 1px solid #e5e9f2; padding: 20px 16px; display: flex; flex-direction: column; }
-        .sidebar-brand { font-size: 20px; font-weight: 700; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
-        .sidebar-brand iconify-icon { font-size: 24px; color: #16a34a; } /* Eco Green */
-        .sidebar-nav-title { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 10px; margin-bottom: 4px; }
-        .sidebar-nav { list-style: none; padding-left: 0; margin: 0; flex-grow: 1; }
-        .sidebar-item { margin-bottom: 4px; }
-        .sidebar-link { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 999px; text-decoration: none; font-size: 14px; color: #475569; transition: background 0.15s ease, color 0.15s ease; font-weight: 500; }
-        .sidebar-link iconify-icon { font-size: 18px; }
-        .sidebar-link:hover { background: #f0fdf4; color: #16a34a; } /* Light Green Hover */
-        .sidebar-link.active { background: #dcfce7; color: #15803d; font-weight: 600; } /* Active Green */
-        .sidebar-footer { font-size: 12px; color: #64748b; border-top: 1px solid #e5e9f2; padding-top: 10px; margin-top: 12px; }
-        .main-content { flex: 1; display: flex; flex-direction: column; }
-        .topbar { background: #f5f7fb; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e5e9f2; }
-        .nav-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
-        .topbar-icon-btn { width: 34px; height: 34px; border-radius: 50%; border: none; background: #ffffff; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12); cursor: pointer; }
+        
         .content-wrapper { padding: 20px 24px 24px; }
         .lb-container { background: #fff; padding: 25px; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); }
 
-        /* HEADER CONTROLS STYLING */
         .controls-header {
             display: flex;
             align-items: center;
@@ -193,12 +171,11 @@ if ($team_result) {
             position: relative;
         }
         
-        /* IMPROVED SEGMENTED CONTROL */
         .segmented-control {
             display: inline-flex;
-            background: #f1f5f9; /* Light gray background */
+            background: #f1f5f9; 
             padding: 5px;
-            border-radius: 50px; /* Pill shape */
+            border-radius: 50px; 
             gap: 0;
             border: 1px solid #e2e8f0;
         }
@@ -220,15 +197,13 @@ if ($team_result) {
         .segmented-btn:hover {
             color: #334155;
         }
-        /* ACTIVE STATE - WHITE BG + GREEN TEXT */
         .segmented-btn.active {
             background: #ffffff;
-            color: #16a34a; /* Green text */
+            color: #16a34a; 
             box-shadow: 0 2px 4px rgba(0,0,0,0.06);
             font-weight: 700;
         }
         
-        /* Leaderboard Title Design */
         .title-wrapper {
             text-align: center;
             margin-bottom: 2rem;
@@ -252,7 +227,6 @@ if ($team_result) {
             font-weight: 500;
         }
         
-        /* Absolute center the date filters */
         .date-filters-wrapper {
             position: absolute;
             left: 50%;
@@ -271,13 +245,13 @@ if ($team_result) {
             border-radius: 20px; 
             box-shadow: 0 10px 25px rgba(0,0,0,0.03); 
             position: relative; 
-            width: 140px; /* Standardized Width */
+            width: 140px; 
             border: 1px solid #f1f5f9; 
             display: flex;
             flex-direction: column;
-            justify-content: flex-end; /* Align content to bottom of fixed height */
-            align-items: center; /* FIXED: Centers items horizontally in flex column */
-            min-height: 220px; /* Standardized Min-Height */
+            justify-content: flex-end; 
+            align-items: center; 
+            min-height: 220px; 
             cursor: pointer;
             transition: transform 0.2s;
         }
@@ -286,9 +260,8 @@ if ($team_result) {
             border-color: #16a34a;
         }
         
-        /* Enforce Min-Heights for Podium Steps */
         .podium-item.rank-1 { 
-            padding-top: 25px; /* Add padding to push rank 1 up */
+            padding-top: 25px; 
             z-index: 2; 
             background: linear-gradient(to bottom, #ffffff, #f0fdf4); 
             border: 2px solid #fbbf24; 
@@ -304,7 +277,6 @@ if ($team_result) {
         .podium-avatar { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 4px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 10px; }
         .rank-1 .podium-avatar { width: 100px; height: 100px; }
         
-        /* Text Truncation for Podium to prevent broken layout */
         .podium-name {
             font-weight: bold;
             width: 100%;
@@ -327,12 +299,9 @@ if ($team_result) {
             text-overflow: ellipsis;
         }
 
-        /* MODIFIED: Rank Badges (Numbers) for Podium (No 1, 2, 3) 
-           Positioned to OVERLAP the bottom center of the avatar 
-        */
         .rank-badge { 
             position: absolute; 
-            bottom: -5px; /* Pull it up to overlap */
+            bottom: -5px; 
             left: 50%; 
             transform: translateX(-50%); 
             width: 30px; 
@@ -370,7 +339,7 @@ if ($team_result) {
             margin-bottom: 25px;
             box-shadow: 0 8px 20px rgba(22, 163, 74, 0.25);
             transition: transform 0.2s;
-            cursor: pointer; /* Added cursor pointer */
+            cursor: pointer; 
         }
         .current-rank-bar:hover {
             transform: scale(1.005);
@@ -386,7 +355,7 @@ if ($team_result) {
         .leaderboard-header {
             display: flex;
             align-items: center;
-            padding: 0 25px 10px 25px; /* REVERTED PADDING */
+            padding: 0 25px 10px 25px; 
             color: #94a3b8;
             font-weight: 700;
             font-size: 12px;
@@ -403,7 +372,6 @@ if ($team_result) {
             padding: 15px 25px;
             transition: all 0.2s ease;
             cursor: pointer;
-            /* REVERTED: Removed position relative */
         }
         .leaderboard-card:hover {
             transform: translateY(-2px);
@@ -411,15 +379,12 @@ if ($team_result) {
             border-color: #22c55e;
         }
 
-        /* REVERTED: Standard Rank Styles for List Items */
         .lb-col-rank { width: 60px; text-align: center; margin-right: 15px; font-weight: 800; font-style: italic; color: #1e293b; font-size: 24px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .leaderboard-header .lb-col-rank { font-size: 12px; font-style: normal; font-weight: 700; color: #94a3b8; }
         
-        /* REVERTED: Standard Avatar Styles for List Items */
         .lb-col-avatar { width: 75px; margin-right: 20px; display: flex; justify-content: center; }
         .lb-avatar { width: 65px; height: 65px; border-radius: 50%; object-fit: cover; border: 2px solid #f8fafc; }
         
-        /* REVERTED: Standard Name Styles for List Items */
         .lb-col-name { flex: 2; font-weight: 700; color: #334155; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .leaderboard-header .lb-col-name { font-size: 12px; color: #94a3b8; }
 
@@ -476,14 +441,12 @@ if ($team_result) {
             viewInputs.forEach(input => input.value = view);
         }
 
-        // New function to scroll to rank
         function scrollToRank(type, id) {
             const selector = `[data-type="${type}"][data-id="${id}"]`;
             const element = document.querySelector(selector);
 
             if (element) {
                 element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                // Optional: Add a highlight effect
                 element.style.transition = 'all 0.5s';
                 const originalTransform = element.style.transform;
                 element.style.transform = 'scale(1.05)';
@@ -492,12 +455,9 @@ if ($team_result) {
                     element.style.transform = originalTransform;
                     element.style.boxShadow = ''; 
                 }, 1500);
-            } else {
-                console.log("Element not found for", selector);
             }
         }
 
-        // Logic for Detail Modal
         document.addEventListener('DOMContentLoaded', function() {
             let statsChart = null;
 
@@ -512,11 +472,9 @@ if ($team_result) {
                     
                     document.getElementById('modalTitle').innerText = name + "'s Performance";
                     
-                    // Fetch data - CHANGED FILENAME HERE
                     fetch(`lbDetail.php?id=${id}&type=${type}`)
                         .then(response => response.json())
                         .then(data => {
-                            // Update Chart
                             const ctx = document.getElementById('statsChart').getContext('2d');
                             if (statsChart) statsChart.destroy();
                             
@@ -539,7 +497,6 @@ if ($team_result) {
                                 }
                             });
 
-                            // Update Breakdown Table
                             const listBody = document.getElementById('breakdownList');
                             listBody.innerHTML = '';
                             data.breakdown.forEach(item => {
@@ -561,64 +518,8 @@ if ($team_result) {
             });
         });
     </script>
-</head>
+
 <body>
-<div class="layout-wrapper">
-    <!-- Same Sidebar -->
-    <aside class="sidebar">
-        <div class="sidebar-brand">
-            <iconify-icon icon="solar:shop-2-line-duotone"></iconify-icon>
-            <span>EcoTrip Dashboard</span>
-        </div>
-        <div class="sidebar-nav-title">Dashboards</div>
-        <ul class="sidebar-nav">
-            <li class="sidebar-item"><a href="index.php" class="sidebar-link"><iconify-icon icon="solar:bag-4-line-duotone"></iconify-icon><span>eCommerce</span></a></li>
-            <li class="sidebar-item"><a href="#" class="sidebar-link"><iconify-icon icon="solar:chart-square-line-duotone"></iconify-icon><span>Analytics</span></a></li>
-        </ul>
-        <div class="sidebar-nav-title">EcoTrip</div>
-        <ul class="sidebar-nav">
-            <?php if ($_SESSION['role'] !== 'admin'): ?>
-                <li class="sidebar-item"><a href="team.php" class="sidebar-link"><iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon><span>My Team</span></a></li>
-                <li class="sidebar-item"><a href="create_team.php" class="sidebar-link"><iconify-icon icon="solar:user-plus-rounded-line-duotone"></iconify-icon><span>Create Team</span></a></li>
-                <li class="sidebar-item"><a href="join_team.php" class="sidebar-link"><iconify-icon icon="solar:login-3-line-duotone"></iconify-icon><span>Join Team</span></a></li>
-            <?php endif; ?>
-            <li class="sidebar-item"><a href="view.php" class="sidebar-link"><iconify-icon icon="solar:list-check-line-duotone"></iconify-icon><span>View Challenges</span></a></li>
-            <li class="sidebar-item"><a href="manage.php" class="sidebar-link"><iconify-icon icon="solar:pen-new-round-line-duotone"></iconify-icon><span>Manage Challenges</span></a></li>
-            <li class="sidebar-item"><a href="profile.php" class="sidebar-link"><iconify-icon icon="solar:user-circle-line-duotone"></iconify-icon><span>User Profile</span></a></li>
-            <li class="sidebar-item"><a href="rewards.php" class="sidebar-link"><iconify-icon icon="solar:gift-line-duotone"></iconify-icon><span>Reward</span></a></li>
-            <li class="sidebar-item"><a href="rewardAdmin.php" class="sidebar-link"><iconify-icon icon="solar:settings-minimalistic-line-duotone"></iconify-icon><span>RewardAdmin</span></a></li>
-            <li class="sidebar-item"><a href="leaderboard.php" class="sidebar-link active"><iconify-icon icon="solar:cup-star-line-duotone"></iconify-icon><span>Leaderboard</span></a></li>
-            <li class="sidebar-item"><a href="reviewRR.php" class="sidebar-link"><iconify-icon icon="solar:clipboard-check-line-duotone"></iconify-icon><span>ReviewRR</span></a></li>
-        </ul>
-        <?php if ($_SESSION['role'] === 'admin'): ?>
-            <div class="sidebar-nav-title">Admin</div>
-            <ul class="sidebar-nav">
-                <li class="sidebar-item"><a href="manage_user.php" class="sidebar-link"><iconify-icon icon="solar:users-group-rounded-line-duotone"></iconify-icon><span>Manage Users</span></a></li>
-                <li class="sidebar-item"><a href="manage_team.php" class="sidebar-link"><iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon><span>Manage Teams</span></a></li>
-            </ul>
-        <?php endif; ?>
-        <div class="sidebar-footer mt-auto">
-            Logged in as:<br>
-            <strong><?php echo htmlspecialchars($currentUser['firstName'] . ' ' . $currentUser['lastName']); ?></strong>
-            <br>(<?php echo htmlspecialchars($_SESSION['role']); ?>)
-        </div>
-    </aside>
-    <div class="main-content">
-        <div class="topbar">
-            <div class="topbar-title">Leaderboard</div>
-            <div>
-                <button class="topbar-icon-btn"><iconify-icon icon="solar:moon-line-duotone"></iconify-icon></button>
-                <button class="topbar-icon-btn"><iconify-icon icon="solar:bell-bing-line-duotone"></iconify-icon></button>
-                <div class="dropdown d-inline-block">
-                    <a href="#" class="d-flex align-items-center text-decoration-none" data-bs-toggle="dropdown"><img src="<?php echo htmlspecialchars($avatarPath); ?>" class="nav-avatar me-1"></a>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="profile.php">Profile</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="logout.php">Logout</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
         <div class="content-wrapper">
             <div class="lb-container">
                 <div class="title-wrapper">
@@ -663,7 +564,7 @@ if ($team_result) {
                             <div class="podium-item rank-<?= $rank ?>" data-id="<?= $user['userID'] ?>" data-type="user" data-name="<?= htmlspecialchars($user['firstName']) ?>">
                                 <div class="position-relative d-inline-block mb-2">
                                     <i class="fas fa-crown crown-icon"></i>
-                                    <img src="<?= $user['avatarURL'] ?? 'upload/default.png' ?>" class="podium-avatar">
+                                    <img src="<?= $user['avatarURL'] ?? 'uploads/default.png' ?>" class="podium-avatar">
                                     <div class="rank-badge"><?= $rank ?></div>
                                 </div>
                                 <div class="podium-name"><?= htmlspecialchars($user['firstName']) ?></div>
@@ -700,7 +601,7 @@ if ($team_result) {
                             <div class="leaderboard-card" data-id="<?= $user['userID'] ?>" data-type="user" data-name="<?= htmlspecialchars($user['firstName']) ?>">
                                 <div class="lb-col-rank"><?= $rank ?></div>
                                 <div class="lb-col-avatar">
-                                    <img src="<?= $user['avatarURL'] ?? 'upload/default.png' ?>" class="lb-avatar">
+                                    <img src="<?= $user['avatarURL'] ?? 'uploads/default.png' ?>" class="lb-avatar">
                                 </div>
                                 <div class="lb-col-name"><?= htmlspecialchars($user['firstName']) ?></div>
                                 <div class="lb-col-team"><?= htmlspecialchars($user['teamName'] ?? '-') ?></div>
@@ -771,7 +672,6 @@ if ($team_result) {
     </div>
 </div>
 
-<!-- Details Modal -->
 <div class="modal fade" id="detailModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content border-0 shadow-lg rounded-4">
@@ -787,7 +687,6 @@ if ($team_result) {
         
         <h6 class="text-muted text-uppercase small fw-bold mb-3">Recent Activity Breakdown</h6>
         <div id="breakdownList">
-            <!-- Items injected by JS -->
         </div>
       </div>
     </div>

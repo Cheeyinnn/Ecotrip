@@ -90,18 +90,20 @@ body {
 /* Hover */
 .sidebar-link:hover {
     background: #eef2ff;
-    color: #2563eb;
+    color: #16a34a;
 }
+
+/* In your separate layout.css file */
 
 /* Active */
 .sidebar-link.active {
-    background: #e0ecff !important;
-    color: #1d4ed8 !important;
+    background: #dcfce7 !important; /* Light Green Background */
+    color: #15803d !important;     /* Dark Green Text */
     font-weight: 600 !important;
 }
 
 .sidebar-link.active iconify-icon {
-    color: #1d4ed8 !important;
+    color: #15803d !important;     /* Dark Green Icon */
 }
 
 /* Footer info */
