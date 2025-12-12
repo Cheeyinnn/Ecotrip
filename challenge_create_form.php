@@ -2,7 +2,7 @@
 // -------------------------------------
 // PAGE TITLE & AUTH
 // -------------------------------------
-$pageTitle = "Create New Challenge";
+$pageTitle = "Create New Challenge"; 
 require "db_connect.php";
 require "includes/auth.php";
 
@@ -132,7 +132,7 @@ include "includes/layout_start.php";
 <div class="hero-mini">
     <div class="container d-flex justify-content-between align-items-center">
         <div>
-            <h2 class="fw-bold m-0">Create Challenge</h2>
+            <h2 class="fw-bold m-0">Create Challenge hi</h2>
             <p class="m-0 opacity-75 small">Add a new eco-task to the platform.</p>
         </div>
         <a href="manage.php" class="btn-back">
