@@ -1,5 +1,7 @@
 <?php
 require "db_connect.php";
+// Ensure no PHP warnings/notices break the JSON output
+ini_set('display_errors', 0);
 header('Content-Type: application/json');
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -16,24 +18,52 @@ $breakdown = [];
 // Prepare query based on User or Team
 if ($type === 'user') {
     // Get transaction history for a single user
-    // Assuming 'description' column exists, otherwise we use 'transactionType'
-    // If you have a challengeID, you might need to JOIN the challenges table here
-    $stmt = $conn->prepare("SELECT pointsTransaction, generate_at, transactionType, 'User Activity' as source_name 
-                           FROM pointtransaction 
-                           WHERE userID = ? AND transactionType = 'earn' 
-                           ORDER BY generate_at ASC");
+    // Link path: pointtransaction -> submissions -> challenges
+    $query = "SELECT 
+                pt.pointsTransaction, 
+                pt.generate_at, 
+                pt.transactionType, 
+                COALESCE(c.title, 'General Activity') as source_name 
+              FROM pointtransaction pt 
+              LEFT JOIN submissions s ON pt.submissionID = s.id
+              LEFT JOIN challenges c ON s.challenge_id = c.id
+              WHERE pt.userID = ? AND pt.transactionType = 'earn' 
+              ORDER BY pt.generate_at ASC";
+              
+    $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        echo json_encode(['error' => 'Prepare failed: ' . $conn->error]);
+        exit;
+    }
     $stmt->bind_param("i", $id);
 } else {
     // Get transaction history for the whole team
-    $stmt = $conn->prepare("SELECT pt.pointsTransaction, pt.generate_at, pt.transactionType, u.firstName as source_name 
-                           FROM pointtransaction pt 
-                           JOIN user u ON pt.userID = u.userID 
-                           WHERE u.teamID = ? AND pt.transactionType = 'earn' 
-                           ORDER BY pt.generate_at ASC");
+    $query = "SELECT 
+                pt.pointsTransaction, 
+                pt.generate_at, 
+                pt.transactionType, 
+                u.firstName as user_name,
+                COALESCE(c.title, 'General Activity') as challenge_name
+              FROM pointtransaction pt 
+              JOIN user u ON pt.userID = u.userID 
+              LEFT JOIN submissions s ON pt.submissionID = s.id
+              LEFT JOIN challenges c ON s.challenge_id = c.id
+              WHERE u.teamID = ? AND pt.transactionType = 'earn' 
+              ORDER BY pt.generate_at ASC";
+              
+    $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        echo json_encode(['error' => 'Prepare failed: ' . $conn->error]);
+        exit;
+    }
     $stmt->bind_param("i", $id);
 }
 
-$stmt->execute();
+if (!$stmt->execute()) {
+    echo json_encode(['error' => 'Execute failed: ' . $stmt->error]);
+    exit;
+}
+
 $result = $stmt->get_result();
 
 $cumulativePoints = 0;
@@ -41,20 +71,27 @@ $graphLabels = [];
 $graphData = [];
 
 while ($row = $result->fetch_assoc()) {
-    // Process Graph Data (Cumulative or per day)
+    // Process Graph Data (Cumulative)
     $date = date('M d', strtotime($row['generate_at']));
     $cumulativePoints += $row['pointsTransaction'];
     
-    // Simple logic: Add entry for graph
     $graphLabels[] = $date;
-    $graphData[] = $cumulativePoints; // Shows growth over time
+    $graphData[] = $cumulativePoints; 
     
-    // Process Breakdown List (Latest first for display, so we unshift)
+    // Process Breakdown List
+    if ($type === 'team') {
+        $description = $row['user_name'] . ' - ' . $row['challenge_name'];
+        $source = $row['challenge_name'];
+    } else {
+        $description = $row['source_name']; // The Challenge Title
+        $source = $row['transactionType'];
+    }
+
     array_unshift($breakdown, [
         'points' => $row['pointsTransaction'],
         'date' => date('Y-m-d H:i', strtotime($row['generate_at'])),
-        'description' => $row['transactionType'], // Replace with column 'description' if available
-        'source' => $row['source_name']
+        'description' => $description, 
+        'source' => $source
     ]);
 }
 

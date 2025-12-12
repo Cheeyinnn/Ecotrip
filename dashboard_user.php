@@ -228,7 +228,7 @@ if ($teamID === null) {
 
     $stmt2->close();
 }
-
+include "includes/layout_start.php";    
 
 // 关闭连接
 if (isset($conn) && $conn->ping()) {
@@ -718,5 +718,6 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 
+<?php include "includes/layout_end.php"; ?>
 </body>
 </html>
