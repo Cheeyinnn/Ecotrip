@@ -157,19 +157,11 @@ $requests_result = $conn->query("SELECT rr.redemptionID, rw.rewardName, rr.quant
 
 include "includes/layout_start.php";
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Rewards - EcoTrip</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-        
         body { margin: 0; background: #f5f7fb; font-family: 'Plus Jakarta Sans', sans-serif; }
     
         .dashboard-row { display: flex; gap: 20px; margin-bottom: 35px; flex-wrap: wrap; }
@@ -238,7 +230,6 @@ include "includes/layout_start.php";
 
         .hidden { display: none !important; }
     </style>
-</head>
 <body>
 
         <div class="content-wrapper">
@@ -509,7 +500,5 @@ include "includes/layout_start.php";
     }
     applyFilters(); 
 </script>
-
-<?php include "includes/layout_end.php"; ?>
 </body>
 </html>
