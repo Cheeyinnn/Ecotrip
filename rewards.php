@@ -168,8 +168,6 @@ include "includes/layout_start.php";
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-        
         body { margin: 0; background: #f5f7fb; font-family: 'Plus Jakarta Sans', sans-serif; }
     
         .dashboard-row { display: flex; gap: 20px; margin-bottom: 35px; flex-wrap: wrap; }

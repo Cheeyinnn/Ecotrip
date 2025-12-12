@@ -173,7 +173,6 @@ include "includes/layout_start.php";
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         body { margin: 0; background: #f5f7fb; font-family: 'Plus Jakarta Sans', sans-serif; }
 
         .content-wrapper { padding: 20px 24px 24px; }
