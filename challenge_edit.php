@@ -44,7 +44,7 @@ if (!$challengeData) {
 // 3. PREPARE VARIABLES
 // ------------------------------------------------------
 // We extract data using the unique variable name
-$title       = $challengeData['challengeTitle']; 
+$dbtitle       = $challengeData['challengeTitle']; 
 $description = $challengeData['description'];
 $city        = $challengeData['city'];
 $points      = $challengeData['pointAward'];
@@ -120,7 +120,7 @@ include "includes/layout_start.php";
 <div class="hero-mini">
     <div class="container d-flex justify-content-between align-items-center">
         <div>
-            <h2 class="fw-bold m-0"> <?= htmlspecialchars($title) ?></h2>
+            <h2 class="fw-bold m-0"> <?= htmlspecialchars($dbtitle) ?></h2>
             <p class="m-0 opacity-75 small">Update details for challenge #<?= $challengeID ?></p>
         </div>
         <a href="manage.php" class="btn-back">
@@ -150,7 +150,7 @@ include "includes/layout_start.php";
                 <div class="mb-4">
                     <label class="form-label">Challenge Title *</label>
                     <input type="text" name="challengeTitle" required class="form-control" 
-                           value="<?= htmlspecialchars($title) ?>">
+                           value="<?= htmlspecialchars($dbtitle) ?>">
                 </div>
 
                 <div class="mb-4">
@@ -165,8 +165,8 @@ include "includes/layout_start.php";
                 <div class="row g-4 mb-4">
                     <div class="col-md-6">
                         <label class="form-label">Category</label>
-                        <select name="categoryID" class="form-select" required>
-                            <option value="">-- Select --</option>
+                        <select name="categoryID" class="form-select">
+                            <option value="">-- Select Existing --</option>
                             <?php foreach ($categories as $cat): ?>
                                 <option value="<?= $cat['categoryID'] ?>"
                                     <?= $currentCat == $cat['categoryID'] ? 'selected' : '' ?>>
@@ -177,6 +177,14 @@ include "includes/layout_start.php";
                     </div>
 
                     <div class="col-md-6">
+                        <label class="form-label">Create New Category</label>
+                        <input type="text" name="newCategory" class="form-control" 
+                               placeholder="e.g. Solar Energy">
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-md-6">
                         <label class="form-label">City</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
@@ -184,9 +192,7 @@ include "includes/layout_start.php";
                                    value="<?= htmlspecialchars($city) ?>">
                         </div>
                     </div>
-                </div>
 
-                <div class="row g-4 mb-4">
                     <div class="col-md-6">
                         <label class="form-label">Points Award *</label>
                         <div class="input-group">
@@ -195,14 +201,14 @@ include "includes/layout_start.php";
                                    value="<?= htmlspecialchars($points) ?>">
                         </div>
                     </div>
+                </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label">Status *</label>
-                        <select name="is_active" class="form-select" required>
-                            <option value="1" <?= $status == 1 ? 'selected' : '' ?>>Active (Visible)</option>
-                            <option value="0" <?= $status == 0 ? 'selected' : '' ?>>Inactive (Hidden)</option>
-                        </select>
-                    </div>
+                <div class="mb-4">
+                    <label class="form-label">Status *</label>
+                    <select name="is_active" class="form-select" required>
+                        <option value="1" <?= $status == 1 ? 'selected' : '' ?>>Active (Visible)</option>
+                        <option value="0" <?= $status == 0 ? 'selected' : '' ?>>Inactive (Hidden)</option>
+                    </select>
                 </div>
 
                 <div class="form-section-title mt-5">

@@ -263,5 +263,6 @@ include 'includes/layout_start.php';
         shippingModal.show();
     }
 </script>
+
 </body>
 </html>
