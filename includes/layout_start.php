@@ -110,6 +110,11 @@ if (!isset($pageTitle)) {
     <!-- Layout CSS -->
     <link rel="stylesheet" href="includes/layout.css">
 </head>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+</head>
+<body>
 <body>
 
 <div class="layout-wrapper">

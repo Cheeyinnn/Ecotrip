@@ -5,6 +5,8 @@ include 'db_connect.php';
 if (!isset($_SESSION['userID'])) { header("Location: login.php"); exit(); }
 $userID = $_SESSION['userID'];
 
+$pageTitle = "Rewards Center";
+
 // Auto-DB fix for shipping
 $cols = $conn->query("SHOW COLUMNS FROM redemptionrequest LIKE 'receiver_name'");
 if ($cols->num_rows == 0) { $conn->query("ALTER TABLE redemptionrequest ADD COLUMN receiver_name VARCHAR(255) NULL, ADD COLUMN phone_number VARCHAR(50) NULL, ADD COLUMN address TEXT NULL"); }
@@ -152,6 +154,8 @@ usort($rewardsArray, function($a, $b) {
 });
 
 $requests_result = $conn->query("SELECT rr.redemptionID, rw.rewardName, rr.quantity, rr.pointSpent, rr.status, rr.rewardID, rr.requested_at FROM redemptionrequest rr LEFT JOIN reward rw ON rr.rewardID = rw.rewardID WHERE rr.userID = $userID ORDER BY rr.redemptionID DESC");
+
+include "includes/layout_start.php";
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -167,22 +171,7 @@ $requests_result = $conn->query("SELECT rr.redemptionID, rw.rewardName, rr.quant
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         
         body { margin: 0; background: #f5f7fb; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .layout-wrapper { display: flex; min-height: 100vh; }
-        .sidebar { width: 260px; background: #ffffff; border-right: 1px solid #e5e9f2; padding: 20px 16px; display: flex; flex-direction: column; }
-        .sidebar-brand { font-size: 20px; font-weight: 700; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
-        .sidebar-brand iconify-icon { font-size: 24px; color: #2563eb; }
-        .sidebar-nav-title { font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 10px; margin-bottom: 4px; }
-        .sidebar-nav { list-style: none; padding-left: 0; margin: 0; flex-grow: 1; }
-        .sidebar-item { margin-bottom: 4px; }
-        .sidebar-link { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 999px; text-decoration: none; font-size: 14px; color: #4b5563; transition: background 0.15s ease, color 0.15s ease; font-weight: 500; }
-        .sidebar-link:hover { background: #eef2ff; color: #2563eb; }
-        .sidebar-link.active { background: #e0ecff; color: #1d4ed8; font-weight: 600; }
-        .sidebar-footer { font-size: 12px; color: #6b7280; border-top: 1px solid #e5e9f2; padding-top: 10px; margin-top: 12px; }
-        .main-content { flex: 1; display: flex; flex-direction: column; }
-        .topbar { background: #f5f7fb; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e5e9f2; }
-        .nav-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
-        .content-wrapper { padding: 30px; }
-
+    
         .dashboard-row { display: flex; gap: 20px; margin-bottom: 35px; flex-wrap: wrap; }
         .dash-card { flex: 1; min-width: 300px; background: #fff; border-radius: 20px; padding: 15px 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; display: flex; align-items: center; position: relative; overflow: hidden; }
         .profile-card-content { display: flex; align-items: center; gap: 20px; width: 100%; z-index: 2; }
@@ -251,37 +240,6 @@ $requests_result = $conn->query("SELECT rr.redemptionID, rw.rewardName, rr.quant
     </style>
 </head>
 <body>
-<div class="layout-wrapper">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-        <div class="sidebar-brand"><iconify-icon icon="solar:shop-2-line-duotone"></iconify-icon><span>EcoTrip Dashboard</span></div>
-        <div class="sidebar-nav-title">EcoTrip</div>
-        <ul class="sidebar-nav">
-             <li class="sidebar-item"><a href="rewards.php" class="sidebar-link active"><iconify-icon icon="solar:gift-line-duotone"></iconify-icon><span>Reward</span></a></li>
-            <!-- Add other links as needed -->
-             <li class="sidebar-item"><a href="team.php" class="sidebar-link"><iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon><span>My Team</span></a></li>
-            <li class="sidebar-item"><a href="create_team.php" class="sidebar-link"><iconify-icon icon="solar:user-plus-rounded-line-duotone"></iconify-icon><span>Create Team</span></a></li>
-            <li class="sidebar-item"><a href="join_team.php" class="sidebar-link"><iconify-icon icon="solar:login-3-line-duotone"></iconify-icon><span>Join Team</span></a></li>
-            <li class="sidebar-item"><a href="view.php" class="sidebar-link"><iconify-icon icon="solar:list-check-line-duotone"></iconify-icon><span>View Challenges</span></a></li>
-            <li class="sidebar-item"><a href="manage.php" class="sidebar-link"><iconify-icon icon="solar:pen-new-round-line-duotone"></iconify-icon><span>Manage Challenges</span></a></li>
-            <li class="sidebar-item"><a href="profile.php" class="sidebar-link"><iconify-icon icon="solar:user-circle-line-duotone"></iconify-icon><span>User Profile</span></a></li>
-            <li class="sidebar-item"><a href="rewardAdmin.php" class="sidebar-link"><iconify-icon icon="solar:settings-minimalistic-line-duotone"></iconify-icon><span>RewardAdmin</span></a></li>
-            <li class="sidebar-item"><a href="leaderboard.php" class="sidebar-link"><iconify-icon icon="solar:cup-star-line-duotone"></iconify-icon><span>Leaderboard</span></a></li>
-            <li class="sidebar-item"><a href="reviewRR.php" class="sidebar-link"><iconify-icon icon="solar:clipboard-check-line-duotone"></iconify-icon><span>ReviewRR</span></a></li>
-            <li class="sidebar-item"><a href="manage_user.php" class="sidebar-link"><iconify-icon icon="solar:users-group-rounded-line-duotone"></iconify-icon><span>Manage Users</span></a></li>
-            <li class="sidebar-item"><a href="manage_team.php" class="sidebar-link"><iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon><span>Manage Teams</span></a></li>
-        </ul>
-        <div class="sidebar-footer mt-auto">Logged in as:<br><strong><?php echo htmlspecialchars($currentUser['firstName']); ?></strong></div>
-    </aside>
-
-    <div class="main-content">
-        <!-- Topbar -->
-        <div class="topbar">
-            <div class="topbar-title">Rewards Center</div>
-            <div class="dropdown d-inline-block">
-                <a href="#" class="d-flex align-items-center text-decoration-none"><img src="<?php echo htmlspecialchars($avatarPath); ?>" class="nav-avatar me-1"></a>
-            </div>
-        </div>
 
         <div class="content-wrapper">
             <?php if(isset($_GET['msg']) && $_GET['msg'] == 'approved'): ?>
@@ -551,5 +509,7 @@ $requests_result = $conn->query("SELECT rr.redemptionID, rw.rewardName, rr.quant
     }
     applyFilters(); 
 </script>
+
+<?php include "includes/layout_end.php"; ?>
 </body>
 </html>

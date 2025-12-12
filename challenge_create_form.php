@@ -2,7 +2,7 @@
 // -------------------------------------
 // PAGE TITLE & AUTH
 // -------------------------------------
-$pageTitle = "Create New Challenge";
+$pageTitle = "Create New Challenge"; 
 require "db_connect.php";
 require "includes/auth.php";
 
