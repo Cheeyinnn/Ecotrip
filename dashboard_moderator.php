@@ -110,6 +110,8 @@ $topUsersSQL = "
     LIMIT 5
 ";
 $topUsers = $conn->query($topUsersSQL);
+
+include "includes/layout_start.php";
 ?>
 
 
@@ -595,7 +597,7 @@ function showTab(tab) {
 }
 </script>
 
-
+<?php include "includes/layout_end.php"; ?>
 
 
   </body>

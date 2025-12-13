@@ -172,7 +172,7 @@ function statusTag($status) {
             if (!$timestamp || $timestamp === "0000-00-00 00:00:00") return "";
 
             $time = strtotime($timestamp);
-            if ($time <= 0) return ""; // 防止奇怪时间
+            if ($time <= 0) return ""; 
 
             $diff = time() - $time;
 
@@ -241,25 +241,23 @@ function statusTag($status) {
             <div class="grid grid-cols-1 gap-4 w-64 md:w-80 lg:w-96 flex-shrink-0">
    
         <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 relative pb-14">
-            <p class="text-sm text-blue-700 font-bold">Total Submissions</p>
+            <p class="text-sm text-blue-700 font-bold underline">Total Submissions</p>
             <h3 class="text-2xl font-bold text-blue-800"><?= $total ?></h3>
 
-        
-
-
-            
-
-
-
-
-
-
-
+        <button onclick="openChartModal()"
+                class="absolute bottom-3 right-3 flex items-center gap-1 px-4 py-2 border-2 border-blue-500 text-blue-500 text-sm font-semibold rounded-lg hover:bg-blue-500 hover:text-white transition transform duration-200 ease-in-out">
+                <!-- Donut Ring Icon -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
+                    <circle cx="12" cy="12" r="10" stroke-width="2" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v10h10" />
+                </svg>
+                Chart
+            </button>
 
         </div>
        
         <div class="bg-purple-50 p-4 rounded-xl border border-purple-200">
-            <p class="text-sm text-purple-700 font-bold">Total Points Earned (Approved Only)</p>
+            <p class="text-sm text-purple-700 font-bold underline ">Total Points Earned (Approved Only)</p>
             <h3 class="text-2xl font-bold text-purple-800"><?= $points ?></h3>
         </div>
     </div>
@@ -305,7 +303,7 @@ function statusTag($status) {
 
             <!-- Recent Actions Panel -->
             <div class="bg-white p-2 rounded-xl shadow flex-1 max-w-l">
-                <h3 class="text-lg font-semibold mb-4">Recent Actions</h3>
+                <h3 class="text-lg font-semibold text-center mb-4 underline"  >Recent Actions</h3>
 
                 <div class="space-y-5">
                     <?php foreach ($recentActions as $log): ?>
@@ -430,12 +428,12 @@ function statusTag($status) {
                                         Resubmit
                                     </a>';
                             } else {
-                                // 超过一次就禁用
+ 
                                 echo '<span class="text-red-400">Challenge fail</span>';
                             }
                         }
                         elseif ($status === "approved") {
-                            echo '<a href="userpoints.php"
+                            echo '<a a href="leaderboard.php?id=' . $submissionId . '"
                                     class="inline-block px-4 py-2 text-sm font-medium border border-green-600
                                         text-green-600 rounded-lg hover:bg-green-600 hover:text-white
                                         transition-all duration-200">
