@@ -475,24 +475,25 @@ function formatDate(dateStr) {
     </div>
 
   <!-- tabs -->
-  <div class="bg-white rounded-2xl shadow-lg p-6">
+    <div class="bg-white rounded-2xl shadow-lg p-6">
 
-    <div class="flex border-b border-light-2 mb-6 space-x-6">
-      <button id="tab-charts" class=" py-3 px-4 text-sm font-semibold text-primary border-b-2 border-primary transition-all" onclick="showTab('charts')">Growth</button>
-      <button id="tab-user" class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('user')">Users</button>
-      <button id="tab-Challenge" class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('Challenge')">Challenge</button>
-      <button id="tab-tables" class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('tables')">Submission</button>
-      <button id="tab-reward" class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('reward')">Reward</button>
+        <div class="flex border-b border-light-2 mb-6 space-x-6">
 
-    </div>
+            <button id="tab-charts" class=" py-3 px-4 text-sm font-semibold text-primary border-b-2 border-primary transition-all" onclick="showTab('charts')">Growth</button>
+            <button id="tab-user" class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('user')">Users</button>
+            <button id="tab-Challenge" class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('Challenge')">Challenge</button>
+            <button id="tab-tables" class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('tables')">Submission</button>
+            <button id="tab-reward" class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('reward')">Reward</button>
+
+        </div>
 
 
     <div id="charts" class="tab-content">
-      <div class="p-4 bg-white rounded-xl shadow-md">
-        <div id="growthChart" style="height:380px;"></div>
-      </div>
-    </div>
-<div id="tables" class="tab-content hidden">
+        <div class="p-4 bg-white rounded-xl shadow-md">
+            <div id="growthChart" style="height:380px;"></div>
+        </div>
+        </div>
+        <div id="tables" class="tab-content hidden">
 
     <!-- KPI Cards Row -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -731,28 +732,52 @@ const tabInitialized = {
     Challenge: false
 };
 
-function showTab(tab) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-    document.getElementById(tab).classList.remove('hidden');
+function showTab(tabName) {
 
-    if (!tabInitialized[tab]) {
-        if (tab === 'charts') initGrowthChart();
-        if (tab === 'user') initUsersTab();
-        if (tab === 'tables') initSubmissionTab();
-        if (tab === 'reward') initRewardTab();
-        if (tab === 'Challenge') initChallengeTab();
-        tabInitialized[tab] = true;
+  // hide all
+  document.querySelectorAll('.tab-content').forEach(tab => {
+    tab.classList.add('hidden');
+  });
+
+  // show current
+  document.getElementById(tabName)?.classList.remove('hidden');
+
+  // reset buttons
+  document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+    btn.classList.remove('text-primary','border-b-2','border-primary');
+    btn.classList.add('text-dark-2');
+  });
+
+  // active button
+  const activeBtn = document.getElementById('tab-' + tabName);
+  if (activeBtn) {
+    activeBtn.classList.add('text-primary','border-b-2','border-primary');
+    activeBtn.classList.remove('text-dark-2');
+  }
+
+  // 🚀 INIT CHARTS ONCE
+  if (!tabInitialized[tabName]) {
+    switch (tabName) {
+      case 'charts':
+        initGrowthChart();
+        break;
+      case 'tables':
+        initSubmissionTab();
+        break;
+      case 'user':
+        initUsersTab();
+        break;
+      case 'Challenge':
+        initChallengeTab();
+        break;
+      case 'reward':
+        initRewardTab();
+        break;
     }
-
-    setTimeout(() => {
-        if (tab === 'tables') {
-            if (window.submissionCharts?.trend) window.submissionCharts.trend.resize();
-            if (window.submissionCharts?.cat) window.submissionCharts.cat.resize();
-        }
-        if (tab === 'user') Object.values(window.usersCharts || {}).forEach(c=>c.resize && c.resize());
-        if (tab === 'reward') Object.values(window.rewardCharts || {}).forEach(c=>c.resize && c.resize());
-    }, 200);
+    tabInitialized[tabName] = true;
+  }
 }
+
 
 // ensure executed after whole page load
 window.onload = () => showTab("charts");
