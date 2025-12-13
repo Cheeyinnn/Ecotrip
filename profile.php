@@ -7,16 +7,18 @@ require "includes/auth.php";       // session + auth
 require "includes/notify.php";     // ⭐ notification system
 
 // -------------------------------------
-// FETCH LOGGED-IN USER DATA & SCORE SYNC
+// FETCH LOGGED-IN USER DATA (Direct Read for scorePoint)
 // -------------------------------------
 $id = $_SESSION['userID'];
 $msg = "";
 $msgType = "info";
 
-// 1. FETCH CURRENT USER DATA
-// Query includes the direct fetch of scorePoint (will be overwritten) AND walletPoint.
+// 1. FETCH USER DATA: Retrieves scorePoint (Total Earned) and walletPoint (Available) directly.
+// This SELECT statement is crucial for fetching the correct 500 and 50 values.
 $stmt = $conn->prepare("
-    SELECT *, COALESCE(scorePoint, 0) AS scorePoint, COALESCE(walletPoint, 0) AS walletPoint
+    SELECT firstName, lastName, email, phone, address, avatarURL, password, 
+           COALESCE(scorePoint, 0) AS scorePoint, 
+           COALESCE(walletPoint, 0) AS walletPoint
     FROM user 
     WHERE userID=?
 ");
@@ -25,28 +27,11 @@ $stmt->execute();
 $user = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
-// 2. SYNC TOTAL SCORE (Point Score) FROM TRANSACTIONS
-// Calculate the TRUE lifetime total earned points from the transaction table.
-$sync_sql = "
-    SELECT 
-        COALESCE(SUM(pt.pointsTransaction), 0) AS calculatedTotal
-    FROM pointtransaction pt 
-    WHERE pt.userID = ? AND pt.transactionType = 'earn'
-";
-$sync_stmt = $conn->prepare($sync_sql);
-$sync_stmt->bind_param("i", $id);
-$sync_stmt->execute();
-$sync_result = $sync_stmt->get_result()->fetch_assoc();
-$sync_stmt->close();
+// Ensure points are treated as numbers
+$user['scorepoint'] = (int)($user['scorePoint'] ?? 0); // This will be 500
+$user['walletPoint'] = (int)($user['walletPoint'] ?? 0); // This will be 50
 
-// OVERRIDE the scorePoint with the calculated total
-$user['scorepoint'] = $sync_result['calculatedTotal']; 
-$user['scorepoint'] = (int)($user['scorepoint'] ?? 0); 
-
-// Ensure walletPoint is cast to integer for clean display
-$user['walletPoint'] = (int)($user['walletPoint'] ?? 0); 
-
-// Prevent null fields for other data
+// Prevent null fields for consistency
 $user['phone']      = $user['phone']      ?? '';
 $user['address']    = $user['address']    ?? '';
 
@@ -104,7 +89,9 @@ if (isset($_POST['change_password'])) {
     $old     = $_POST['old_password'];
     $new     = $_POST['new_password'];
     $confirm = $_POST['confirm_password'];
-
+    
+    // Note: The 'password' field must be available in the $user array for password_verify to work.
+    
     if (!password_verify($old, $user['password'])) {
 
         $msg = "Old password incorrect!";

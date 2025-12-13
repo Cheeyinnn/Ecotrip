@@ -49,6 +49,11 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
             Dashboard
         </a>
 
+        <a href="#" class="sidebar-link <?= isActive('Analytics.tsx') ?>">
+            <iconify-icon icon="solar:chart-square-line-duotone"></iconify-icon>
+            Reward Analysis
+        </a>
+
         <?php if ($role === 'admin'): ?>
 
             <div class="sidebar-nav-title">Dashboards</div>
