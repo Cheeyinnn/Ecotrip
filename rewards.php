@@ -2,6 +2,14 @@
 session_start(); 
 include 'db_connect.php';
 
+// Notification Function
+function sendNotification($conn, $userID, $message, $link = null) {
+    $stmt = $conn->prepare("INSERT INTO notifications (userID, message, link) VALUES (?, ?, ?)");
+    $stmt->bind_param("iss", $userID, $message, $link);
+    $stmt->execute();
+    $stmt->close();
+}
+
 if (!isset($_SESSION['userID'])) { header("Location: login.php"); exit(); }
 $userID = $_SESSION['userID'];
 
@@ -16,12 +24,6 @@ if ($cols->num_rows == 0) { $conn->query("ALTER TABLE redemptionrequest ADD COLU
 $cols = $conn->query("SHOW COLUMNS FROM reward LIKE 'prefix'");
 if ($cols->num_rows == 0) { 
     $conn->query("ALTER TABLE reward ADD COLUMN prefix VARCHAR(50) DEFAULT 'ECO-'"); 
-}
-
-// 2. ADD COLUMN FOR EXPIRY DATE (Ensure it exists)
-$checkExpiry = $conn->query("SHOW COLUMNS FROM reward LIKE 'expiry_date'");
-if ($checkExpiry->num_rows == 0) {
-    $conn->query("ALTER TABLE reward ADD COLUMN expiry_date DATE DEFAULT NULL");
 }
 
 // Fetch User
@@ -64,6 +66,50 @@ $myProducts = $conn->query("SELECT
                             ORDER BY rr.redemptionID DESC");
 
 
+// --- HANDLE USER CANCELLATION (Requirement 1 & 2) ---
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['cancelRedemptionID'])) {
+    $cancelID = $_POST['cancelRedemptionID'];
+    
+    // Check if pending to allow cancel
+    $checkStmt = $conn->prepare("SELECT status, pointSpent, quantity, rewardID, u.firstName, u.lastName FROM redemptionrequest rr JOIN user u ON rr.userID = u.userID WHERE redemptionID = ? AND rr.userID = ?");
+    $checkStmt->bind_param("ii", $cancelID, $userID);
+    $checkStmt->execute();
+    $checkStmt->bind_result($cStatus, $cPoints, $cQty, $cRewardID, $uFName, $uLName);
+    
+    if($checkStmt->fetch() && $cStatus == 'pending') {
+        $checkStmt->close();
+        
+        // 1. Refund Points
+        $refundStmt = $conn->prepare("INSERT INTO pointtransaction (userID, transactionType, pointsTransaction) VALUES (?, 'return', ?)");
+        $refundStmt->bind_param("ii", $userID, $cPoints);
+        $refundStmt->execute(); $refundStmt->close();
+        
+        // 2. Return Stock
+        $stockStmt = $conn->prepare("UPDATE reward SET stockQuantity = stockQuantity + ? WHERE rewardID = ?");
+        $stockStmt->bind_param("ii", $cQty, $cRewardID);
+        $stockStmt->execute(); $stockStmt->close();
+        
+        // 3. Update Status
+        $updateStmt = $conn->prepare("UPDATE redemptionrequest SET status = 'cancelled' WHERE redemptionID = ?");
+        $updateStmt->bind_param("i", $cancelID);
+        $updateStmt->execute(); $updateStmt->close();
+
+        // 4. NOTIFY ADMINS & MODERATORS (Requirement 2)
+        $msgAdmin = "User " . $uFName . " " . $uLName . " has cancelled their redemption request #" . $cancelID;
+        
+        $adminQuery = "SELECT userID FROM user WHERE role IN ('admin', 'moderator')";
+        $adminResult = $conn->query($adminQuery);
+        while($admin = $adminResult->fetch_assoc()) {
+            sendNotification($conn, $admin['userID'], $msgAdmin, "reviewRR.php");
+        }
+        
+        header("Location: rewards.php?msg=cancelled");
+        exit();
+    }
+    $checkStmt->close();
+}
+
+
 // --- HANDLE REDEMPTION ---
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rewardID']) && !isset($_POST['cancelRedemptionID'])) {
     $rewardID = $_POST['rewardID'];
@@ -78,10 +124,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rewardID']) && !isset(
     $stmt->bind_result($currentUserPoints);
     $stmt->fetch(); $stmt->close();
 
-    $stmt = $conn->prepare("SELECT stockQuantity, is_active, pointRequired, category FROM reward WHERE rewardID = ?");
+    // UPDATED QUERY: Fetch rewardName as well
+    $stmt = $conn->prepare("SELECT stockQuantity, is_active, pointRequired, category, rewardName FROM reward WHERE rewardID = ?");
     $stmt->bind_param("i", $rewardID);
     $stmt->execute();
-    $stmt->bind_result($stockQuantity, $isActive, $singlePointReq, $category);
+    $stmt->bind_result($stockQuantity, $isActive, $singlePointReq, $category, $rewardName);
     $stmt->fetch(); $stmt->close();
 
     $pointsRequired = $singlePointReq * $quantity;
@@ -108,6 +155,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rewardID']) && !isset(
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("ii", $quantity, $rewardID);
         $stmt->execute(); $stmt->close();
+
+        // 5. NOTIFY ADMINS & MODERATORS of New Request (Requirement 2)
+        // Only if it's pending (i.e., needs review). If auto-approved (voucher), maybe notify differently or not at all.
+        // Assuming "new reward request" means something that needs action.
+        if ($status === 'pending') {
+            $msgNewReq = "New redemption request #" . $newRedemptionID . " from " . $userName . " for " . $rewardName;
+            $adminQuery = "SELECT userID FROM user WHERE role IN ('admin', 'moderator')";
+            $adminResult = $conn->query($adminQuery);
+            while($admin = $adminResult->fetch_assoc()) {
+                sendNotification($conn, $admin['userID'], $msgNewReq, "reviewRR.php");
+            }
+        }
+        
+        // Notify User
+        $notifMsg = "You have successfully redeemed a " . $rewardName . " " . ucfirst($category);
+        sendNotification($conn, $userID, $notifMsg, "rewards.php");
 
         if ($isVoucher) {
             header("Location: rewards.php?msg=approved&voucher_id=$newRedemptionID");
@@ -195,7 +258,6 @@ include "includes/layout_start.php";
         .dashboard-row { display: flex; gap: 20px; margin-bottom: 35px; flex-wrap: wrap; }
         .dash-card { flex: 1; min-width: 250px; background: #fff; border-radius: 20px; padding: 15px 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; display: flex; align-items: center; position: relative; overflow: hidden; height: 120px; }
         
-        /* Updated Profile Card Style */
         .profile-card-content { display: flex; align-items: center; gap: 15px; width: 100%; z-index: 2; }
         .profile-card-bg { 
             background: linear-gradient(135deg, #1e293b 0%, #334155 100%); 
@@ -229,7 +291,7 @@ include "includes/layout_start.php";
         .modal-filter-group { display: flex; gap: 5px; }
 
         .fixed-height-list {
-            height: 400px; /* Fixed height for consistency */
+            height: 400px; 
             overflow-y: auto; 
             display: flex;
             flex-direction: column;
@@ -291,7 +353,6 @@ include "includes/layout_start.php";
         .status-approved { background: #f0fdf4; color: #16a34a; }
         .status-rejected { background: #fef2f2; color: #dc2626; }
 
-        /* BLUR EFFECT FOR EXPIRED VOUCHERS */
         .barcode-blur {
             filter: blur(5px);
             opacity: 0.5;
@@ -317,6 +378,8 @@ include "includes/layout_start.php";
             <div class="alert alert-success border-0 shadow-sm"><i class="fas fa-check-circle me-2"></i><strong>Redemption Approved!</strong> Your item has been approved.</div>
             <?php elseif(isset($_GET['msg']) && $_GET['msg'] == 'pending'): ?>
             <div class="alert alert-info border-0 shadow-sm"><i class="fas fa-clock me-2"></i><strong>Request Sent!</strong> Shipping soon.</div>
+            <?php elseif(isset($_GET['msg']) && $_GET['msg'] == 'cancelled'): ?>
+            <div class="alert alert-warning border-0 shadow-sm"><i class="fas fa-info-circle me-2"></i><strong>Cancelled!</strong> Request cancelled and points refunded.</div>
             <?php endif; ?>
 
             <!-- Dashboard Row -->
@@ -423,7 +486,12 @@ include "includes/layout_start.php";
 
 <!-- History Modal -->
 <div class="modal fade" id="historyModal" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content border-0 shadow-lg rounded-4"><div class="modal-header border-0 bg-light rounded-top-4"><h5 class="modal-title fw-bold">History</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="bg-light"><tr><th class="ps-4">Reward</th><th>Points</th><th>Status</th></tr></thead><tbody><?php if ($requests_result->num_rows > 0) { while ($req = $requests_result->fetch_assoc()) { echo "<tr><td class='ps-4 fw-bold'>".htmlspecialchars($req['rewardName'])."</td><td class='text-danger'>-".number_format($req['pointSpent'])."</td><td>".ucfirst($req['status'])."</td></tr>"; }} ?></tbody></table></div></div></div></div>
+  <div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content border-0 shadow-lg rounded-4"><div class="modal-header border-0 bg-light rounded-top-4"><h5 class="modal-title fw-bold">History</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="bg-light"><tr><th class="ps-4">Reward</th><th>Points</th><th>Status</th><th>Action</th></tr></thead><tbody><?php if ($requests_result->num_rows > 0) { while ($req = $requests_result->fetch_assoc()) { 
+    $canCancel = ($req['status'] == 'pending');
+    echo "<tr><td class='ps-4 fw-bold'>".htmlspecialchars($req['rewardName'])."</td><td class='text-danger'>-".number_format($req['pointSpent'])."</td><td>".ucfirst($req['status'])."</td><td>";
+    if($canCancel) echo '<form method="POST" onsubmit="return confirm(\'Cancel this request?\')"><input type="hidden" name="cancelRedemptionID" value="'.$req['redemptionID'].'"><button type="submit" class="btn btn-xs btn-danger" style="font-size:10px; padding:2px 8px;">Cancel</button></form>';
+    else echo '-';
+    echo "</td></tr>"; }} ?></tbody></table></div></div></div></div>
 </div>
 
 <!-- MY VOUCHERS LIST MODAL -->
@@ -432,6 +500,7 @@ include "includes/layout_start.php";
     <div class="modal-content border-0 shadow-lg rounded-4">
       <div class="modal-header border-0 bg-light"><h5 class="modal-title fw-bold">My Vouchers</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body p-0">
+          <!-- ADDED: fixed-height-list for consistency -->
           <div class="list-group list-group-flush my-vouchers-list fixed-height-list">
               <?php if($myVouchers->num_rows > 0): ?>
                   <?php while($v = $myVouchers->fetch_assoc()): 
@@ -457,6 +526,7 @@ include "includes/layout_start.php";
                   </div>
                   <?php endwhile; ?>
               <?php else: ?>
+                  <!-- EMPTY STATE -->
                   <div class="empty-state-msg">No active vouchers found.</div>
               <?php endif; ?>
           </div>
@@ -465,7 +535,7 @@ include "includes/layout_start.php";
   </div>
 </div>
 
-<!-- MY PRODUCT LIST MODAL -->
+<!-- MY PRODUCT LIST MODAL (Updated Title & Filter Buttons) -->
 <div class="modal fade" id="myProductsModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow-lg rounded-4">
@@ -482,11 +552,13 @@ include "includes/layout_start.php";
           </div>
       </div>
       <div class="modal-body p-0">
+          <!-- FIXED HEIGHT CONTAINER -->
           <div class="list-group list-group-flush fixed-height-list" id="myProductsList">
               <?php if($myProducts->num_rows > 0): ?>
                   <?php while($p = $myProducts->fetch_assoc()): 
                       $statusColor = 'status-pending';
                       $statusVal = strtolower($p['status']);
+                      $canCancel = ($statusVal == 'pending');
                       
                       if($statusVal == 'approved') $statusColor = 'status-approved';
                       elseif($statusVal == 'rejected' || $statusVal == 'denied') { 
@@ -505,9 +577,17 @@ include "includes/layout_start.php";
                               <small class="text-muted"><?php echo date('M d, Y', strtotime($p['requested_at'])); ?></small>
                           </div>
                       </div>
+                      <!-- ADDED: Cancel Button for Pending Products -->
+                      <?php if($canCancel): ?>
+                        <form method="POST" onsubmit="return confirm('Cancel this redemption?');" class="ms-3">
+                            <input type="hidden" name="cancelRedemptionID" value="<?php echo $p['redemptionID']; ?>">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" style="font-size: 11px; padding: 4px 10px;">Cancel</button>
+                        </form>
+                      <?php endif; ?>
                   </div>
                   <?php endwhile; ?>
               <?php else: ?>
+                  <!-- EMPTY STATE -->
                   <div class="empty-state-msg">No products redeemed yet.</div>
               <?php endif; ?>
           </div>
