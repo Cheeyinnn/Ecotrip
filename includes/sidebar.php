@@ -44,7 +44,7 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
             My Profile
         </a>
 
-        <a href="#" class="sidebar-link <?= isActive('Analytics.tsx') ?>">
+        <a href="userReward_board.php" class="sidebar-link <?= isActive('userReward_board.php') ?>">
             <iconify-icon icon="solar:chart-square-line-duotone"></iconify-icon>
             Reward Analysis
         </a>
@@ -153,17 +153,12 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
                 <iconify-icon icon="solar:cup-star-line-duotone"></iconify-icon>
                 Leaderboard
             </a>
-
-            <a href="LbDetail.php" class="sidebar-link <?= isActive('LbDetail.php') ?>">
-                <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
-                lbdetail
-            </a>
         
             <div class="sidebar-nav-title">Redemption</div>
 
             <a href="rewards.php" class="sidebar-link <?= isActive('rewards.php') ?>">
                 <iconify-icon icon="solar:gift-line-duotone"></iconify-icon>
-                rewards
+                Rewards
             </a>
 
             <div class="sidebar-nav-title">EcoTrip</div>
