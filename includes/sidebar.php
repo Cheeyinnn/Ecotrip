@@ -44,7 +44,7 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
             My Profile
         </a>
 
-        <a href="#" class="sidebar-link <?= isActive('Analytics.tsx') ?>">
+        <a href="userReward_board.php" class="sidebar-link <?= isActive('userReward_board.php') ?>">
             <iconify-icon icon="solar:chart-square-line-duotone"></iconify-icon>
             Reward Analysis
         </a>
