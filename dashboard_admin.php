@@ -305,7 +305,7 @@ $topCategories = $conn->query("
     LIMIT 5
 ")->fetch_all(MYSQLI_ASSOC);
 
-
+include "includes/layout_start.php";
 
 ?>
 <!doctype html>
@@ -1151,6 +1151,8 @@ window.rewardCharts.trend = new Chart(trendCtx, {
 
 }
 </script>
+
+<?php include "includes/layout_end.php"; ?>
 
 </body>
 </html>
