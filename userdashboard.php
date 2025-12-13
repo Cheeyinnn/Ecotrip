@@ -433,11 +433,11 @@ function statusTag($status) {
                             }
                         }
                         elseif ($status === "approved") {
-                            echo '<a a href="leaderboard.php?id=' . $submissionId . '"
+                            echo '<a a href="rewards.php"
                                     class="inline-block px-4 py-2 text-sm font-medium border border-green-600
                                         text-green-600 rounded-lg hover:bg-green-600 hover:text-white
                                         transition-all duration-200">
-                                    View Points
+                                        Reward
                                 </a>';
                         }
 
