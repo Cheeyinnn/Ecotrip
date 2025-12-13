@@ -204,16 +204,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submission_id'])) {
         $stmt->close();
 
         if ($decision === 'approve' && $submissionUserID) {
-       
+
             $insert = $conn->prepare("
                 INSERT INTO pointtransaction
-                (transactionType, pointsTransaction, generate_at, userID)
-                VALUES ('earn', ?, NOW(), ?)
+                (transactionType, pointsTransaction, generate_at, submissionID, userID)
+                VALUES ('earn', ?, NOW(), ?, ?)
             ");
-            $insert->bind_param("ii", $pointsToAward, $submissionUserID);
+
+            if (!$insert) {
+                die("Prepare failed: " . $conn->error);
+            }
+
+            $insert->bind_param(
+                "iii",
+                $pointsToAward,
+                $submissionId,
+                $submissionUserID
+            );
+
             $insert->execute();
             $insert->close();
         }
+
 
     $_SESSION['flash'] = "Submission reviewed successfully.";
 
