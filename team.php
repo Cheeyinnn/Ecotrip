@@ -392,7 +392,7 @@ if (
             $stmt->execute();
             $stmt->close();
 
-            $message     = "Member kicked successfully!";
+            $message     = "Member removed successfully!";
             $messageType = "success";
 
             // ⭐ Notify kicked MEMBER
@@ -412,7 +412,7 @@ if (
             );
 
         } else {
-            $message     = "Cannot kick this user!";
+            $message     = "Cannot remove this user!";
             $messageType = "info";
         }
     }
@@ -957,7 +957,7 @@ include "includes/layout_start.php";
                                     <input type="hidden" name="action" value="kick_member">
                                     <input type="hidden" name="targetID" value="<?= $m['userID'] ?>">
                                     <button class="btn btn-sm btn-outline-danger">
-                                        <iconify-icon icon="ic:round-person-remove"></iconify-icon> Kick
+                                        <iconify-icon icon="ic:round-person-remove"></iconify-icon> Remove
                                     </button>
                                 </form>
                             <?php endif; ?>

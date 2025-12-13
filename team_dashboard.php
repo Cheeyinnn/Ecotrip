@@ -26,7 +26,7 @@ if ($teamID <= 0) {
 // --------------------
 $stmt = $conn->prepare("
     SELECT u.firstName, u.lastName, u.role, u.avatarURL, u.teamID,
-           t.teamName, t.teamDesc, t.teamLeaderID, t.teamImage, t.created_at
+            t.teamName, t.teamDesc, t.teamLeaderID, t.teamImage, t.created_at
     FROM user u
     JOIN team t ON t.teamID = u.teamID
     WHERE u.userID = ? AND u.teamID = ?
@@ -51,19 +51,34 @@ $teamDesc  = $data['teamDesc'];
 $teamImage = $data['teamImage'] ?: 'uploads/team/default_team.png';
 
 // --------------------
-// FETCH TEAM MEMBERS
+// ⭐ NEW: CALCULATE TOTAL TEAM POINTS (Sum of all members' scorePoint)
+// --------------------
+$stmtPoints = $conn->prepare("
+    SELECT COALESCE(SUM(scorePoint), 0) AS total
+    FROM user
+    WHERE teamID = ?
+");
+$stmtPoints->bind_param("i", $teamID);
+$stmtPoints->execute();
+$resPoints = $stmtPoints->get_result();
+$totalTeamPoints = (int)$resPoints->fetch_assoc()['total'];
+$stmtPoints->close();
+
+// --------------------
+// FETCH TEAM MEMBERS (Includes scorePoint for display and sorting)
 // --------------------
 $members = [];
 $resMembers = $conn->query("
-    SELECT userID, firstName, lastName, avatarURL, last_online
+    SELECT userID, firstName, lastName, avatarURL, last_online, COALESCE(scorePoint, 0) as scorePoint
     FROM user
     WHERE teamID = $teamID
-    ORDER BY userID = {$data['teamLeaderID']} DESC, firstName
+    ORDER BY COALESCE(scorePoint, 0) DESC, userID = {$data['teamLeaderID']} DESC, firstName
 ");
 while ($row = $resMembers->fetch_assoc()) {
     $members[] = $row;
 }
 $resMembers->free();
+
 
 // --------------------
 // PROVIDE USER + PAGE TITLE FOR LAYOUT
@@ -85,7 +100,6 @@ include "includes/layout_start.php";
 
 <div class="container-fluid p-4">
 
-    <!-- ================= TEAM HEADER ================= -->
     <div class="card shadow-sm mb-4">
         <div class="card-body d-flex justify-content-between align-items-center">
             <div>
@@ -103,11 +117,10 @@ include "includes/layout_start.php";
         </div>
     </div>
 
-    <!-- ================= QUICK STATS ================= -->
     <div class="row g-4 mb-4">
 
-        <div class="col-md-4">
-            <div class="card text-center shadow-sm">
+        <div class="col-md-3 col-sm-6">
+            <div class="card text-center shadow-sm h-100">
                 <div class="card-body">
                     <h6 class="text-muted">Total Members</h6>
                     <h2><?= count($members) ?></h2>
@@ -115,17 +128,25 @@ include "includes/layout_start.php";
             </div>
         </div>
 
-        <div class="col-md-4">
-            <div class="card text-center shadow-sm">
+        <div class="col-md-3 col-sm-6">
+            <div class="card text-center shadow-sm h-100">
                 <div class="card-body">
                     <h6 class="text-muted">Your Role</h6>
                     <h2><?= $isOwner ? 'Owner' : 'Member' ?></h2>
                 </div>
             </div>
         </div>
-
-        <div class="col-md-4">
-            <div class="card text-center shadow-sm">
+        
+        <div class="col-md-3 col-sm-6">
+            <div class="card text-center shadow-sm h-100 bg-success text-white">
+                <div class="card-body">
+                    <h6 class="text-white">Total Team Score</h6>
+                    <h2><?= number_format($totalTeamPoints) ?> <small>pts</small></h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card text-center shadow-sm h-100">
                 <div class="card-body">
                     <h6 class="text-muted">Team ID</h6>
                     <h2>#<?= $teamID ?></h2>
@@ -135,49 +156,68 @@ include "includes/layout_start.php";
 
     </div>
 
-    <!-- ================= MEMBERS LIST ================= -->
     <div class="card shadow-sm">
         <div class="card-header bg-light">
             <strong>Team Members</strong>
         </div>
 
         <ul class="list-group list-group-flush">
-            <?php foreach ($members as $m): ?>
+            <li class="list-group-item d-flex justify-content-between align-items-center bg-light small text-muted fw-bold py-2">
+                <div style="flex-basis: 50%;">MEMBER NAME</div>
+                <div class="text-center" style="flex-basis: 30%;">LAST SEEN</div>
+                <div class="text-end" style="flex-basis: 20%;">SCORE</div>
+            </li>
+            
+            <?php 
+            $timeThreshold = strtotime('-5 minutes'); // 5 minutes for online check
+            foreach ($members as $m): ?>
                 <?php
-                    $online = ($m['last_online'] && strtotime($m['last_online']) > strtotime('-5 minutes'));
+                    $isLeader = ((int)$m['userID'] === (int)$data['teamLeaderID']);
+                    $isCurrentUser = ((int)$m['userID'] === (int)$userID);
+                    
+                    // Determine online status
+                    $online = ($m['last_online'] && strtotime($m['last_online']) > $timeThreshold);
                 ?>
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                        <strong>
-                            <?= htmlspecialchars($m['firstName'] . " " . $m['lastName']) ?>
-                        </strong>
-
-                        <?php if ($m['userID'] == $data['teamLeaderID']): ?>
-                            <span class="badge bg-dark ms-2">Owner</span>
-                        <?php endif; ?>
-
-                        <?php if ($m['userID'] == $userID): ?>
-                            <span class="badge bg-info ms-1">You</span>
-                        <?php endif; ?>
-
-                        <div class="small text-muted">
-                            Last online:
-                            <?= $m['last_online']
-                                ? date('M d, Y h:i A', strtotime($m['last_online']))
-                                : 'Never'
-                            ?>
+                <li class="list-group-item d-flex justify-content-between align-items-center <?= $isCurrentUser ? 'bg-light-info' : '' ?>">
+                    <div style="flex-basis: 50%;">
+                        <div class="d-flex align-items-center">
+                            <img src="<?= htmlspecialchars($m['avatarURL'] ?? 'uploads/default.png') ?>" 
+                                 style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" class="me-2">
+                            <div>
+                                <strong>
+                                    <?= htmlspecialchars($m['firstName'] . " " . $m['lastName']) ?>
+                                </strong>
+        
+                                <?php if ($isLeader): ?>
+                                    <span class="badge bg-primary ms-1">Leader</span>
+                                <?php endif; ?>
+        
+                                <?php if ($isCurrentUser): ?>
+                                    <span class="badge bg-info ms-1">You</span>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
-
-                    <span class="badge <?= $online ? 'bg-success' : 'bg-secondary' ?>">
-                        <?= $online ? 'Online' : 'Offline' ?>
-                    </span>
+        
+                    <div class="text-center small text-muted" style="flex-basis: 30%;">
+                         <span class="badge <?= $online ? 'bg-success' : 'bg-secondary' ?> me-2">
+                            <?= $online ? 'Online' : 'Offline' ?>
+                        </span>
+                        
+                        <?= $m['last_online']
+                            ? date('M d, Y', strtotime($m['last_online']))
+                            : 'N/A'
+                        ?>
+                    </div>
+                    
+                    <div class="text-end fw-bold text-success" style="flex-basis: 20%;">
+                        <?= number_format($m['scorePoint']) ?> pts
+                    </div>
                 </li>
             <?php endforeach; ?>
         </ul>
     </div>
 
-    <!-- ================= ACTIONS ================= -->
     <div class="mt-4">
         <a href="team.php" class="btn btn-outline-secondary">
             ← Back to Team
