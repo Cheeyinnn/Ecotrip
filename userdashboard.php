@@ -172,7 +172,7 @@ function statusTag($status) {
             if (!$timestamp || $timestamp === "0000-00-00 00:00:00") return "";
 
             $time = strtotime($timestamp);
-            if ($time <= 0) return ""; // 防止奇怪时间
+            if ($time <= 0) return ""; 
 
             $diff = time() - $time;
 
@@ -430,7 +430,7 @@ function statusTag($status) {
                                         Resubmit
                                     </a>';
                             } else {
-                                // 超过一次就禁用
+ 
                                 echo '<span class="text-red-400">Challenge fail</span>';
                             }
                         }
