@@ -150,7 +150,12 @@ if ($team_result) {
     }
 }
 ?>
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Leaderboard - EcoTrip</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> 
@@ -548,7 +553,7 @@ if ($team_result) {
             });
         });
     </script>
-
+</head>
 <body>
 <div class="layout-wrapper">
     <aside class="sidebar">
@@ -779,7 +784,5 @@ if ($team_result) {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-<?php include "includes/layout_end.php"; ?>
 </body>
 </html>
