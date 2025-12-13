@@ -352,5 +352,7 @@ include "includes/layout_start.php";
     });
 </script>
 
+<?php include "includes/layout_end.php"; ?>
+
 </body>
 </html>

@@ -46,8 +46,13 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
 
         <a href="userReward_board.php" class="sidebar-link <?= isActive('userReward_board.php') ?>">
             <iconify-icon icon="solar:chart-square-line-duotone"></iconify-icon>
-            Reward Analysis
+            Reward Analysis(User)
         </a>
+
+        <a href="adminReward_board.php" class="sidebar-link <?= isActive('adminReward_board.php') ?>">
+                <iconify-icon icon="solar:bag-4-line-duotone"></iconify-icon>
+                Reward Analysis(Admin)
+            </a>
 
         <?php if ($role === 'admin'): ?>
 
@@ -85,11 +90,6 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
             <a href="leaderboard.php" class="sidebar-link <?= isActive('leaderboard.php') ?>">
                 <iconify-icon icon="solar:cup-star-line-duotone"></iconify-icon>
                 Leaderboard
-            </a>
-
-            <a href="LbDetail.php" class="sidebar-link <?= isActive('LbDetail.php') ?>">
-                <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
-                lbdetail
             </a>
 
             <a href="rewardAdmin.php" class="sidebar-link <?= isActive('rewardAdmin.php') ?>">
