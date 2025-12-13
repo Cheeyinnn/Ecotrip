@@ -661,7 +661,6 @@ include "includes/layout_start.php";
     initReviewResultRadio();
     initTimeFilterAutoSubmit();
 
-    // 首次加载时点击第一个 pending item
     const firstPending = document.querySelector('.accordion-content div[data-status="Pending"]');
     const firstAny = document.querySelector('.submit-item');
    
@@ -692,11 +691,10 @@ function initSubmitItemClick() {
 
     submitItems.forEach(item => {
         item.addEventListener('click', () => {
-            // 左侧高亮
+
             submitItems.forEach(i => i.classList.remove('bg-primary/5','border','border-primary/20'));
             item.classList.add('bg-primary/5','border','border-primary/20');
 
-            // 从 data-* 读取（注意：dataset 用 camelCase）
             const id = item.dataset.id;
             const title = item.dataset.title || 'No Caption';
             const user = item.dataset.user || '';
@@ -711,7 +709,6 @@ function initSubmitItemClick() {
             const chCity = item.dataset.challengeCity || 'N/A';
             const chPoints = item.dataset.challengePoints || points || '0';
 
-            // 更新右侧顶部基本 info
             const detailTitleEl = document.getElementById('detail-title');
             const detailUsernameEl = document.getElementById('detail-username');
             const detailTypeEl = document.getElementById('detail-type');
@@ -721,18 +718,16 @@ function initSubmitItemClick() {
             if (detailTypeEl) detailTypeEl.textContent = `Challenge Submission · Sent at ${submitTime}`;
             if (detailImageEl) {
                 detailImageEl.src = thumbnail;
-                // 更新 modal 的 onclick 事件
+
                 detailImageEl.setAttribute('onclick', `openModal('${thumbnail}')`);
             }
 
-            // 更新 challenge info（下方五个块）
             if (challengeIdEl) challengeIdEl.textContent = chId;
             if (challengeTitleEl) challengeTitleEl.textContent = chTitle;
             if (challengeDescEl) challengeDescEl.textContent = chDesc;
             if (challengeCityEl) challengeCityEl.textContent = chCity;
             if (challengePointsEl) challengePointsEl.textContent = chPoints;
 
-            // 根据状态切换表单 / static block
             if (status === 'pending') {
                 reviewFormBlock.style.display = 'block';
                 reviewStaticBlock.style.display = 'none';
@@ -740,7 +735,7 @@ function initSubmitItemClick() {
                 submissionIdInput.value = id;
                 detailFeedbackTextarea.value = feedback;
 
-                const isResubmit = item.dataset.isResubmit === 'true'; // dataset 属性需要加上 data-is-resubmit="true"
+                const isResubmit = item.dataset.isResubmit === 'true'; 
 
                 if (status === 'pending') {
                     reviewFormBlock.style.display = 'block';
@@ -748,19 +743,16 @@ function initSubmitItemClick() {
 
                     submissionIdInput.value = id;
                    
-                    // 对 resubmit 清空 feedback
                     if (isResubmit) {
                         detailFeedbackTextarea.value = '';
                     } else {
                         detailFeedbackTextarea.value = feedback ? feedback : '';
                     }
 
-                    // 清 radio
                     const radios = document.querySelectorAll('#review-form input[name="review_result"]');
                     radios.forEach(r => r.checked = false);
                 }
 
-                // 清 radio
                 const radios = document.querySelectorAll('#review-form input[name="review_result"]');
                 radios.forEach(r => r.checked = false);
 
@@ -818,7 +810,6 @@ function initSubmitItemClick() {
                 content.style.maxHeight = null;
                 icon.style.transform = 'rotate(0deg)';
             } else {
-                // 计算实际高度并应用
                 content.style.maxHeight = content.scrollHeight + 'px';
                 icon.style.transform = 'rotate(180deg)';
             }
@@ -829,7 +820,6 @@ function initSubmitItemClick() {
     window.addEventListener('DOMContentLoaded', () => {
         const pendingAccordion = document.querySelector('.accordion-header');
         if (pendingAccordion) {
-             // 仅在初始状态下点击，确保用户搜索后不会自动关闭
              if (pendingAccordion.textContent.includes('Pending')) {
                 pendingAccordion.click();
              }

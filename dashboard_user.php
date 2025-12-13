@@ -21,10 +21,6 @@ elseif ($timeFilter === '30') {
 }
 
 
-
-
-
-// --- 1. 获取用户总积分 (My Points) ---
 // --- Fetch User Points Safely ---
 $sql_points = "SELECT walletPoint AS totalPoints FROM user WHERE userID = ?";
 $stmt_points = $conn->prepare($sql_points);
@@ -46,7 +42,6 @@ if ($stmt_points) {
     $myPoints = 0;
 }
 
-// --- 2. 获取 Submission 统计 (Approved, Pending, Denied) ---
 $sql_subs = "
     SELECT 
         SUM(CASE WHEN status = 'Approved' THEN 1 ELSE 0 END) AS approvedCount,
@@ -69,7 +64,6 @@ $totalSubmission = $res_subs['totalSubmission'] ?? 0;
 $stmt_subs->close();
 
 
-// --- 3. 获取 Submission 详情 (用于 My Submissions Tab: Table) ---
 $submissionDetails = [];
 $sql_sub_details = "
     SELECT s.status, s.pointEarned, s.reviewNote, s.uploaded_at, c.challengeTitle
@@ -89,8 +83,6 @@ while($row = $res_sub_details->fetch_assoc()){
 }
 $stmt_sub_details->close();
 
-// --- 4. 获取用户挑战列表 (My Challenges Tab) ---
-// ... (使用 INNER JOIN 逻辑保持不变，确保只显示有提交记录的挑战) ...
 $userChallenges = [];
 $sql_challenges = "
     SELECT 
@@ -134,8 +126,6 @@ while($row = $res_challenges->fetch_assoc()){
 }
 $stmt_challenges->close();
 
-// --- 5. 获取奖励数据 (Rewards Tab) ---
-// a) 奖励列表 (可兑换)
 $availableRewards = [];
 $sql_rewards = "SELECT rewardName, description, pointRequired FROM reward ORDER BY pointRequired ASC";
 $res_rewards = $conn->query($sql_rewards);
@@ -143,15 +133,14 @@ while($row = $res_rewards->fetch_assoc()){
     $availableRewards[] = [
         'name' => $row['rewardName'],
         'points' => $row['pointRequired'],
-        'status' => ($myPoints >= $row['pointRequired']) ? 'available' : 'locked' // 根据用户积分判断
+        'status' => ($myPoints >= $row['pointRequired']) ? 'available' : 'locked' 
     ];
 }
 
-// b) 已使用的积分 (用于 Points Overview 饼图)
 $sql_used_points = "SELECT SUM(r.pointRequired) AS usedPoints 
                     FROM redemptionrequest rr
                     JOIN reward r ON rr.rewardID = r.rewardID
-                    WHERE rr.userID = ? AND rr.status = 'Approved'"; // 假设只有 Approved 的兑换才算 used
+                    WHERE rr.userID = ? AND rr.status = 'Approved'"; 
 $stmt_used = $conn->prepare($sql_used_points);
 $stmt_used->bind_param("i", $userID);
 $stmt_used->execute();
@@ -159,9 +148,8 @@ $res_used = $stmt_used->get_result()->fetch_assoc();
 $usedPoints = $res_used['usedPoints'] ?? 0;
 $stmt_used->close();
 
-$availablePoints = $myPoints - $usedPoints; // 剩余积分
+$availablePoints = $myPoints - $usedPoints; 
 
-// c) 已领取的奖励 (Claimed Rewards)
 $claimedRewards = [];
 $sql_claimed = "
     SELECT r.rewardName, rr.requested_at
@@ -176,7 +164,7 @@ $stmt_claimed->execute();
 $res_claimed = $stmt_claimed->get_result();
 
 while($row = $res_claimed->fetch_assoc()){
-    // 注意: 数据库字段为 requested_at
+
     $claimedRewards[] = [
         'name' => $row['rewardName'],
         'date' => date('Y-m-d', strtotime($row['requested_at'])) 
@@ -184,13 +172,11 @@ while($row = $res_claimed->fetch_assoc()){
 }
 $stmt_claimed->close();
 
-// --- 6. 获取团队排名数据 (简化版：获取个人积分排名 Top 5) ---
 $userHasTeam = false;
 $teamRankMessage = '';
 $teamRank = [];
 $personalRank = null;
 
-// Step 1: 获取当前用户的 teamID
 $sql_team_id = "SELECT teamID FROM user WHERE userID = ?";
 $stmt = $conn->prepare($sql_team_id);
 $stmt->bind_param("i", $userID);
@@ -201,12 +187,11 @@ $stmt->close();
 $teamID = $userTeam['teamID'] ?? null;
 
 if ($teamID === null) {
-    // 用户没有团队
+
     $teamRankMessage = "You are not part of any team yet. Join a team to see your rank!";
 } else {
     $userHasTeam = true;
 
-    // Step 2: 获取该团队内所有成员积分排行
     $sql_leaderboard = "
         SELECT 
             u.userID,
@@ -235,7 +220,6 @@ if ($teamID === null) {
             'value' => (int)($row['totalPoints'] ?? 0)
         ];
 
-        // 记录当前用户的个人排名
         if ($row['userID'] == $userID) {
             $personalRank = $rankCounter;
         }
@@ -246,7 +230,6 @@ if ($teamID === null) {
 }
 include "includes/layout_start.php";    
 
-// 关闭连接
 if (isset($conn) && $conn->ping()) {
     $conn->close();
 }
@@ -540,29 +523,24 @@ function applyTimeFilter(){
 
 document.addEventListener('DOMContentLoaded', function () {
 
-    // ---------- Tab 切换函数 ----------
     function showTab(tabId) {
-        // 隐藏所有 tab-content
+
         document.querySelectorAll('.tab-content').forEach(tc => tc.classList.add('hidden'));
 
-        // 移除所有 tab 按钮高亮
         document.querySelectorAll('[id^="tab-"]').forEach(btn => {
             btn.classList.remove('text-primary','border-b-2','border-primary');
             btn.classList.add('text-dark-2','hover:text-dark','hover:border-dark/20');
         });
 
-        // 显示选中的 tab
         const tab = document.getElementById(tabId);
         if(tab) tab.classList.remove('hidden');
 
-        // 高亮选中按钮
         const btn = document.querySelector(`[onclick="showTab('${tabId}')"]`);
         if(btn){
             btn.classList.add('text-primary','border-b-2','border-primary');
             btn.classList.remove('text-dark-2','hover:text-dark','hover:border-dark/20');
         }
 
-        // ---------- My Submissions 图表 ----------
         if(tabId === 'user' && !window.userChartInitialized){
             const userChartEl = document.getElementById('submissionStatusBarChart');
             if(userChartEl){
@@ -597,7 +575,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        // ---------- My Challenges 图表 ----------
         if(tabId === 'tables' && !window.challengeChartInitialized){
             const challengeEl = document.getElementById('challengeChart');
             if(challengeEl){
@@ -631,9 +608,8 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        // ---------- Reward Tab 图表 ----------
         if(tabId === 'reward' && !window.rewardChartInitialized){
-            // Points Overview 饼图
+
             const rewardChartEl = document.getElementById('rewardChart');
             if(rewardChartEl){
                 window.rewardChart = echarts.init(rewardChartEl);
@@ -684,7 +660,6 @@ window.rewardChart.setOption({
                 window.rewardChart.resize();
             }
 
-            // Available Rewards 柱状图
             const rewardBarEl = document.getElementById('rewardBarChart');
             if(rewardBarEl){
                 const rewardsData = <?= json_encode($availableRewards); ?>;
@@ -709,7 +684,6 @@ window.rewardChart.setOption({
 
     window.showTab = showTab;
 
-    // ---------- Overview Tab 初始化 ----------
     const teamRankData = <?= json_encode($teamRank); ?>;
     if(teamRankData.length>0){
         const teamRankChart = echarts.init(document.getElementById('teamRankChart'));
@@ -762,8 +736,6 @@ submissionStatusChart.setOption({
     }]
 });
 
-
-    // ---------- 自适应 ----------
     window.addEventListener('resize', function(){
         if(teamRankChart) teamRankChart.resize();
         if(submissionStatusChart) submissionStatusChart.resize();
@@ -773,7 +745,6 @@ submissionStatusChart.setOption({
         if(window.rewardBarChart) window.rewardBarChart.resize();
     });
 
-    // 默认显示 Overview Tab
     showTab('charts');
 });
 </script>

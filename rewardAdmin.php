@@ -21,6 +21,16 @@ if ($checkPrefix->num_rows == 0) {
     $conn->query("ALTER TABLE reward ADD COLUMN prefix VARCHAR(50) DEFAULT 'ECO-'"); 
 }
 
+// 2. ADD COLUMN FOR EXPIRY DATE (New Requirement)
+$checkExpiry = $conn->query("SHOW COLUMNS FROM reward LIKE 'expiry_date'");
+if ($checkExpiry->num_rows == 0) {
+    $conn->query("ALTER TABLE reward ADD COLUMN expiry_date DATE DEFAULT NULL");
+}
+
+// 3. AUTO-DEACTIVATE EXPIRED REWARDS (New Requirement)
+// If expiry_date is set (not NULL) and is in the past (< CURDATE()), set is_active to 0
+$conn->query("UPDATE reward SET is_active = 0 WHERE expiry_date IS NOT NULL AND expiry_date < CURDATE() AND is_active = 1");
+
 // Fetch User
 $stmt = $conn->prepare("SELECT firstName, lastName, email, role, avatarURL FROM user WHERE userID = ?");
 $stmt->bind_param("i", $userID);
@@ -126,7 +136,7 @@ function uploadImage($file) {
 
 $msg = ""; $msgType = "";
 
-// 2. UPDATE ADD REWARD LOGIC (Handle Prefix)
+// 2. UPDATE ADD REWARD LOGIC (Handle Prefix & Expiry Date)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['addReward'])) {
     $img = ""; 
     // No more barcode image upload
@@ -135,26 +145,30 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['addReward'])) {
     // Capture prefix (default to ECO- if empty)
     $prefix = !empty($_POST['prefix']) ? $_POST['prefix'] : 'ECO-';
     
-    // Updated SQL to insert 'prefix' instead of 'barcodeURL'
-    $sql = $conn->prepare("INSERT INTO reward (rewardName, description, stockQuantity, pointRequired, is_active, category, imageURL, prefix) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    // Capture expiry date (allow null)
+    $expiryDate = !empty($_POST['expiry_date']) ? $_POST['expiry_date'] : NULL;
+    
+    // Updated SQL to insert 'prefix' and 'expiry_date'
+    $sql = $conn->prepare("INSERT INTO reward (rewardName, description, stockQuantity, pointRequired, is_active, category, imageURL, prefix, expiry_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $active = isset($_POST['is_active']) ? 1 : 0;
     
     // Bind parameters
-    $sql->bind_param("ssiiisss", $_POST['rewardName'], $_POST['description'], $_POST['stockQuantity'], $_POST['pointRequired'], $active, $_POST['category'], $img, $prefix);
+    $sql->bind_param("ssiiissss", $_POST['rewardName'], $_POST['description'], $_POST['stockQuantity'], $_POST['pointRequired'], $active, $_POST['category'], $img, $prefix, $expiryDate);
     
     if ($sql->execute()) { $msg = "Reward Added!"; $msgType = "success"; } else { $msg = "Error: ".$sql->error; $msgType = "danger"; }
     echo "<meta http-equiv='refresh' content='0'>";
 }
 
-// 3. UPDATE EDIT REWARD LOGIC (Handle Prefix)
+// 3. UPDATE EDIT REWARD LOGIC (Handle Prefix & Expiry Date)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['editReward'])) {
     // Update prefix field
-    $q = "UPDATE reward SET rewardName=?, description=?, stockQuantity=?, pointRequired=?, is_active=?, category=?, prefix=?";
+    $q = "UPDATE reward SET rewardName=?, description=?, stockQuantity=?, pointRequired=?, is_active=?, category=?, prefix=?, expiry_date=?";
     
     $prefix = !empty($_POST['prefix']) ? $_POST['prefix'] : 'ECO-';
+    $expiryDate = !empty($_POST['expiry_date']) ? $_POST['expiry_date'] : NULL;
     
-    $p = [$_POST['rewardName'], $_POST['description'], $_POST['stockQuantity'], $_POST['pointRequired'], (isset($_POST['is_active'])?1:0), $_POST['category'], $prefix];
-    $t = "ssiiiss";
+    $p = [$_POST['rewardName'], $_POST['description'], $_POST['stockQuantity'], $_POST['pointRequired'], (isset($_POST['is_active'])?1:0), $_POST['category'], $prefix, $expiryDate];
+    $t = "ssiiisss";
     
     if(!empty($_FILES['rewardImage']['name']) && $u=uploadImage($_FILES['rewardImage'])){ $q.=", imageURL=?"; $p[]=$u; $t.="s"; }
     // Removed barcode image upload logic here
@@ -187,7 +201,6 @@ include "includes/layout_start.php";
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
     <style>
-
         body { margin: 0; background: #f5f7fb; font-family: 'Plus Jakarta Sans', sans-serif; }
 
         .content-wrapper { padding: 20px 24px 24px; }
@@ -390,8 +403,7 @@ include "includes/layout_start.php";
 
                 <div class="table-responsive">
                     <table class="table table-hover align-middle">
-                        <!-- Updated widths -->
-                        <thead><tr><th style="width: 50px;">Img</th><th style="width: 50px;">ID</th><th>Name / Desc</th><th style="width: 70px;">Stock</th><th style="width: 80px;">Points</th><th style="width: 100px;">Cat</th><th style="width: 130px;">Options</th><th style="width: 60px;">Status</th><th style="width: 80px;">Action</th></tr></thead>
+                        <thead><tr><th style="width: 50px;">Img</th><th style="width: 50px;">ID</th><th>Name / Desc</th><th style="width: 70px;">Stock</th><th style="width: 80px;">Points</th><th style="width: 100px;">Cat</th><th style="width: 130px;">Options</th><th style="width: 80px;">Expiry</th><th style="width: 60px;">Status</th><th style="width: 80px;">Action</th></tr></thead>
                         <tbody>
                             <?php if ($rewards->num_rows > 0) { while ($row = $rewards->fetch_assoc()) { 
                                 $imgSrc = !empty($row['imageURL']) ? $row['imageURL'] : 'upload/reward_placeholder.png';
@@ -401,7 +413,6 @@ include "includes/layout_start.php";
                                     <td><img src="<?php echo htmlspecialchars($imgSrc); ?>" class="reward-img-preview" alt="Img"></td>
                                     <td><small class="text-muted">#<?php echo $row['rewardID']; ?></small></td>
                                     <form action="" method="POST" enctype="multipart/form-data">
-                                        <!-- Reduced width for Name/Desc Column by using styles directly if needed, but table handles dynamic width -->
                                         <td>
                                             <input type="hidden" name="rewardID" value="<?php echo $row['rewardID']; ?>">
                                             <input type="text" name="rewardName" class="form-control form-control-sm mb-1 fw-bold" value="<?php echo htmlspecialchars($row['rewardName']); ?>" required>
@@ -409,13 +420,11 @@ include "includes/layout_start.php";
                                         </td>
                                         <td><input type="number" name="stockQuantity" class="form-control form-control-sm <?php echo $lowStockClass ? 'border-danger text-danger' : ''; ?>" value="<?php echo $row['stockQuantity']; ?>" required></td>
                                         <td><input type="number" name="pointRequired" class="form-control form-control-sm" value="<?php echo $row['pointRequired']; ?>" required></td>
-                                        <!-- Width set to 110px to fit 'Product'/'Voucher' -->
                                         <td><select name="category" class="form-select form-select-sm" style="width: 110px;" required><option value="product" <?php echo ($row['category'] == 'product') ? 'selected' : ''; ?>>Product</option><option value="voucher" <?php echo ($row['category'] == 'voucher') ? 'selected' : ''; ?>>Voucher</option></select></td>
                                         <td>
                                             <div class="d-flex flex-column gap-1">
                                                 <input type="file" name="rewardImage" class="form-control form-control-sm" style="font-size:10px;">
                                                 
-                                                <!-- 6. EDIT PREFIX (Replaces Barcode Upload) -->
                                                 <?php if($row['category'] == 'voucher'): ?>
                                                     <input type="text" name="prefix" class="form-control form-control-sm border-primary" 
                                                            style="font-size:11px;" 
@@ -424,17 +433,22 @@ include "includes/layout_start.php";
                                                 <?php endif; ?>
                                             </div>
                                         </td>
+                                        <!-- Added Expiry Date Input to Edit Form -->
+                                        <td>
+                                            <input type="date" name="expiry_date" class="form-control form-control-sm" 
+                                                   style="width: 110px;" 
+                                                   value="<?php echo !empty($row['expiry_date']) ? $row['expiry_date'] : ''; ?>">
+                                        </td>
                                         <td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="is_active" value="1" <?php echo $row['is_active'] ? 'checked' : ''; ?>></div></td>
                                         <td>
                                             <div class="d-flex gap-2" style="white-space: nowrap;">
-                                                <!-- Made button width auto and removed icon-only style to show 'Save' -->
                                                 <button type="submit" name="editReward" class="btn btn-sm btn-light border px-3" title="Save"><iconify-icon icon="solar:disk-bold-duotone" class="text-success me-1"></iconify-icon> Save</button> 
                                                 <a href="?deleteRewardID=<?php echo $row['rewardID']; ?>" onclick="return confirm('Delete?')" class="btn btn-sm btn-light border text-danger" title="Delete"><iconify-icon icon="solar:trash-bin-trash-bold-duotone"></iconify-icon></a>
                                             </div>
                                         </td>
                                     </form>
                                 </tr>
-                            <?php }} else { echo "<tr><td colspan='9' class='text-center py-5 text-muted'>No rewards found.</td></tr>"; } ?>
+                            <?php }} else { echo "<tr><td colspan='10' class='text-center py-5 text-muted'>No rewards found.</td></tr>"; } ?>
                         </tbody>
                     </table>
                 </div>
@@ -529,6 +543,15 @@ include "includes/layout_start.php";
                             </div>
                         </div>
 
+                        <!-- Added Expiry Date to Add Modal -->
+                        <div class="col-md-6">
+                            <label class="fancy-label">Expiry Date (Optional)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0" style="border-radius: 10px 0 0 10px; border-color: #cbd5e1;"><iconify-icon icon="solar:calendar-linear"></iconify-icon></span>
+                                <input type="date" name="expiry_date" class="form-control fancy-input border-start-0" style="border-radius: 0 10px 10px 0;">
+                            </div>
+                        </div>
+
                         <div class="col-12 mt-4 d-flex align-items-center justify-content-between border-top pt-3">
                             <div class="d-flex align-items-center gap-3">
                                 <label class="toggle-switch">
@@ -573,5 +596,6 @@ function previewImage(input) {
 }
 </script>
 
+<?php include "includes/layout_end.php"; ?>
 </body>
 </html>

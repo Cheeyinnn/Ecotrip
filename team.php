@@ -859,6 +859,7 @@ include "includes/layout_start.php";
                     Settings
                 </button>
             </li>
+            
             <?php if ($userID == $ownerID): ?>
                 <?php 
                     $pendingCount = ($pendingRequests && $pendingRequests->num_rows > 0) 
@@ -874,6 +875,16 @@ include "includes/layout_start.php";
                     </button>
                 </li>
             <?php endif; ?>
+
+            <!-- 🔗 Dashboard Nav Link (ADDED ONLY) -->
+<li class="nav-item">
+    <a class="nav-link"
+       href="team_dashboard.php?teamID=<?= (int)$teamID ?>">
+        <iconify-icon icon="mdi:view-dashboard-outline"></iconify-icon>
+        Dashboard
+    </a>
+</li>
+
 
         </ul>
 

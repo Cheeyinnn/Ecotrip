@@ -44,9 +44,9 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
             My Profile
         </a>
 
-        <a href="index.php" class="sidebar-link <?= isActive('index.php') ?>">
+        <a href="#" class="sidebar-link <?= isActive('Analytics.tsx') ?>">
             <iconify-icon icon="solar:chart-square-line-duotone"></iconify-icon>
-            Dashboard
+            Reward Analysis
         </a>
 
         <?php if ($role === 'admin'): ?>
@@ -147,6 +147,23 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
             <a href="userdashboard.php" class="sidebar-link <?= isActive('userdashboard.php') ?>">
                 <iconify-icon icon="solar:list-check-line-duotone"></iconify-icon>
                 Submission Dashboard
+            </a>
+
+            <a href="leaderboard.php" class="sidebar-link <?= isActive('leaderboard.php') ?>">
+                <iconify-icon icon="solar:cup-star-line-duotone"></iconify-icon>
+                Leaderboard
+            </a>
+
+            <a href="LbDetail.php" class="sidebar-link <?= isActive('LbDetail.php') ?>">
+                <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
+                lbdetail
+            </a>
+        
+            <div class="sidebar-nav-title">Redemption</div>
+
+            <a href="rewards.php" class="sidebar-link <?= isActive('rewards.php') ?>">
+                <iconify-icon icon="solar:gift-line-duotone"></iconify-icon>
+                rewards
             </a>
 
             <div class="sidebar-nav-title">EcoTrip</div>

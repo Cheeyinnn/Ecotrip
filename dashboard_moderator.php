@@ -110,6 +110,8 @@ $topUsersSQL = "
     LIMIT 5
 ";
 $topUsers = $conn->query($topUsersSQL);
+
+include "includes/layout_start.php";
 ?>
 
 
@@ -194,12 +196,9 @@ $topUsers = $conn->query($topUsersSQL);
     
     <div class="flex flex-1 overflow-hidden">
       
-      <!-- [/MODULE] c3d_侧边导航栏 -- 包含仪表盘、用户管理、课程管理等主要导航项 -->
-      <!-- [MODULE] e5f_主内容区域 -->
       <main class="flex-1 overflow-y-auto bg-gray-50 p-6 lg:p-10">
          <div id="dashboard-page" class="max-w-7xl mx-auto space-y-10">
 
-          <!-- [MODULE] i9j_仪表盘页面:页面标题 -->
           <div class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
 
             <div>
@@ -224,7 +223,6 @@ $topUsers = $conn->query($topUsersSQL);
           
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
 
-            <!-- 用户总数卡片 -->
             <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
 
               <div class="flex justify-between items-start">
@@ -240,7 +238,7 @@ $topUsers = $conn->query($topUsersSQL);
               </div>
               
             </div>
-            <!-- 课程总数卡片 -->
+
             <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
               <div class="flex justify-between items-start">
                 <div>
@@ -254,7 +252,7 @@ $topUsers = $conn->query($topUsersSQL);
               </div>
               
             </div>
-            <!-- 活跃用户卡片 -->
+
            <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
               <div class="flex justify-between items-start">
                 <div>
@@ -268,7 +266,7 @@ $topUsers = $conn->query($topUsersSQL);
                 </div>
               </div>
             </div>
-            <!-- 系统状态卡片 -->
+
             <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
               <div class="flex justify-between items-start">
                 <div>
@@ -284,7 +282,6 @@ $topUsers = $conn->query($topUsersSQL);
             </div>
           </div>
 
-            <!-- Tabs 容器 -->
             <div class="bg-white rounded-2xl shadow-lg p-6">
 
                 <!-- Tab Buttons -->
@@ -298,16 +295,15 @@ $topUsers = $conn->query($topUsersSQL);
                 </div>
 
 
-            <!-- Tab 内容 -->
             <div id="charts" class="tab-content">
                 <div class="flex flex-col lg:flex-row gap-6">
-                <!-- 左边环形图 -->
+
                 <div class="bg-white rounded-2xl shadow-lg p-6 flex-1 flex flex-col items-center">
                     <h4 class="text-lg font-semibold text-dark mb-4">总审批率 (Approved vs Rejected)</h4>
                     <div id="approvalRateChart" class="w-full h-80"></div>
                 </div>
 
-                <!-- 右边挑战类型展示 -->
+  
                 <div class="bg-white rounded-2xl shadow-lg p-6 flex-1 flex flex-col">
                     <h4 class="text-lg font-semibold text-dark mb-4">提交最多的挑战类别</h4>
                     <div id="challengeTypeChart" class="w-full h-80"></div>
@@ -318,8 +314,6 @@ $topUsers = $conn->query($topUsersSQL);
 
             </div>
 
-          
-              <!-- 最近活动日志 -->
               <div id="tables" class="tab-content hidden">
                 <div class="bg-white rounded-2xl shadow-lg p-6 flex-1">
                     <h4 class="text-lg font-semibold text-dark mb-4">Daily Review Trend</h4>
@@ -331,7 +325,7 @@ $topUsers = $conn->query($topUsersSQL);
 
             
         <div id="user" class="tab-content hidden">
-            <!-- 折线图趋势 -->
+
             <div class="bg-white rounded-2xl shadow-lg p-6 flex-1">
             <h4 class="text-lg font-semibold text-dark mb-4">最近7天审批趋势</h4>
             <div id="approvalTrendChart" class="w-full h-64"></div>
@@ -344,7 +338,6 @@ $topUsers = $conn->query($topUsersSQL);
             <!-- Participant Tab Content -->
               <div class="space-y-6">
 
-                <!-- 顶部紧凑统计条 -->
                 <div class="flex flex-wrap gap-4">
                   <!-- Total Users -->
                   <div class="flex-1 min-w-[120px] bg-gray-100 rounded-lg px-4 py-2 flex flex-col items-center justify-center">
@@ -365,7 +358,6 @@ $topUsers = $conn->query($topUsersSQL);
                   </div>
                 </div>
 
-                <!-- 下方排行榜列表 -->
                 <div class="bg-white rounded-2xl shadow-lg p-4">
                   <h4 class="text-md font-semibold text-dark mb-4">Top Participants</h4>
                   <div class="divide-y divide-gray-200">
@@ -427,12 +419,6 @@ const dailyTotals = <?= json_encode($dailyTotals) ?>;
 
 document.addEventListener('DOMContentLoaded', function () {
 
-
-    // ---------------------------
-    // 初始化图表
-    // ---------------------------
-
-    // 总审批率 (Approved vs Rejected) - Donut
     const approvalRateChart = echarts.init(document.getElementById('approvalRateChart'));
     approvalRateChart.setOption({
         tooltip: {
@@ -467,7 +453,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }]
     });
 
-    // 提交最多的挑战类别 - 柱状图
         const challengeTypeChart = echarts.init(document.getElementById('challengeTypeChart'));
 
         challengeTypeChart.setOption({
@@ -488,7 +473,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
 
-    // Daily Review Trend - 柱状图
   // ============================
 // Daily Review Trend (from DB)
 // ============================
@@ -520,8 +504,6 @@ dailyReviewChart.setOption({
     }]
 });
 
-
-    // Approval Trend - 折线图
 // ============================
 // Approval Trend (from DB)
 // ============================
@@ -569,11 +551,6 @@ approvalTrendChart.setOption({
     ]
 });
 
-
-
-    // ---------------------------
-    // 全局图表对象，用于 resize
-    // ---------------------------
     window.dashboardCharts = {
         approvalRateChart,
         challengeTypeChart,
@@ -592,9 +569,6 @@ function applyTimeFilter() {
     window.location = "?time=" + val;
 }
 
-// ---------------------------
-// Tab 切换
-// ---------------------------
 function showTab(tab) {
     document.querySelectorAll('.tab-content').forEach(tc => tc.classList.add('hidden'));
     document.getElementById(tab).classList.remove('hidden');
@@ -610,7 +584,6 @@ function showTab(tab) {
         tabBtn.classList.remove('text-dark-2');
     }
 
-    // 切换 tab 时刷新对应图表
     if (window.dashboardCharts) {
         if (tab === 'charts') {
             window.dashboardCharts.approvalRateChart.resize();
@@ -624,7 +597,7 @@ function showTab(tab) {
 }
 </script>
 
-
+<?php include "includes/layout_end.php"; ?>
 
 
   </body>

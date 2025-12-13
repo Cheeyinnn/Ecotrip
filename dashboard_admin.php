@@ -305,7 +305,7 @@ $topCategories = $conn->query("
     LIMIT 5
 ")->fetch_all(MYSQLI_ASSOC);
 
-
+include "includes/layout_start.php";
 
 ?>
 <!doctype html>
@@ -724,12 +724,11 @@ window.onload = () => showTab("charts");
 function initGrowthChart() {
     const el = document.getElementById('growthChart');
 
-    // 如果已经有实例，先 dispose（避免重复实例）
     if (window.dashboardCharts && window.dashboardCharts.growth) {
         try { window.dashboardCharts.growth.dispose(); } catch(e){/* ignore */ }
         window.dashboardCharts = {};
     }
-    // 如果 echarts 先前绑定在 el 上也 dispose
+
     try {
         const prev = echarts.getInstanceByDom(el);
         if (prev) echarts.dispose(prev);
@@ -737,15 +736,15 @@ function initGrowthChart() {
 
     const chart = echarts.init(el);
 
-    // 后端回来的 submissionTrend（格式：[{day: "YYYY-MM-DD", pending:.., approved:.., denied:..}, ...]）
+
     const trend = dashboardData.submissionTrend || [];
 
-    // 如果后端给了日期就用它们做 labels；如果没有或天数 < 7，补齐为最近 7 天（保证稳定的 UX）
+
     let labels = trend.map(d => d.day);
     if (!labels.length || labels.length < 7) {
         const days = [];
         const today = new Date();
-        // 生成最近 7 天的日期字符串 yyyy-mm-dd
+
         for (let i = 6; i >= 0; i--) {
             const dt = new Date(today);
             dt.setDate(today.getDate() - i);
@@ -754,20 +753,17 @@ function initGrowthChart() {
             const dd = ('0' + dt.getDate()).slice(-2);
             days.push(`${yyyy}-${mm}-${dd}`);
         }
-        // 如果后端返回的日期是子集，则用后端数据覆盖对应日期的值（保证 labels 包含最近 7 天）
+
         labels = days;
     }
 
-    // 构建 newUsers map（后端 newUsers 中的 day 也应为 YYYY-MM-DD）
     const newUsersMap = {};
     (dashboardData.newUsers || []).forEach(r => {
         if (r.day) newUsersMap[r.day] = parseInt(r.cnt || 0, 10);
     });
 
-    // newUsers series 对齐 labels（labels 中某日后端无值则补 0）
     const newUsersSeries = labels.map(day => newUsersMap[day] || 0);
 
-    // submissions series：先把 submissionTrend 转为 map 便于根据 labels 对齐
     const subsMap = {};
     (trend || []).forEach(r => {
         const key = r.day;
@@ -780,15 +776,15 @@ function initGrowthChart() {
 
     legend: {
         data: ['New Users', 'Submissions'],
-        top: 10,           // ⭐ 放上面，不会挡住
+        top: 10,           
         textStyle: { fontSize: 12 }
     },
 
     grid: {
-        top: 60,           // ⭐ 给 legend 足够空间
+        top: 60,         
         left: '8%',
         right: '6%',
-        bottom: '15%'      // ⭐ 也给 X轴空间
+        bottom: '15%'     
     },
 
     xAxis: {
@@ -820,7 +816,6 @@ function initGrowthChart() {
     window.dashboardCharts = window.dashboardCharts || {};
     window.dashboardCharts.growth = chart;
 
-    // resize 支持
     window.addEventListener('resize', () => {
         try { chart.resize(); } catch(e) {}
     });
@@ -1009,8 +1004,8 @@ window.submissionCharts.cat = new Chart(ctxCat, {
             data: catCounts,
             backgroundColor: "#6366F1",
             borderRadius: 6,
-            barThickness: 12,       // ⭐ 控制每条的高度（变细）
-            maxBarThickness: 14     // ⭐ 避免太粗
+            barThickness: 12,      
+            maxBarThickness: 14     
         }]
     },
     options: {
@@ -1151,6 +1146,8 @@ window.rewardCharts.trend = new Chart(trendCtx, {
 
 }
 </script>
+
+<?php include "includes/layout_end.php"; ?>
 
 </body>
 </html>
