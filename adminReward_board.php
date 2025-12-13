@@ -225,77 +225,7 @@ include "includes/layout_start.php";
         </div>
     </div>
 
-    <div class="row g-4">
-        <div class="col-lg-6">
-            <div class="table-card">
-                <div class="table-header">
-                    <h6 class="fw-bold m-0 text-dark">Recent Pending Requests</h6>
-                    <a href="reviewRR.php?status=pending" class="btn btn-sm btn-light border">View All</a>
-                </div>
-                <div class="table-responsive">
-                    <table class="table custom-table mb-0">
-                        <thead><tr><th>User</th><th>Reward</th><th>Date</th></tr></thead>
-                        <tbody>
-                            <?php if($pendingRes->num_rows > 0): ?>
-                                <?php while($p = $pendingRes->fetch_assoc()): ?>
-                                <tr>
-                                    <td>
-                                        <div class="fw-bold text-dark"><?php echo htmlspecialchars($p['firstName'].' '.$p['lastName']); ?></div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <img src="<?php echo !empty($p['imageURL'])?$p['imageURL']:'upload/reward_placeholder.png'; ?>" class="item-thumb me-2">
-                                            <span class="text-truncate" style="max-width: 150px;"><?php echo htmlspecialchars($p['rewardName']); ?></span>
-                                        </div>
-                                    </td>
-                                    <td class="text-muted"><?php echo date('M d', strtotime($p['requested_at'])); ?></td>
-                                </tr>
-                                <?php endwhile; ?>
-                            <?php else: ?>
-                                <tr><td colspan="3" class="text-center text-muted py-4">No pending requests. Great job!</td></tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-6">
-            <div class="table-card">
-                <div class="table-header">
-                    <h6 class="fw-bold m-0 text-danger">Inventory Alerts</h6>
-                    <a href="rewardAdmin.php" class="btn btn-sm btn-light border">Manage</a>
-                </div>
-                <div class="table-responsive">
-                    <table class="table custom-table mb-0">
-                        <thead><tr><th>Reward</th><th>Stock</th><th>Issue</th></tr></thead>
-                        <tbody>
-                            <?php if($alertRes->num_rows > 0): ?>
-                                <?php while($a = $alertRes->fetch_assoc()): 
-                                    $isExpiring = (!empty($a['expiry_date']) && strtotime($a['expiry_date']) < strtotime('+30 days'));
-                                    $issue = $a['stockQuantity'] < 5 ? "Low Stock" : "Expiring Soon";
-                                    $badgeClass = $a['stockQuantity'] < 5 ? "stock-low" : "stock-expiring";
-                                ?>
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <img src="<?php echo !empty($a['imageURL'])?$a['imageURL']:'upload/reward_placeholder.png'; ?>" class="item-thumb me-2">
-                                            <span class="text-truncate" style="max-width: 150px;"><?php echo htmlspecialchars($a['rewardName']); ?></span>
-                                        </div>
-                                    </td>
-                                    <td class="fw-bold text-dark"><?php echo $a['stockQuantity']; ?></td>
-                                    <td><span class="badge-stock <?php echo $badgeClass; ?>"><?php echo $issue; ?></span></td>
-                                </tr>
-                                <?php endwhile; ?>
-                            <?php else: ?>
-                                <tr><td colspan="3" class="text-center text-muted py-4"><iconify-icon icon="solar:check-circle-bold" class="text-success mb-1"></iconify-icon><br>Inventory looks healthy.</td></tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
+    
 </div>
 
 <script>

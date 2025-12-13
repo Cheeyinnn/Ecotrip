@@ -1,5 +1,5 @@
-<?php 
-session_start();
+<?php
+// DO NOT session_start again
 include 'db_connect.php';
 
 // 1. Security Check
@@ -65,17 +65,7 @@ $recentRes = $conn->query($recentSql);
 include "includes/layout_start.php"; // Assuming you have this
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Analytics Dashboard</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
-
-    <style>
+<style>
         body { background: #f5f7fb; font-family: 'Plus Jakarta Sans', sans-serif; color: #334155; }
         
         /* Card Styles */
@@ -122,13 +112,9 @@ include "includes/layout_start.php"; // Assuming you have this
         .bg-purple { background-color: #8b5cf6; }
         .text-orange { color: #f97316; }
         .bg-orange { background-color: #f97316; }
-    </style>
-</head>
-<body>
+</style>
 
-<div class="container-fluid p-4">
-    
-    <div class="row g-4 mb-4">
+<div class="row g-4 mb-4">
         <div class="col-md-4">
             <div class="stat-card">
                 <div class="d-flex justify-content-between align-items-start">
@@ -200,7 +186,56 @@ include "includes/layout_start.php"; // Assuming you have this
         </div>
     </div>
 
-    
+    <div class="row">
+        <div class="col-12">
+            <div class="stat-card p-0 overflow-hidden">
+                <div class="p-4 border-bottom">
+                    <h5 class="fw-bold m-0">Recent Transactions</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-custom mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">Reward Name</th>
+                                <th>Category</th>
+                                <th>Date</th>
+                                <th>Points</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if ($recentRes->num_rows > 0): ?>
+                                <?php while($row = $recentRes->fetch_assoc()): 
+                                    $statusColor = match($row['status']) {
+                                        'approved' => 'success',
+                                        'pending' => 'warning',
+                                        'rejected' => 'danger',
+                                        'cancelled' => 'secondary',
+                                        default => 'primary'
+                                    };
+                                ?>
+                                <tr>
+                                    <td class="ps-4">
+                                        <div class="d-flex align-items-center">
+                                            <img src="<?php echo !empty($row['imageURL']) ? $row['imageURL'] : 'upload/reward_placeholder.png'; ?>" class="item-img">
+                                            <span><?php echo htmlspecialchars($row['rewardName']); ?></span>
+                                        </div>
+                                    </td>
+                                    <td><span class="badge bg-light text-dark border"><?php echo ucfirst($row['category']); ?></span></td>
+                                    <td><?php echo date('d M Y', strtotime($row['requested_at'])); ?></td>
+                                    <td class="text-danger fw-bold">-<?php echo number_format($row['pointSpent']); ?></td>
+                                    <td><span class="badge bg-<?php echo $statusColor; ?> bg-opacity-10 text-<?php echo $statusColor; ?> px-3 py-2 rounded-pill"><?php echo ucfirst($row['status']); ?></span></td>
+                                </tr>
+                                <?php endwhile; ?>
+                            <?php else: ?>
+                                <tr><td colspan="5" class="text-center py-4 text-muted">No recent activity found.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 
 </div>
 
@@ -290,6 +325,3 @@ include "includes/layout_start.php"; // Assuming you have this
     });
 </script>
 
-
-</body>
-</html>

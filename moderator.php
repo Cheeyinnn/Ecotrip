@@ -154,9 +154,14 @@ if (isset($_GET['id'])) {
     }
 } else {
 
-    $currentSubmission = $pendingList[0] ?? $submissions[0] ?? null;
+    // ❗核心规则：
+    // 只有 pending 才能在 page load 时自动显示
+    if (!empty($pendingList)) {
+        $currentSubmission = $pendingList[0];
+    } else {
+        $currentSubmission = null; // pending = 0 → 右边只显示 message
+    }
 }
-
 // total pending submission
 $pendingSubmissions = count($pendingList);
 
@@ -225,12 +230,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submission_id'])) {
             $insert->execute();
             $insert->close();
         }
-
-
-    $_SESSION['flash'] = "Submission reviewed successfully.";
-
-    header("Location: moderator.php");
-    exit;
     }
 }
 
@@ -377,7 +376,11 @@ include "includes/layout_start.php";
             ?>
             <div class="bg-neutral-100 rounded-lg">
                 <button class="w-full flex justify-between items-center px-4 py-2 font-medium text-neutral-700 focus:outline-none accordion-header">
-                    <span><?= $label ?> (<?= count($filteredSubs) ?>)</span>
+                    <span id="<?= $key ?>-count">
+                        <?= $label ?> (<?= count($filteredSubs) ?>)
+                    </span>
+
+
                     <i class="fas fa-chevron-down transition-transform duration-200"></i>
                 </button>
 
@@ -385,6 +388,7 @@ include "includes/layout_start.php";
                     <?php foreach ($filteredSubs as $submission): ?>
 
                     <div class="submit-item p-3 rounded-lg hover:bg-neutral-50 mb-2 cursor-pointer flex"
+
                         data-id="<?= $submission['id']; ?>"
                         data-title="<?= htmlspecialchars($submission['title']); ?>"
                         data-user="<?= htmlspecialchars($submission['user']); ?>"
@@ -411,9 +415,14 @@ include "includes/layout_start.php";
                                     <?= $submission['title']; ?>
         
                                 </h4>
-                                <span class="text-xs px-2 py-0.5 bg-<?= $submission['status_class']; ?>/10 text-<?= $submission['status_class']; ?> rounded-full">
+                              <span
+                                    class="status-badge text-xs px-2 py-0.5
+                                        bg-<?= $submission['status_class']; ?>/10
+                                        text-<?= $submission['status_class']; ?> rounded-full"
+                                >
                                     <?= $submission['status']; ?>
                                 </span>
+
                             </div>
                             <p class="text-sm text-neutral-500 truncate mt-1">UserName: <?= $submission['user']; ?></p>
                             <div class="flex justify-between items-center mt-2">
@@ -447,29 +456,33 @@ include "includes/layout_start.php";
                     </div>
                     <div class="flex-1 overflow-y-auto scrollbar-hide p-4">
 
-           
-            <?php if (empty($pendingList) && empty($approvedList) && empty($deniedList)): ?>
-                <!-- No submissions at all -->
-                <div class="p-8 text-center text-neutral-500">
-                    <i class="fas fa-inbox text-5xl mb-4 text-neutral-300"></i>
-                    <p class="text-lg font-medium">No Submissions Found</p>
-                    <p class="text-sm">Either the search yielded no results, or there are no submissions to review.</p>
-                </div>
-            <?php elseif (empty($pendingList)): ?>
-                <!-- Pending empty but others exist -->
-                <div class="p-8 text-center text-neutral-500">
-                    <i class="fas fa-check-circle text-5xl mb-4 text-green-400"></i>
-                    <p class="text-lg font-bold">All Submissions Reviewed</p>
-                    <p class="text-sm">There are no more pending submissions to review.</p>
-                </div>
-            <?php elseif (is_null($currentSubmission)): ?>
-                <!-- Search found nothing -->
-                <div class="p-8 text-center text-neutral-500">
-                    <i class="fas fa-inbox text-5xl mb-4 text-neutral-300"></i>
-                    <p class="text-lg font-medium">No Submissions Found</p>
-                    <p class="text-sm">Either the search yielded no results, or there are no submissions to review.</p>
-                </div>
-            <?php else: ?>
+                    <!-- Placeholder：永远存在 -->
+                        <div
+                            id="no-submission-placeholder"
+                            class="p-8 text-center text-neutral-500"
+                            style="<?= $currentSubmission ? 'display:none;' : '' ?>"
+                        >
+                            <i class="fas fa-inbox text-5xl mb-4 text-neutral-300"></i>
+
+                            <?php if (empty($pendingList)): ?>
+                                <p class="text-lg font-bold">All Submissions Reviewed</p>
+                                <p class="text-sm">There are no pending submissions to review.</p>
+                            <?php else: ?>
+                                <p class="text-lg font-medium">No Submission Selected</p>
+                                <p class="text-sm">Please select a submission from the list.</p>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Submission details：永远存在 -->
+                        <div
+                            id="submission-details"
+                            style="<?= $currentSubmission ? '' : 'display:none;' ?>"
+                        >
+                          
+
+                            <!-- submission details START -->
+
+                                    
                 <div class="mb-6">
                         <div class="flex flex-wrap items-start justify-between gap-4 mb-4">
                             <div>
@@ -551,7 +564,7 @@ include "includes/layout_start.php";
 
                     </div>
                
-
+             
                        
         <h3 class="font-medium text-neutral-700 mb-3">Review actions</h3>
         <div class="bg-neutral-50 rounded-lg p-4">
@@ -564,7 +577,7 @@ include "includes/layout_start.php";
             ?>
 
             <div id="review-form-block" style="display: <?= $reviewFormDisplay ?>;">
-                <form id="review-form" method="post">
+                <form id="review-form">
                     <input type="hidden" id="submission_id_input" name="submission_id" value="<?= $currentSubmission['id']; ?>">
                    
                     <input type="hidden" name="points" value="<?= $currentSubmission['points']; ?>">
@@ -633,10 +646,15 @@ include "includes/layout_start.php";
                 <p></p>
 
 
+
             </div>
 
         </div>
-    <?php endif; ?>
+   </div>
+
+                
+
+                </div>
 
                     </div>
                 </div>
@@ -656,20 +674,25 @@ include "includes/layout_start.php";
 
 <script id="page-interactions">
 
-    document.addEventListener('DOMContentLoaded', function () {
-    initSubmitItemClick();
-    initReviewResultRadio();
-    initTimeFilterAutoSubmit();
+document.addEventListener('DOMContentLoaded', function () {
 
-    const firstPending = document.querySelector('.accordion-content div[data-status="Pending"]');
-    const firstAny = document.querySelector('.submit-item');
-   
-    if (firstPending) {
-         firstPending.click();
-    } else if (firstAny) {
-         firstAny.click();
-    }
-});
+        initSubmitItemClick();
+        initReviewResultRadio();
+        initTimeFilterAutoSubmit();
+
+        // 自动展开 Pending accordion（不点 submission）
+        const pendingAccordion = Array.from(document.querySelectorAll('.accordion-header'))
+            .find(h => h.textContent.includes('Pending'));
+        if (pendingAccordion) {
+            pendingAccordion.click();
+        }
+
+        // 只有 pending 存在，才自动点第一个
+        const firstPending = document.querySelector('.submit-item[data-status="Pending"]');
+        if (firstPending) {
+            firstPending.click();
+        }
+    });
 
 
 
@@ -689,8 +712,16 @@ function initSubmitItemClick() {
     const challengePointsEl = document.getElementById('challenge-points');
     const detailImageEl = document.getElementById('detail-image');
 
+
     submitItems.forEach(item => {
         item.addEventListener('click', () => {
+
+                const placeholder = document.getElementById('no-submission-placeholder');
+                const details = document.getElementById('submission-details');
+
+                if (placeholder) placeholder.style.display = 'none';
+                if (details) details.style.display = 'block';
+
 
             submitItems.forEach(i => i.classList.remove('bg-primary/5','border','border-primary/20'));
             item.classList.add('bg-primary/5','border','border-primary/20');
@@ -816,15 +847,7 @@ function initSubmitItemClick() {
         });
     });
 
-    // default open Pending accordian after web refresh
-    window.addEventListener('DOMContentLoaded', () => {
-        const pendingAccordion = document.querySelector('.accordion-header');
-        if (pendingAccordion) {
-             if (pendingAccordion.textContent.includes('Pending')) {
-                pendingAccordion.click();
-             }
-        }
-    });
+
 
    
     //close the modal if the user clicks outside the image
@@ -864,14 +887,16 @@ function closeModal() {
     }, 10);
 }
 
-    document.getElementById('search-input').addEventListener('keypress', function(e) {
+const searchInput = document.getElementById('search-input');
+if (searchInput) {
+    searchInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter' || e.keyCode === 13) {
-           
             e.preventDefault();
-           
             this.closest('form').submit();
         }
     });
+}
+
 
     function initTimeFilterAutoSubmit() {
     const timeFilterSelect = document.getElementById('time_filter');
@@ -882,6 +907,156 @@ function closeModal() {
         this.closest('form').submit();
     });
 }
+
+
+/* =========================
+   AJAX Review Submit
+========================= */
+const reviewForm = document.getElementById('review-form');
+if (reviewForm) {
+    reviewForm.addEventListener('submit', function (e) {
+        e.preventDefault(); // 🔴 阻止整页 reload
+
+        const formData = new FormData(reviewForm);
+
+        fetch('review_submission.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+    .then(data => {
+        if (!data.success) {
+            alert(data.message || 'Review failed');
+            return;
+        }
+
+        const item = document.querySelector(
+            `.submit-item[data-id="${data.submission_id}"]`
+        );
+
+        updateRightPanelAfterReview(data);
+
+        // 1️⃣ Pending -1
+        updateAccordionCount('pending', -1);
+
+        // 2️⃣ Approved / Denied +1
+        if (data.status === 'approved') {
+            updateAccordionCount('approved', +1);
+            moveItemToAccordion(item, 'Approved');
+        } else {
+            updateAccordionCount('denied', +1);
+            moveItemToAccordion(item, 'Denied');
+        }
+
+        // 3️⃣ 自动选下一个 pending
+        autoSelectNextPending();
+    });
+
+    });
+}
+
+function removeLeftItem(id) {
+    const item = document.querySelector(`.submit-item[data-id="${id}"]`);
+    if (item) item.remove();
+}
+
+function autoSelectNextPending() {
+    const nextPending = document.querySelector('.submit-item[data-status="Pending"]');
+
+    if (nextPending) {
+        nextPending.click();
+    } else {
+        document.getElementById('submission-details').style.display = 'none';
+        document.getElementById('no-submission-placeholder').style.display = 'block';
+    }
+}
+
+
+function updateRightPanelAfterReview(data) {
+    const reviewFormBlock = document.getElementById('review-form-block');
+    const reviewStaticBlock = document.getElementById('review-static-block');
+
+    reviewFormBlock.style.display = 'none';
+    reviewStaticBlock.style.display = 'block';
+
+    const statusText = reviewStaticBlock.querySelector('.static-status-text');
+    const feedbackText = reviewStaticBlock.querySelector('.static-feedback-text');
+
+    statusText.textContent = `This submission has been ${data.status}.`;
+    statusText.className = `text-sm font-semibold ${
+        data.status === 'approved' ? 'text-success' : 'text-danger'
+    }`;
+
+    if (data.feedback) {
+        feedbackText.textContent = `Moderator feedback: ${data.feedback}`;
+        feedbackText.style.display = 'block';
+    } else {
+        feedbackText.style.display = 'none';
+    }
+}
+
+function decreasePendingCount() {
+    const pendingSpan = document.getElementById('pending-count');
+    if (!pendingSpan) return;
+
+    const match = pendingSpan.textContent.match(/\((\d+)\)/);
+    if (!match) return;
+
+    let count = parseInt(match[1], 10);
+    count = Math.max(0, count - 1);
+
+    pendingSpan.textContent = `Pending (${count})`;
+}
+
+function updateAccordionCount(type, delta) {
+    const span = document.getElementById(`${type}-count`);
+    if (!span) return;
+
+    const match = span.textContent.match(/\((\d+)\)/);
+    if (!match) return;
+
+    let count = parseInt(match[1], 10);
+    count = Math.max(0, count + delta);
+
+    span.textContent = `${type.charAt(0).toUpperCase() + type.slice(1)} (${count})`;
+}
+
+function moveItemToAccordion(item, targetStatus) {
+    if (!item) return;
+
+    const headers = document.querySelectorAll('.accordion-header');
+    let targetContent = null;
+
+    headers.forEach(header => {
+        if (header.textContent.includes(targetStatus)) {
+            targetContent = header.nextElementSibling;
+        }
+    });
+
+    if (!targetContent) return;
+
+    // 更新 data-status
+    item.dataset.status = targetStatus;
+
+    // 更新 badge
+    const badge = item.querySelector('.status-badge');
+    if (badge) {
+        badge.textContent = targetStatus;
+
+        if (targetStatus === 'Approved') {
+            badge.className =
+                'status-badge text-xs px-2 py-0.5 bg-success/10 text-success rounded-full';
+        } else {
+            badge.className =
+                'status-badge text-xs px-2 py-0.5 bg-danger/10 text-danger rounded-full';
+        }
+    }
+
+    // 仅移动 DOM，不展开 accordion
+    targetContent.appendChild(item);
+}
+
+
 
 </script>
 

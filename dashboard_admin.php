@@ -232,6 +232,9 @@ $pointsActivity = $conn->query("
     LIMIT 5
 ")->fetch_all(MYSQLI_ASSOC);
 
+
+
+
 // ----------------------------------
 // 13. User Details (not needed if you removed tables; return minimal if wanted)
 // ----------------------------------
@@ -250,60 +253,92 @@ $userDetails = $conn->query("
 // 14. Rewards: use redemptionrequest as data source (Option A)
 //    count redemptions per reward within timeframe
 // ----------------------------------
-$rewards = $conn->query("
-    SELECT r.rewardID, r.rewardName, COALESCE(rr.cnt,0) AS redeemedQuantity
-    FROM reward r
-    LEFT JOIN (
-        SELECT rewardID, COUNT(*) AS cnt
-        FROM redemptionrequest
-        WHERE status='Approved' AND fulfilled_at >= DATE_SUB(CURDATE(), INTERVAL {$trendWindow} DAY)
-        GROUP BY rewardID
-    ) rr ON rr.rewardID = r.rewardID
-")->fetch_all(MYSQLI_ASSOC);
 
-$totalStock = (int)($conn->query("SELECT COALESCE(SUM(stockQuantity),0) AS stock FROM reward")->fetch_assoc()['stock'] ?? 0);
+// --- 2. DATA FETCHING ---
 
-// low stock - not time dependent
-$lowStockRewards = $conn->query("SELECT rewardName, stockQuantity FROM reward WHERE stockQuantity <= 3")->fetch_all(MYSQLI_ASSOC);
+// Total Points Burned
+$sql = "SELECT SUM(pointSpent) as total 
+        FROM redemptionrequest 
+        WHERE status NOT IN ('cancelled', 'denied')
+        " . ($timeInterval ? " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)" : "");
+$burnedPoints = $conn->query($sql)->fetch_assoc()['total'] ?? 0;
 
-// total redeemed (within timeframe)
-$totalRedeemed = (int)($conn->query("
-    SELECT COUNT(*) AS cnt
-    FROM redemptionrequest
-    WHERE status='Approved' AND fulfilled_at >= DATE_SUB(CURDATE(), INTERVAL {$trendWindow} DAY)
-")->fetch_assoc()['cnt'] ?? 0);
+// Pending Requests
+$sql = "SELECT COUNT(*) as total 
+        FROM redemptionrequest 
+        WHERE status = 'pending'
+        " . ($timeInterval ? " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)" : "");
+$pendingCount = $conn->query($sql)->fetch_assoc()['total'] ?? 0;
 
-// top redeemers (within timeframe)
-$topRedeemers = $conn->query("
-    SELECT u.firstName, COUNT(*) AS cnt
-    FROM redemptionrequest r
-    JOIN user u ON r.userID = u.userID
-    WHERE r.status='Approved' AND r.fulfilled_at >= DATE_SUB(CURDATE(), INTERVAL {$trendWindow} DAY)
-    GROUP BY r.userID
-    ORDER BY cnt DESC
-    LIMIT 5
-")->fetch_all(MYSQLI_ASSOC);
-
-$redeemTrend = $conn->query("
-    SELECT DATE(fulfilled_at) AS day, COUNT(*) AS cnt
-    FROM redemptionrequest
-    WHERE status='Approved'
-    AND fulfilled_at >= DATE_SUB(CURDATE(), INTERVAL {$trendWindow} DAY)
-    GROUP BY DATE(fulfilled_at)
-    ORDER BY day ASC
-")->fetch_all(MYSQLI_ASSOC);
+// Total Successful Redemptions
+$sql = "SELECT COUNT(*) as total 
+        FROM redemptionrequest 
+        WHERE status IN ('approved', 'outOfDiliver', 'Delivered')
+        " . ($timeInterval ? " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)" : "");
+$successCount = $conn->query($sql)->fetch_assoc()['total'] ?? 0;
 
 
-$topCategories = $conn->query("
-    SELECT c.categoryName AS category, COUNT(*) AS cnt
-    FROM sub s
-    LEFT JOIN challenge ch ON s.challengeID = ch.challengeID
-    LEFT JOIN category c ON ch.categoryID = c.categoryID
-    WHERE s.uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$trendWindow} DAY)
-    GROUP BY c.categoryID
-    ORDER BY cnt DESC
-    LIMIT 5
-")->fetch_all(MYSQLI_ASSOC);
+
+// B. CHART 1: REDEMPTION TREND (Last 6 Months)
+$trendData = [];
+for ($i = 5; $i >= 0; $i--) {
+    $m = date('Y-m', strtotime("-$i months"));
+    $lbl = date('M', strtotime("-$i months"));
+
+    $q = "SELECT COUNT(*) as count 
+          FROM redemptionrequest 
+          WHERE DATE_FORMAT(requested_at, '%Y-%m') = '$m'
+          " . ($timeInterval ? " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)" : "");
+    $res = $conn->query($q);
+    $row = $res->fetch_assoc();
+
+    $months[] = $lbl;
+    $trendData[] = $row['count'] ?? 0;
+}
+
+// C. CHART 2: TOP 5 POPULAR REWARDS
+$popLabels = [];
+$popData = [];
+$popColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']; // Blue, Green, Orange, Purple, Pink
+
+$sql = "SELECT r.rewardName, COUNT(rr.redemptionID) as count 
+        FROM redemptionrequest rr
+        JOIN reward r ON rr.rewardID = r.rewardID
+        WHERE rr.status != 'cancelled'
+        " . ($timeInterval ? " AND rr.requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)" : "") . "
+        GROUP BY rr.rewardID 
+        ORDER BY count DESC LIMIT 5";
+
+$res = $conn->query($sql);
+while($row = $res->fetch_assoc()){
+    $popLabels[] = $row['rewardName'];
+    $popData[] = $row['count'];
+}
+
+// D. RECENT PENDING REQUESTS (Actionable List)
+$pendingSql = "SELECT rr.redemptionID, u.firstName, u.lastName, r.rewardName, rr.requested_at, r.imageURL 
+               FROM redemptionrequest rr 
+               JOIN user u ON rr.userID = u.userID
+               JOIN reward r ON rr.rewardID = r.rewardID
+               WHERE rr.status = 'pending'
+               " . ($timeInterval ? " AND rr.requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)" : "") . "
+               ORDER BY rr.requested_at ASC LIMIT 5";
+
+$pendingRes = $conn->query($pendingSql);
+
+// E. INVENTORY ALERTS (Low Stock or Expiring Soon)
+// Leveraging the new expiry_date column from rewardAdmin.php
+$alertSql = "SELECT rewardName, stockQuantity, expiry_date, imageURL 
+             FROM reward 
+             WHERE (stockQuantity < 5 OR (expiry_date IS NOT NULL AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY))) 
+             AND is_active = 1 
+             LIMIT 5";
+$alertRes = $conn->query($alertSql);
+
+
+$lowStockCount = $conn->query("SELECT COUNT(*) as cnt FROM reward WHERE stockQuantity < 5 AND is_active = 1")->fetch_assoc()['cnt'] ?? 0;
+
+
 
 include "includes/layout_start.php";
 
@@ -316,9 +351,10 @@ include "includes/layout_start.php";
   <title>Admin Dashboard</title>
 
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-
+<script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -327,6 +363,62 @@ include "includes/layout_start.php";
     .stat-card-value { font-weight:700; font-size:clamp(1.25rem,2.2vw,2rem); color:#1D2129; }
     .stat-card-label { color:#4E5969; font-size:0.95rem; }
     .shadow-card { box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+
+     body { background: #f8fafc; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .content-wrapper { padding: 25px; }
+        
+        /* KPI Cards */
+        .kpi-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+            border: 1px solid #f1f5f9;
+            height: 100%;
+            transition: transform 0.2s;
+        }
+        .kpi-card:hover { transform: translateY(-3px); border-color: #e2e8f0; }
+        .kpi-icon {
+            width: 48px; height: 48px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+        .kpi-label { color: #64748b; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .kpi-value { color: #0f172a; font-size: 32px; font-weight: 800; line-height: 1.2; margin-top: 5px; }
+        .kpi-sub { font-size: 12px; color: #94a3b8; margin-top: 5px; }
+
+        /* Chart Section */
+        .chart-card {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            height: 100%;
+        }
+        .section-title { font-size: 16px; font-weight: 700; color: #334155; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
+        
+        /* Tables */
+        .table-card { background: white; border-radius: 16px; overflow: hidden; border: 1px solid #f1f5f9; height: 100%; }
+        .table-header { padding: 20px; background: white; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+        .custom-table th { background: #f8fafc; font-size: 11px; text-transform: uppercase; color: #64748b; padding: 12px 20px; border-bottom: 1px solid #e2e8f0; }
+        .custom-table td { padding: 15px 20px; vertical-align: middle; font-size: 14px; color: #334155; border-bottom: 1px solid #f1f5f9; }
+        .custom-table tr:last-child td { border-bottom: none; }
+        .user-avatar { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; margin-right: 10px; }
+        .item-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; border: 1px solid #f1f5f9; }
+        
+        /* Utils */
+        .bg-orange-soft { background: #fff7ed; color: #ea580c; }
+        .bg-blue-soft { background: #eff6ff; color: #2563eb; }
+        .bg-green-soft { background: #f0fdf4; color: #16a34a; }
+        .bg-red-soft { background: #fef2f2; color: #dc2626; }
+        
+        .badge-stock { font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
+        .stock-low { background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2; }
+        .stock-expiring { background: #fffbeb; color: #d97706; border: 1px solid #fef3c7; }
+
+
   </style>
 </head>
 <body class="bg-gray-50 font-sans text-dark">
@@ -371,12 +463,16 @@ const dashboardData = {
     },
 
     // rewards analytics
-    rewards: <?= json_encode($rewards) ?>,
-    totalStock: <?= json_encode($totalStock) ?>,
-    totalRedeemed: <?= json_encode($totalRedeemed) ?>,
-    lowStockRewards: <?= json_encode($lowStockRewards) ?>,
-    topRedeemers: <?= json_encode($topRedeemers) ?>,
-    redeemTrend: <?= json_encode($redeemTrend) ?>
+     rewards: {
+        burnedPoints: <?= json_encode($burnedPoints) ?>,
+        successCount: <?= json_encode($successCount) ?>,
+        pendingCount: <?= json_encode($pendingCount) ?>,
+        lowStockCount: <?= json_encode($lowStockCount) ?>,
+        trendLabels: <?= json_encode($months) ?>,
+        trendData: <?= json_encode($trendData) ?>,
+        topLabels: <?= json_encode($popLabels) ?>,
+        topData: <?= json_encode($popData) ?>
+    }
 
 
 };
@@ -662,43 +758,67 @@ function formatDate(dateStr) {
 
         <div id="reward" class="tab-content hidden">
 
-            <!-- KPI Cards -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-
-                <div class="bg-white p-6 rounded-2xl shadow-card flex flex-col items-center justify-center h-32">
-                    <p class="text-sm text-gray-600">Total Rewards Redeemed</p>
-                    <p id="totalRewardsRedeemed" class="text-3xl font-bold mt-2">0</p>
+            <div class="row g-4 mb-4">
+                <div class="col-xl-3 col-md-6">
+                    <div class="kpi-card">
+                        <div class="kpi-icon bg-orange-soft"><iconify-icon icon="solar:flame-bold-duotone"></iconify-icon></div>
+                        <div class="kpi-label">Points Redeemed</div>
+                        <div class="kpi-value text-orange"><?php echo number_format($burnedPoints); ?></div>
+                        <div class="kpi-sub">Total user points spent</div>
+                    </div>
                 </div>
-
-                <div class="bg-white p-6 rounded-2xl shadow-card flex flex-col items-center justify-center h-32">
-                    <p class="text-sm text-gray-600">Total Rewards Stock</p>
-                    <p id="totalRewardsStock" class="text-3xl font-bold mt-2">0</p>
+                <div class="col-xl-3 col-md-6">
+                    <div class="kpi-card">
+                        <div class="kpi-icon bg-green-soft"><iconify-icon icon="solar:bag-check-bold-duotone"></iconify-icon></div>
+                        <div class="kpi-label">Items Claimed</div>
+                        <div class="kpi-value text-success"><?php echo number_format($successCount); ?></div>
+                        <div class="kpi-sub">Approved & Delivered</div>
+                    </div>
                 </div>
-
-                <div class="bg-white p-6 rounded-2xl shadow-card flex flex-col items-center justify-center h-32">
-                    <p class="text-sm text-gray-600">Low Stock Alerts</p>
-                    <p id="lowStockCount" class="text-3xl font-bold text-red-500 mt-2">0</p>
+                <div class="col-xl-3 col-md-6">
+                    <a href="reviewRR.php?status=pending" style="text-decoration:none;">
+                        <div class="kpi-card" style="<?php echo $pendingCount > 0 ? 'border-color:#bfdbfe;' : ''; ?>">
+                            <div class="kpi-icon bg-blue-soft"><iconify-icon icon="solar:bell-bing-bold-duotone"></iconify-icon></div>
+                            <div class="kpi-label">Pending Review</div>
+                            <div class="kpi-value text-primary"><?php echo number_format($pendingCount); ?></div>
+                            <div class="kpi-sub">Requires attention</div>
+                        </div>
+                    </a>
                 </div>
-
+                <div class="col-xl-3 col-md-6">
+                    <a href="rewardAdmin.php?filter=low_stock" style="text-decoration:none;">
+                        <div class="kpi-card" style="<?php echo $lowStockCount > 0 ? 'border-color:#fecaca;' : ''; ?>">
+                            <div class="kpi-icon bg-red-soft"><iconify-icon icon="solar:box-minimalistic-bold-duotone"></iconify-icon></div>
+                            <div class="kpi-label">Low Stock</div>
+                            <div class="kpi-value text-danger"><?php echo number_format($lowStockCount); ?></div>
+                            <div class="kpi-sub">Items below 5 units</div>
+                        </div>
+                    </a>
+                </div>
             </div>
 
-            <!-- Charts -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                <div class="bg-white p-6 rounded-2xl shadow-card h-[360px] flex flex-col">
-                    <h3 class="font-semibold text-lg mb-4">Redeemed by Type</h3>
-                    <canvas id="redeemedByTypeChart" class="flex-1"></canvas>
+            <div class="row g-4 mb-4">
+            <div class="col-lg-8">
+                <div class="chart-card">
+                    <div class="section-title">Redemption Activity</div>
+                    <div style="height: 300px;">
+                        <canvas id="trendChart"></canvas>
+                    </div>
                 </div>
-
-                <div class="bg-white p-6 rounded-2xl shadow-card h-[360px] flex flex-col">
-                    <h3 class="font-semibold text-lg mb-4">Redemptions Trend</h3>
-                    <canvas id="redemptionsTrendChart" class="w-full" style="height: 260px;"></canvas>
-
-                </div>
-
             </div>
-
+            <div class="col-lg-4">
+                <div class="chart-card">
+                    <div class="section-title">Top 5 Rewards</div>
+                    <div style="height: 250px; position: relative;">
+                        <canvas id="popChart"></canvas>
+                    </div>
+                    <div class="mt-3 text-center text-muted small">Based on quantity redeemed</div>
+                </div>
+            </div>
         </div>
+    
+
+    </div>
 
 </div>
 </div>
@@ -1145,70 +1265,61 @@ function initUsersTab(){
 }
 
 /* Reward tab */
-function initRewardTab(){
-  window.rewardCharts = {};
+function initRewardTab() {
+    // Redemption Trend
+    const trendCtx = document.getElementById('trendChart').getContext('2d');
+    new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: dashboardData.rewards.trendLabels,
+            datasets: [{
+                label: 'Redemptions',
+                data: dashboardData.rewards.trendData,
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246,0.2)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true } },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
 
-  document.getElementById('totalRewardsRedeemed').innerText = dashboardData.totalRedeemed ?? 0;
-  document.getElementById('totalRewardsStock').innerText = dashboardData.totalStock ?? 0;
-  document.getElementById('lowStockCount').innerText = (dashboardData.lowStockRewards||[]).length ?? 0;
 
-  // redeemed by type doughnut
-  const doughCtx = document.getElementById('redeemedByTypeChart').getContext('2d');
-  window.rewardCharts.type = new Chart(doughCtx, {
-    type:'doughnut',
-    data:{
-      labels:(dashboardData.rewards||[]).map(r=>r.rewardName),
-      datasets:[{ data:(dashboardData.rewards||[]).map(r=>r.redeemedQuantity||0), backgroundColor:['#60a5fa','#34d399','#f59e0b','#f87171','#a78bfa','#f472b6'] }]
-    },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
-  });
+    // Top 5 Rewards
+const popColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 
-  // redemptions trend (reuse submissionTrend.approved as approximation)
-// ------ REAL REDEMPTIONS TREND ------
-const redeemTrend = dashboardData.redeemTrend || [];
-
-const redeemLabels = redeemTrend.map(r => r.day);
-const redeemValues = redeemTrend.map(r => r.cnt || 0);
-
-const trendCtx = document.getElementById("redemptionsTrendChart").getContext("2d");
-
-window.rewardCharts.trend = new Chart(trendCtx, {
-    type: "line",
+const ctxPop = document.getElementById('popChart').getContext('2d');
+new Chart(ctxPop, {
+    type: 'doughnut',
     data: {
-        labels: redeemLabels,
+        labels: <?php echo json_encode($popLabels); ?>,
         datasets: [{
-            label: "Redeemed Items",
-            data: redeemValues,
-            borderColor: "#0EA5E9",
-            backgroundColor: "rgba(14,165,233,0.15)",
-            fill: true,
-            tension: 0.35,
-            borderWidth: 2,
-            pointRadius: 3,
-            pointBackgroundColor: "#0284C7"
+            data: <?php echo json_encode($popData); ?>,
+            backgroundColor: popColors,
+            borderWidth: 0,
+            hoverOffset: 10
         }]
     },
     options: {
         responsive: true,
         maintainAspectRatio: false,
-
-        // Better spacing
-        layout: { padding: { left: 15, right: 15, top: 10, bottom: 10 }},
-
-        scales: {
-            x: { 
-                offset: true,
-                grid: { display: false }
-            },
-            y: {
-                beginAtZero: true,
-                grace: 1
+        cutout: '70%',
+        plugins: {
+            legend: { 
+                position: 'right', 
+                labels: { boxWidth: 12, font: { size: 11 } } 
             }
         }
     }
 });
-
 }
+
 </script>
 
 <?php include "includes/layout_end.php"; ?>

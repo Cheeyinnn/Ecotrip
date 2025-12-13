@@ -2,12 +2,6 @@
 
 session_start();
 include("db_connect.php");
-require_once "includes/auth.php";  // <--- REQUIRED FIRST
-
-if (!isset($_SESSION['userID'])) {
-    header("Location: login.php");
-    exit;
-}
 
 
 $timeFilter = $_GET['time'] ?? 'all';
@@ -20,6 +14,7 @@ elseif ($timeFilter === '30') {
     $timeSQL = " AND uploaded_at >= NOW() - INTERVAL 30 DAY ";
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // --- Fetch User Points Safely ---
 $sql_points = "SELECT walletPoint AS totalPoints FROM user WHERE userID = ?";
@@ -41,6 +36,8 @@ if ($stmt_points) {
     // fallback if prepare fails
     $myPoints = 0;
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 $sql_subs = "
     SELECT 
@@ -82,6 +79,9 @@ while($row = $res_sub_details->fetch_assoc()){
     $submissionDetails[] = $row;
 }
 $stmt_sub_details->close();
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 $userChallenges = [];
 $sql_challenges = "
@@ -126,52 +126,71 @@ while($row = $res_challenges->fetch_assoc()){
 }
 $stmt_challenges->close();
 
-$availableRewards = [];
-$sql_rewards = "SELECT rewardName, description, pointRequired FROM reward ORDER BY pointRequired ASC";
-$res_rewards = $conn->query($sql_rewards);
-while($row = $res_rewards->fetch_assoc()){
-    $availableRewards[] = [
-        'name' => $row['rewardName'],
-        'points' => $row['pointRequired'],
-        'status' => ($myPoints >= $row['pointRequired']) ? 'available' : 'locked' 
-    ];
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+//reward section
+
+// 1. Security Check
+if (!isset($_SESSION['userID'])) { header("Location: login.php"); exit(); }
+$userID = $_SESSION['userID'];
+
+// 2. Data Fetching for Dashboard
+
+// A. User Summary Stats
+$stmt = $conn->prepare("SELECT walletPoint, 
+    (SELECT SUM(pointSpent) FROM redemptionrequest WHERE userID = ?) as totalSpent,
+    (SELECT COUNT(*) FROM redemptionrequest WHERE userID = ?) as totalRedeemed
+    FROM user WHERE userID = ?");
+$stmt->bind_param("iii", $userID, $userID, $userID);
+$stmt->execute();
+$summary = $stmt->get_result()->fetch_assoc();
+$currentPoints = $summary['walletPoint'];
+$totalSpent = $summary['totalSpent'] ?? 0;
+$totalRedeemed = $summary['totalRedeemed'] ?? 0;
+$stmt->close();
+
+// B. Chart Data 1: Points Spent Trend (根据 filter)
+$trendLabels = [];
+$trendData = [];
+
+$trendSql = "SELECT DATE(requested_at) AS date, SUM(pointSpent) AS total 
+             FROM redemptionrequest 
+             WHERE userID = $userID $timeSQL
+             GROUP BY DATE(requested_at)
+             ORDER BY DATE(requested_at) ASC";
+$trendRes = $conn->query($trendSql);
+
+while($row = $trendRes->fetch_assoc()){
+    $trendLabels[] = $row['date'];
+    $trendData[] = (int)($row['total'] ?? 0);
 }
 
-$sql_used_points = "SELECT SUM(r.pointRequired) AS usedPoints 
-                    FROM redemptionrequest rr
-                    JOIN reward r ON rr.rewardID = r.rewardID
-                    WHERE rr.userID = ? AND rr.status = 'Approved'"; 
-$stmt_used = $conn->prepare($sql_used_points);
-$stmt_used->bind_param("i", $userID);
-$stmt_used->execute();
-$res_used = $stmt_used->get_result()->fetch_assoc();
-$usedPoints = $res_used['usedPoints'] ?? 0;
-$stmt_used->close();
+// C. Chart Data 2: Category Distribution (Products vs Vouchers) 根据 filter
+$catLabels = [];
+$catData = [];
 
-$availablePoints = $myPoints - $usedPoints; 
+$catSql = "SELECT r.category, COUNT(*) AS count
+           FROM redemptionrequest rr
+           JOIN reward r ON rr.rewardID = r.rewardID
+           WHERE rr.userID = $userID $timeSQL
+           GROUP BY r.category";
+$catRes = $conn->query($catSql);
 
-$claimedRewards = [];
-$sql_claimed = "
-    SELECT r.rewardName, rr.requested_at
-    FROM redemptionrequest rr
-    JOIN reward r ON rr.rewardID = r.rewardID
-    WHERE rr.userID = ? AND rr.status = 'Approved'
-    ORDER BY rr.requested_at DESC
-";
-$stmt_claimed = $conn->prepare($sql_claimed);
-$stmt_claimed->bind_param("i", $userID);
-$stmt_claimed->execute();
-$res_claimed = $stmt_claimed->get_result();
-
-while($row = $res_claimed->fetch_assoc()){
-
-    $claimedRewards[] = [
-        'name' => $row['rewardName'],
-        'date' => date('Y-m-d', strtotime($row['requested_at'])) 
-    ];
+while($row = $catRes->fetch_assoc()){
+    $catLabels[] = ucfirst($row['category']);
+    $catData[] = (int)$row['count'];
 }
-$stmt_claimed->close();
 
+// D. Recent Activity List 根据 filter
+$recentSql = "SELECT rr.*, r.rewardName, r.imageURL, r.category
+              FROM redemptionrequest rr
+              JOIN reward r ON rr.rewardID = r.rewardID
+              WHERE rr.userID = $userID $timeSQL
+              ORDER BY rr.requested_at DESC LIMIT 5";
+$recentRes = $conn->query($recentSql);
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+//team rank section
 $userHasTeam = false;
 $teamRankMessage = '';
 $teamRank = [];
@@ -228,6 +247,7 @@ if ($teamID === null) {
 
     $stmt2->close();
 }
+
 include "includes/layout_start.php";    
 
 if (isset($conn) && $conn->ping()) {
@@ -247,7 +267,59 @@ if (isset($conn) && $conn->ping()) {
     <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
     <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
+
     
+    <style>
+        body { background: #f5f7fb; font-family: 'Plus Jakarta Sans', sans-serif; color: #334155; }
+        
+        /* Card Styles */
+        .stat-card {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid #f1f5f9;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+            height: 100%;
+            transition: transform 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card:hover { transform: translateY(-3px); }
+        
+        /* Decorative Background Circles for cards */
+        .bg-circle {
+            position: absolute;
+            right: -20px;
+            bottom: -20px;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            opacity: 0.1;
+        }
+
+        /* Titles & Typography */
+        .card-label { font-size: 13px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .card-value { font-size: 32px; font-weight: 800; color: #0f172a; margin: 5px 0; }
+        .card-sub { font-size: 13px; color: #94a3b8; }
+        
+        /* Chart Containers */
+        .chart-container { position: relative; height: 300px; width: 100%; }
+        
+        /* Table Styles */
+        .table-custom th { font-size: 12px; text-transform: uppercase; color: #94a3b8; font-weight: 700; background: #f8fafc; border: none; padding: 15px; }
+        .table-custom td { padding: 15px; vertical-align: middle; border-bottom: 1px solid #f1f5f9; font-size: 14px; font-weight: 600; color: #475569; }
+        .table-custom tr:last-child td { border-bottom: none; }
+        .item-img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; margin-right: 12px; }
+
+        /* Custom Colors */
+        .text-purple { color: #8b5cf6; }
+        .bg-purple { background-color: #8b5cf6; }
+        .text-orange { color: #f97316; }
+        .bg-orange { background-color: #f97316; }
+    </style>
+
     <script>
       tailwind.config = {
         theme: {
@@ -471,285 +543,345 @@ if (isset($conn) && $conn->ping()) {
                 </div>
 
 
-                     <div id="reward" class="tab-content hidden p-4 space-y-6">
-
-                                    <div class="bg-white shadow rounded p-4">
-                        <div class="text-gray-500 mb-2">Points Overview</div>
-                        <div id="rewardChart" style="height: 250px;"></div>
-                    </div>
-
-                                    <div class="bg-white shadow rounded p-4">
-                        <h3 class="text-lg font-semibold text-dark mb-4">Available Rewards</h3>
-                        <div id="rewardBarChart" style="height: 250px;"></div>
-                    </div>
-
-                  <div class="bg-white shadow rounded p-6">
-                    <h3 class="text-lg font-semibold text-dark mb-4">Claimed Rewards</h3>
-
-                    <?php if (empty($claimedRewards)): ?>
-                        <p class="text-center text-gray-400 py-4">No claimed rewards found.</p>
-                    <?php else: ?>
-                        <div class="relative border-l-2 border-gray-200 ml-4">
-                        <?php foreach ($claimedRewards as $reward): ?>
-                            <div class="mb-6 ml-4">
-                                <div class="absolute w-3 h-3 bg-primary rounded-full -left-[7px] mt-1.5"></div>
-                                <p class="text-dark font-medium"><?= htmlspecialchars($reward['name']); ?></p>
-                                <p class="text-sm text-dark-2">Claimed on: <?= htmlspecialchars($reward['date']); ?></p>
+                <div id="reward" class="tab-content hidden p-4 space-y-6">
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-4">
+                            <div class="stat-card">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <div class="card-label">Current Wallet</div>
+                                        <div class="card-value"><?php echo number_format($currentPoints); ?></div>
+                                        <div class="card-sub text-success"><i class="fas fa-arrow-up"></i> Available to spend</div>
+                                    </div>
+                                    <div class="icon-box bg-success bg-opacity-10 p-3 rounded-circle text-success">
+                                        <iconify-icon icon="solar:wallet-money-bold" style="font-size: 24px;"></iconify-icon>
+                                    </div>
+                                </div>
                             </div>
-                        <?php endforeach; ?>
                         </div>
-                    <?php endif; ?>
-                </div>
+
+                        <div class="col-md-4">
+                            <div class="stat-card">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <div class="card-label">Total Spent</div>
+                                        <div class="card-value text-purple"><?php echo number_format($totalSpent); ?></div>
+                                        <div class="card-sub">Lifetime points burned</div>
+                                    </div>
+                                    <div class="icon-box bg-purple bg-opacity-10 p-3 rounded-circle text-purple">
+                                        <iconify-icon icon="solar:fire-bold" style="font-size: 24px;"></iconify-icon>
+                                    </div>
+                                </div>
+                                <div class="bg-circle bg-purple"></div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="stat-card">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <div class="card-label">Total Redemptions</div>
+                                        <div class="card-value text-orange"><?php echo number_format($totalRedeemed); ?></div>
+                                        <div class="card-sub">Items & Vouchers claimed</div>
+                                    </div>
+                                    <div class="icon-box bg-orange bg-opacity-10 p-3 rounded-circle text-orange">
+                                        <iconify-icon icon="solar:bag-heart-bold" style="font-size: 24px;"></iconify-icon>
+                                    </div>
+                                </div>
+                                <div class="bg-circle bg-orange"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                     <div class="row g-4 mb-4">
+                        <div class="col-lg-8">
+                            <div class="stat-card">
+                                <h5 class="fw-bold mb-4">Spending Analysis</span></h5>
+                                <div class="chart-container">
+                                    <canvas id="trendChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-4">
+                            <div class="stat-card">
+                                <h5 class="fw-bold mb-4">Reward Categories</h5>
+                                <div class="chart-container" style="height: 250px;">
+                                    <canvas id="categoryChart"></canvas>
+                                </div>
+                                <div class="text-center mt-3">
+                                    <small class="text-muted">Distribution of your redemptions</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
 
                 </div>
+
+
 
             </div>
         </main>
     </div>
 
 <script>
-
     // apply time filter by reloading with ?time=
-function applyTimeFilter(){
-  const val = document.getElementById('timeFilter').value;
-  const url = new URL(window.location.href);
-  url.searchParams.set('time', val);
-  // preserve other query params if you want (e.g., status) - currently only time is used
-  window.location.href = url.toString();
-}
-
-
-
-document.addEventListener('DOMContentLoaded', function () {
-
-    function showTab(tabId) {
-
-        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.add('hidden'));
-
-        document.querySelectorAll('[id^="tab-"]').forEach(btn => {
-            btn.classList.remove('text-primary','border-b-2','border-primary');
-            btn.classList.add('text-dark-2','hover:text-dark','hover:border-dark/20');
-        });
-
-        const tab = document.getElementById(tabId);
-        if(tab) tab.classList.remove('hidden');
-
-        const btn = document.querySelector(`[onclick="showTab('${tabId}')"]`);
-        if(btn){
-            btn.classList.add('text-primary','border-b-2','border-primary');
-            btn.classList.remove('text-dark-2','hover:text-dark','hover:border-dark/20');
-        }
-
-        if(tabId === 'user' && !window.userChartInitialized){
-            const userChartEl = document.getElementById('submissionStatusBarChart');
-            if(userChartEl){
-                window.userChart = echarts.init(userChartEl);
-
-                const statusCounts = {
-                    'Approved': <?= (int)$approvedCount; ?>,
-                    'Pending': <?= (int)$pendingCount; ?>,
-                    'Denied': <?= (int)$deniedCount; ?>
-                };
-
-                window.userChart.setOption({
-                    title: { text: 'Submission Status Overview', left: 'center', textStyle:{fontSize:14} },
-                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                    xAxis: { type:'category', data: Object.keys(statusCounts) },
-                    yAxis: { type:'value' },
-                    series: [{
-                        type:'bar',
-                        data: Object.values(statusCounts),
-                        itemStyle: {
-                            color: params => {
-                                const name = Object.keys(statusCounts)[params.dataIndex];
-                                return name==='Approved' ? '#22c55e' : name==='Pending' ? '#facc15' : '#ef4444';
-                            }
-                        },
-                        label: { show: true, position: 'top' }
-                    }]
-                });
-
-                window.userChartInitialized = true;
-                window.userChart.resize(); 
-            }
-        }
-
-        if(tabId === 'tables' && !window.challengeChartInitialized){
-            const challengeEl = document.getElementById('challengeChart');
-            if(challengeEl){
-                const challengeData = <?php echo json_encode($userChallenges); ?>;
-                const names = challengeData.map(c => c.name);
-                const points = challengeData.map(c => c.points);
-                const times = challengeData.map(c => c.times);
-                const statusColors = challengeData.map(c => 
-                    c.status === 'Completed' ? '#22c55e' :
-                    c.status === 'In Review' ? '#facc15' :
-                    c.status === 'Denied/Try Again' ? '#ef4444' : '#9ca3af'
-                );
-
-                window.challengeChart = echarts.init(challengeEl);
-                window.challengeChart.setOption({
-                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                    xAxis: { type: 'category', data: names, axisLabel:{interval:0, rotate:30} },
-                    yAxis: { type: 'value', name: 'Points / Times' },
-                    series: [{
-                        type: 'bar',
-                        data: points.map((p,i)=>({
-                            value: p,
-                            itemStyle: { color: statusColors[i] },
-                            label: { show: true, position: 'top', formatter: times[i] + ' times' }
-                        }))
-                    }]
-                });
-
-                window.challengeChartInitialized = true;
-                window.challengeChart.resize();
-            }
-        }
-
-        if(tabId === 'reward' && !window.rewardChartInitialized){
-
-            const rewardChartEl = document.getElementById('rewardChart');
-            if(rewardChartEl){
-                window.rewardChart = echarts.init(rewardChartEl);
-
-const totalUserPoints = <?= (int)($usedPoints + $availablePoints); ?>;
-
-window.rewardChart.setOption({
-    title: {
-        text: totalUserPoints,
-        subtext: 'Total Points',
-        left: 'center',
-        top: '36%', 
-        textStyle: {
-            fontSize: 26,
-            fontWeight: 'bold',
-            color: '#1f2937'
-        },
-        subtextStyle: {
-            fontSize: 12,
-            color: '#6b7280'
-        }
-    },
-    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-    legend: {
-        bottom: 0,
-        itemWidth: 12,
-        itemHeight: 12,
-        textStyle: { color: '#374151' }
-    },
-    series: [{
-        type: 'pie',
-        radius: ['55%', '75%'],
-         center: ['50%', '48%'], 
-        avoidLabelOverlap: true,
-        label: { show: false },
-        labelLine: { show: false },
-        itemStyle: {
-            borderWidth: 3,
-            borderColor: '#fff'
-        },
-        data: [
-            { value: <?= $usedPoints ?>, name: 'Used Points', itemStyle:{color:'#60a5fa'} },
-            { value: <?= $availablePoints ?>, name: 'Available Points', itemStyle:{color:'#34d399'} }
-        ]
-    }]
-});
-
-                window.rewardChart.resize();
-            }
-
-            const rewardBarEl = document.getElementById('rewardBarChart');
-            if(rewardBarEl){
-                const rewardsData = <?= json_encode($availableRewards); ?>;
-                window.rewardBarChart = echarts.init(rewardBarEl);
-                window.rewardBarChart.setOption({
-                    title: { text: 'Available Rewards', left: 'center', textStyle:{fontSize:14} },
-                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                    xAxis: { type:'category', data: rewardsData.map(r=>r.name), axisLabel:{interval:0, rotate:30} },
-                    yAxis: { type:'value', name:'Points Required' },
-                    series: [{
-                        type:'bar',
-                        data: rewardsData.map(r=>({ value:r.points, itemStyle:{ color: r.status==='available' ? '#22c55e':'#9ca3af' } })),
-                        label: { show:true, position:'top' }
-                    }]
-                });
-                window.rewardBarChart.resize();
-            }
-
-            window.rewardChartInitialized = true;
-        }
+    function applyTimeFilter(){
+        const val = document.getElementById('timeFilter').value;
+        const url = new URL(window.location.href);
+        url.searchParams.set('time', val);
+        window.location.href = url.toString();
     }
 
-    window.showTab = showTab;
+    document.addEventListener('DOMContentLoaded', function () {
 
-    const teamRankData = <?= json_encode($teamRank); ?>;
-    if(teamRankData.length>0){
-        const teamRankChart = echarts.init(document.getElementById('teamRankChart'));
-        const yMin = Math.max(0, Math.min(...teamRankData.map(t=>t.value))-100);
-        teamRankChart.setOption({
-            title:{ text:'Team & Personal Rank', left:'center', textStyle:{fontSize:14} },
-            xAxis:{ type:'category', data:teamRankData.map(t=>t.name), axisLabel:{interval:0} },
-            yAxis:{ type:'value', min:yMin, name:'Total Points' },
-            series:[{
-                type:'bar',
-                data:teamRankData.map(t=>t.value),
-                itemStyle:{ color: params => params.name==='You'?'#3b82f6':'#9ca3af' },
-                label:{ show:true, position:'top' }
+        function showTab(tabId) {
+
+            // hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.add('hidden'));
+
+            // reset all tab buttons
+            document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+                btn.classList.remove('text-primary','border-b-2','border-primary');
+                btn.classList.add('text-dark-2','hover:text-dark','hover:border-dark/20');
+            });
+
+            // show current tab
+            const tab = document.getElementById(tabId);
+            if(tab) tab.classList.remove('hidden');
+
+            // highlight current tab button
+            const btn = document.querySelector(`[onclick="showTab('${tabId}')"]`);
+            if(btn){
+                btn.classList.add('text-primary','border-b-2','border-primary');
+                btn.classList.remove('text-dark-2','hover:text-dark','hover:border-dark/20');
+            }
+
+            // --- User Tab Chart ---
+            if(tabId === 'user' && !window.userChartInitialized){
+                const userChartEl = document.getElementById('submissionStatusBarChart');
+                if(userChartEl){
+                    window.userChart = echarts.init(userChartEl);
+
+                    const statusCounts = {
+                        'Approved': <?= (int)$approvedCount; ?>,
+                        'Pending': <?= (int)$pendingCount; ?>,
+                        'Denied': <?= (int)$deniedCount; ?>
+                    };
+
+                    window.userChart.setOption({
+                        title: { text: 'Submission Status Overview', left: 'center', textStyle:{fontSize:14} },
+                        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                        xAxis: { type:'category', data: Object.keys(statusCounts) },
+                        yAxis: { type:'value' },
+                        series: [{
+                            type:'bar',
+                            data: Object.values(statusCounts),
+                            itemStyle: {
+                                color: params => {
+                                    const name = Object.keys(statusCounts)[params.dataIndex];
+                                    return name==='Approved' ? '#22c55e' : name==='Pending' ? '#facc15' : '#ef4444';
+                                }
+                            },
+                            label: { show: true, position: 'top' }
+                        }]
+                    });
+
+                    window.userChartInitialized = true;
+                    window.userChart.resize(); 
+                }
+            }
+
+            // --- Challenge Tab Chart ---
+            if(tabId === 'tables' && !window.challengeChartInitialized){
+                const challengeEl = document.getElementById('challengeChart');
+                if(challengeEl){
+                    const challengeData = <?php echo json_encode($userChallenges); ?>;
+                    const names = challengeData.map(c => c.name);
+                    const points = challengeData.map(c => c.points);
+                    const times = challengeData.map(c => c.times);
+                    const statusColors = challengeData.map(c => 
+                        c.status === 'Completed' ? '#22c55e' :
+                        c.status === 'In Review' ? '#facc15' :
+                        c.status === 'Denied/Try Again' ? '#ef4444' : '#9ca3af'
+                    );
+
+                    window.challengeChart = echarts.init(challengeEl);
+                    window.challengeChart.setOption({
+                        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                        xAxis: { type: 'category', data: names, axisLabel:{interval:0, rotate:30} },
+                        yAxis: { type: 'value', name: 'Points / Times' },
+                        series: [{
+                            type: 'bar',
+                            data: points.map((p,i)=>({
+                                value: p,
+                                itemStyle: { color: statusColors[i] },
+                                label: { show: true, position: 'top', formatter: times[i] + ' times' }
+                            }))
+                        }]
+                    });
+
+                    window.challengeChartInitialized = true;
+                    window.challengeChart.resize();
+                }
+            }
+
+            // --- Reward Tab Charts ---
+            if(tabId === 'reward' && !window.rewardChartsLoaded){
+                // Line Chart (Points Trend)
+                const ctxTrendEl = document.getElementById('trendChart');
+                if(ctxTrendEl){
+                    const ctxTrend = ctxTrendEl.getContext('2d');
+                    const gradient = ctxTrend.createLinearGradient(0,0,0,400);
+                    gradient.addColorStop(0,'rgba(139,92,246,0.5)');
+                    gradient.addColorStop(1,'rgba(139,92,246,0.0)');
+
+                    window.rewardTrendChart = new Chart(ctxTrend,{
+                        type:'line',
+                        data:{
+                            labels: <?= json_encode($trendLabels ?? []) ?>,
+                            datasets:[{
+                                label:'Points Spent',
+                                data: <?= json_encode($trendData ?? []) ?>,
+                                borderColor:'#8b5cf6',
+                                backgroundColor: gradient,
+                                borderWidth:3,
+                                tension:0.4,
+                                fill:true,
+                                pointBackgroundColor:'#ffffff',
+                                pointBorderColor:'#8b5cf6',
+                                pointBorderWidth:2,
+                                pointRadius:6,
+                                pointHoverRadius:8
+                            }]
+                        },
+                        options:{
+                            responsive:true,
+                            maintainAspectRatio:false,
+                            plugins:{
+                                legend:{ display:false },
+                                tooltip:{
+                                    backgroundColor:'#1e293b',
+                                    padding:12,
+                                    titleFont:{ size:13 },
+                                    bodyFont:{ size:14, weight:'bold' }
+                                }
+                            },
+                            scales:{
+                                y:{
+                                    beginAtZero:true,
+                                    grid:{ borderDash:[5,5], color:'#f1f5f9' },
+                                    ticks:{ font:{ family:"'Plus Jakarta Sans', sans-serif" } }
+                                },
+                                x:{
+                                    grid:{ display:false },
+                                    ticks:{ font:{ family:"'Plus Jakarta Sans', sans-serif" } }
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Doughnut Chart (Category)
+                const ctxCatEl = document.getElementById('categoryChart');
+                if(ctxCatEl){
+                    const ctxCat = ctxCatEl.getContext('2d');
+                    window.rewardCategoryChart = new Chart(ctxCat,{
+                        type:'doughnut',
+                        data:{
+                            labels: <?= json_encode($catLabels ?? []) ?>,
+                            datasets:[{
+                                data: <?= json_encode($catData ?? []) ?>,
+                                backgroundColor:['#3b82f6','#10b981','#f59e0b','#6366f1'],
+                                borderWidth:0,
+                                hoverOffset:4
+                            }]
+                        },
+                        options:{
+                            responsive:true,
+                            maintainAspectRatio:false,
+                            cutout:'75%',
+                            plugins:{
+                                legend:{
+                                    position:'bottom',
+                                    labels:{ usePointStyle:true, padding:20, font:{ family:"'Plus Jakarta Sans'" } }
+                                }
+                            }
+                        }
+                    });
+                }
+
+                window.rewardChartsLoaded = true;
+            }
+        }
+
+        // expose showTab globally
+        window.showTab = showTab;
+
+        // --- Team & Personal Rank Chart ---
+        const teamRankData = <?= json_encode($teamRank); ?>;
+        if(teamRankData.length>0){
+            const teamRankChart = echarts.init(document.getElementById('teamRankChart'));
+            const yMin = Math.max(0, Math.min(...teamRankData.map(t=>t.value))-100);
+            teamRankChart.setOption({
+                title:{ text:'Team & Personal Rank', left:'center', textStyle:{fontSize:14} },
+                xAxis:{ type:'category', data:teamRankData.map(t=>t.name), axisLabel:{interval:0} },
+                yAxis:{ type:'value', min:yMin, name:'Total Points' },
+                series:[{
+                    type:'bar',
+                    data:teamRankData.map(t=>t.value),
+                    itemStyle:{ color: params => params.name==='You'?'#3b82f6':'#9ca3af' },
+                    label:{ show:true, position:'top' }
+                }]
+            });
+        }
+
+        // --- Submission Status Pie Chart ---
+        const submissionStatusChart = echarts.init(document.getElementById('submissionStatusChart'));
+        submissionStatusChart.setOption({
+            tooltip: { trigger: 'item' },
+            legend: { show: false },
+            series: [{
+                type:'pie',
+                radius:['40%','75%'],
+                center:['50%','50%'],
+                minAngle:5,
+                label:{
+                    position:'right',
+                    alignTo:'labelLine',
+                    formatter:'{b}: {c} ({d}%)',
+                    fontSize:12
+                },
+                labelLine:{
+                    length:15,
+                    length2:5,
+                    maxSurfaceAngle:120
+                },
+                data:[
+                    {value: <?= $approvedCount ?>, name:'Approved', itemStyle:{color:'#22c55e'}},
+                    {value: <?= $pendingCount ?>, name:'Pending', itemStyle:{color:'#eab308'}},
+                    {value: <?= $deniedCount ?>, name:'Denied', itemStyle:{color:'#ef4444'}}
+                ]
             }]
         });
-    }
 
-    const submissionStatusData = [
-    { name:'Approved', value: <?= (int)$approvedCount; ?>, itemStyle:{color:'#22c55e'} },
-    { name:'Pending', value: <?= (int)$pendingCount; ?>, itemStyle:{color:'#facc15'} },
-    { name:'Denied', value: <?= (int)$deniedCount; ?>, itemStyle:{color:'#ef4444'} }
-].filter(item => item.value > 0);
+        // --- Resize charts on window resize ---
+        window.addEventListener('resize', function(){
+            if(typeof teamRankChart !== 'undefined') teamRankChart.resize();
+            if(typeof submissionStatusChart !== 'undefined') submissionStatusChart.resize();
+            if(window.userChart) window.userChart.resize();
+            if(window.challengeChart) window.challengeChart.resize();
+            if(window.rewardTrendChart) window.rewardTrendChart.resize();
+            if(window.rewardCategoryChart) window.rewardCategoryChart.resize();
+        });
 
-const submissionStatusChart = echarts.init(document.getElementById('submissionStatusChart'));
-
-submissionStatusChart.setOption({
-    tooltip: { trigger: 'item' },
-    legend: { show: false },
-    series: [{
-        type: 'pie',
-        radius: ['40%', '75%'],
-        center: ['50%', '50%'],
-        minAngle: 5,
-        label: {
-            position: 'right',
-            alignTo: 'labelLine',
-            formatter: '{b}: {c} ({d}%)',
-            fontSize: 12
-        },
-        labelLine: {
-            length: 15,
-            length2: 5,
-            maxSurfaceAngle: 120
-        },
-        data: [
-            {value: <?= $approvedCount ?>, name:'Approved', itemStyle:{color:'#22c55e'}},
-            {value: <?= $pendingCount ?>, name:'Pending', itemStyle:{color:'#eab308'}},
-            {value: <?= $deniedCount ?>, name:'Denied', itemStyle:{color:'#ef4444'}}
-        ]
-    }]
-});
-
-    window.addEventListener('resize', function(){
-        if(teamRankChart) teamRankChart.resize();
-        if(submissionStatusChart) submissionStatusChart.resize();
-        if(window.userChart) window.userChart.resize();
-        if(window.challengeChart) window.challengeChart.resize();
-        if(window.rewardChart) window.rewardChart.resize();
-        if(window.rewardBarChart) window.rewardBarChart.resize();
+        // Show default tab
+        showTab('charts');
     });
-
-    showTab('charts');
-});
 </script>
 
 
-<?php include "includes/layout_end.php"; ?>
+
 </body>
 </html>
