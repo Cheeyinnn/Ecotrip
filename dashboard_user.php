@@ -471,7 +471,7 @@ if (isset($conn) && $conn->ping()) {
                 </div>
 
 
-                                <div id="reward" class="tab-content hidden p-4 space-y-6">
+                     <div id="reward" class="tab-content hidden p-4 space-y-6">
 
                                     <div class="bg-white shadow rounded p-4">
                         <div class="text-gray-500 mb-2">Points Overview</div>

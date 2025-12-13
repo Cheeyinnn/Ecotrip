@@ -414,26 +414,65 @@ function formatDate(dateStr) {
     </div>
   </div>
 
-  <!-- summary cards -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-    <div class="bg-white p-5 rounded-2xl shadow-card">
-      <p class="stat-card-label">Total Users</p>
-      <div class="stat-card-value" id="cardTotalUsers">—</div>
+    <!-- summary cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+
+        <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
+        <div class="p-2 bg-blue-100 text-blue-600 rounded-xl">
+            <!-- Users Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M17 20h5v-2a4 4 0 00-4-4h-1M9 20H4v-2a4 4 0 014-4h1m4-4a4 4 0 100-8 4 4 0 000 8zm6 4a4 4 0 10-8 0" />
+            </svg>
+        </div>
+        <div>
+            <p class="stat-card-label">Total Users</p>
+            <div class="stat-card-value" id="cardTotalUsers">—</div>
+        </div>
+        </div>
+
+        <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
+        <div class="p-2 bg-green-100 text-green-600 rounded-xl">
+            <!-- User Plus -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M18 9a4 4 0 11-8 0 4 4 0 018 0zM12 14a6 6 0 00-6 6v1m13-7v4m0 0h4m-4 0h-4" />
+            </svg>
+        </div>
+        <div>
+            <p class="stat-card-label">New User (period)</p>
+            <div class="stat-card-value" id="cardNewUsers">—</div>
+        </div>
+        </div>
+
+        <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
+        <div class="p-2 bg-purple-100 text-purple-600 rounded-xl">
+            <!-- Team -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M17 20h5v-2a4 4 0 00-4-4h-1M7 20H2v-2a4 4 0 014-4h1m5-4a4 4 0 100-8 4 4 0 000 8z" />
+            </svg>
+        </div>
+        <div>
+            <p class="stat-card-label">Active Teams (period)</p>
+            <div class="stat-card-value" id="cardActiveTeams">—</div>
+        </div>
+        </div>
+
+        <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
+        <div class="p-2 bg-orange-100 text-orange-600 rounded-xl">
+            <!-- Document -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z" />
+            </svg>
+        </div>
+        <div>
+            <p class="stat-card-label">Total Submission (period)</p>
+            <div class="stat-card-value" id="cardTotalSubmissions">—</div>
+        </div>
+        </div>
     </div>
-    <div class="bg-white p-5 rounded-2xl shadow-card">
-      <p class="stat-card-label">New User (period)</p>
-      <div class="stat-card-value" id="cardNewUsers">—</div>
-    </div>
-    <div class="bg-white p-5 rounded-2xl shadow-card">
-      <p class="stat-card-label">Active Teams (period)</p>
-      <div class="stat-card-value" id="cardActiveTeams">—</div>
-    </div>
-    <div class="bg-white p-5 rounded-2xl shadow-card">
-      <p class="stat-card-label">Total Submission (period)</p>
-      
-      <div class="stat-card-value" id="cardTotalSubmissions">—</div>
-    </div>
-  </div>
 
   <!-- tabs -->
   <div class="bg-white rounded-2xl shadow-lg p-6">
@@ -616,51 +655,51 @@ function formatDate(dateStr) {
 
 </div>
 
+
+
+
+
+        <div id="reward" class="tab-content hidden">
+
+            <!-- KPI Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+
+                <div class="bg-white p-6 rounded-2xl shadow-card flex flex-col items-center justify-center h-32">
+                    <p class="text-sm text-gray-600">Total Rewards Redeemed</p>
+                    <p id="totalRewardsRedeemed" class="text-3xl font-bold mt-2">0</p>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl shadow-card flex flex-col items-center justify-center h-32">
+                    <p class="text-sm text-gray-600">Total Rewards Stock</p>
+                    <p id="totalRewardsStock" class="text-3xl font-bold mt-2">0</p>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl shadow-card flex flex-col items-center justify-center h-32">
+                    <p class="text-sm text-gray-600">Low Stock Alerts</p>
+                    <p id="lowStockCount" class="text-3xl font-bold text-red-500 mt-2">0</p>
+                </div>
+
+            </div>
+
+            <!-- Charts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                <div class="bg-white p-6 rounded-2xl shadow-card h-[360px] flex flex-col">
+                    <h3 class="font-semibold text-lg mb-4">Redeemed by Type</h3>
+                    <canvas id="redeemedByTypeChart" class="flex-1"></canvas>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl shadow-card h-[360px] flex flex-col">
+                    <h3 class="font-semibold text-lg mb-4">Redemptions Trend</h3>
+                    <canvas id="redemptionsTrendChart" class="w-full" style="height: 260px;"></canvas>
+
+                </div>
+
+            </div>
+
+        </div>
+
 </div>
-
-
-
-<div id="reward" class="tab-content hidden">
-
-    <!-- KPI Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-
-        <div class="bg-white p-6 rounded-2xl shadow-card flex flex-col items-center justify-center h-32">
-            <p class="text-sm text-gray-600">Total Rewards Redeemed</p>
-            <p id="totalRewardsRedeemed" class="text-3xl font-bold mt-2">0</p>
-        </div>
-
-        <div class="bg-white p-6 rounded-2xl shadow-card flex flex-col items-center justify-center h-32">
-            <p class="text-sm text-gray-600">Total Rewards Stock</p>
-            <p id="totalRewardsStock" class="text-3xl font-bold mt-2">0</p>
-        </div>
-
-        <div class="bg-white p-6 rounded-2xl shadow-card flex flex-col items-center justify-center h-32">
-            <p class="text-sm text-gray-600">Low Stock Alerts</p>
-            <p id="lowStockCount" class="text-3xl font-bold text-red-500 mt-2">0</p>
-        </div>
-
-    </div>
-
-    <!-- Charts -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        <div class="bg-white p-6 rounded-2xl shadow-card h-[360px] flex flex-col">
-            <h3 class="font-semibold text-lg mb-4">Redeemed by Type</h3>
-            <canvas id="redeemedByTypeChart" class="flex-1"></canvas>
-        </div>
-
-        <div class="bg-white p-6 rounded-2xl shadow-card h-[360px] flex flex-col">
-            <h3 class="font-semibold text-lg mb-4">Redemptions Trend</h3>
-            <canvas id="redemptionsTrendChart" class="w-full" style="height: 260px;"></canvas>
-
-        </div>
-
-    </div>
-
-</div>
-
-
 </div>
 
 <script>
