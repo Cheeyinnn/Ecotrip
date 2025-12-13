@@ -10,6 +10,7 @@ if (!isset($_SESSION['userID'])) {
     exit;
 }
 $userID = $_SESSION['userID'];
+$pageTitle = "Leaderboard";
 
 // Fetch Current User
 $stmt = $conn->prepare("SELECT firstName, lastName, email, role, avatarURL, teamID FROM user WHERE userID = ?");
