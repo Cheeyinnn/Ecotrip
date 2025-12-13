@@ -170,6 +170,10 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
 
             <div class="sidebar-nav-title">Team Management</div>
 
+            <a href="team.php" class="sidebar-link <?= isActive('team.php') ?>">
+                <iconify-icon icon="solar:users-group-rounded-line-duotone"></iconify-icon>
+                My Team
+
             <a href="join_team.php" class="sidebar-link <?= isActive('join_team.php') ?>">
                 <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
                 Join Team
@@ -178,11 +182,6 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
             <a href="create_team.php" class="sidebar-link <?= isActive('create_team.php') ?>">
                 <iconify-icon icon="solar:pen-new-round-line-duotone"></iconify-icon>
                 Create Team
-            </a>
-
-            <a href="team.php" class="sidebar-link <?= isActive('team.php') ?>">
-                <iconify-icon icon="solar:users-group-rounded-line-duotone"></iconify-icon>
-                My Team
 
                 <?php if ($teamPendingCountSidebar > 0): ?>
                     <span class="badge bg-danger ms-2"

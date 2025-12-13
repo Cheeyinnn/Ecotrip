@@ -177,21 +177,34 @@ if (
 
 // ====================== OWNER: APPROVE / REJECT REQUESTS ======================
 
-// APPROVE REQUEST
+/// APPROVE ALL REQUESTS
 if (
     $_SERVER['REQUEST_METHOD'] === 'POST' &&
     isset($_POST['action']) &&
-    $_POST['action'] === "approve_request"
+    $_POST['action'] === "approve_all_requests"
 ) {
-    $targetID       = intval($_POST['userID']);
-    $teamIDFromForm = intval($_POST['teamID']);
+    $teamIDFromForm = (int)$_POST['teamID'];
 
-    // Only proceed if current user is leader of this team
-    $stmtTeam = $conn->prepare("SELECT teamLeaderID, teamName FROM team WHERE teamID = ?");
+    $stmtTeam = $conn->prepare("SELECT teamLeaderID FROM team WHERE teamID = ?");
     $stmtTeam->bind_param("i", $teamIDFromForm);
     $stmtTeam->execute();
     $teamRow = $stmtTeam->get_result()->fetch_assoc();
     $stmtTeam->close();
+
+    if ($teamRow && (int)$teamRow['teamLeaderID'] === $userID) {
+        $stmt = $conn->prepare("
+            UPDATE user
+            SET teamID = ?, pendingTeamID = NULL
+            WHERE pendingTeamID = ?
+        ");
+        $stmt->bind_param("ii", $teamIDFromForm, $teamIDFromForm);
+        $stmt->execute();
+        $count = $stmt->affected_rows;
+        $stmt->close();
+
+        $message = "{$count} join request(s) approved.";
+        $messageType = "success";
+    }
 
     if ($teamRow && (int)$teamRow['teamLeaderID'] === $userID) {
         $teamName = $teamRow['teamName'];
@@ -235,21 +248,34 @@ if (
     }
 }
 
-// REJECT REQUEST
+// REJECT ALL REQUESTS
 if (
     $_SERVER['REQUEST_METHOD'] === 'POST' &&
     isset($_POST['action']) &&
-    $_POST['action'] === "reject_request"
+    $_POST['action'] === "reject_all_requests"
 ) {
-    $targetID       = intval($_POST['userID']);
-    $teamIDFromForm = intval($_POST['teamID']);
+    $teamIDFromForm = (int)$_POST['teamID'];
 
-    // Verify current user is leader of this team
-    $stmtTeam = $conn->prepare("SELECT teamLeaderID, teamName FROM team WHERE teamID = ?");
+    $stmtTeam = $conn->prepare("SELECT teamLeaderID FROM team WHERE teamID = ?");
     $stmtTeam->bind_param("i", $teamIDFromForm);
     $stmtTeam->execute();
     $teamRow = $stmtTeam->get_result()->fetch_assoc();
     $stmtTeam->close();
+
+    if ($teamRow && (int)$teamRow['teamLeaderID'] === $userID) {
+        $stmt = $conn->prepare("
+            UPDATE user
+            SET pendingTeamID = NULL
+            WHERE pendingTeamID = ?
+        ");
+        $stmt->bind_param("i", $teamIDFromForm);
+        $stmt->execute();
+        $count = $stmt->affected_rows;
+        $stmt->close();
+
+        $message = "{$count} join request(s) rejected.";
+        $messageType = "info";
+    }
 
     if ($teamRow && (int)$teamRow['teamLeaderID'] === $userID) {
 
@@ -392,7 +418,7 @@ if (
             $stmt->execute();
             $stmt->close();
 
-            $message     = "Member kicked successfully!";
+            $message     = "Member removed successfully!";
             $messageType = "success";
 
             // ⭐ Notify kicked MEMBER
@@ -412,7 +438,7 @@ if (
             );
 
         } else {
-            $message     = "Cannot kick this user!";
+            $message     = "Cannot remove this user!";
             $messageType = "info";
         }
     }
@@ -957,7 +983,7 @@ include "includes/layout_start.php";
                                     <input type="hidden" name="action" value="kick_member">
                                     <input type="hidden" name="targetID" value="<?= $m['userID'] ?>">
                                     <button class="btn btn-sm btn-outline-danger">
-                                        <iconify-icon icon="ic:round-person-remove"></iconify-icon> Kick
+                                        <iconify-icon icon="ic:round-person-remove"></iconify-icon> Remove
                                     </button>
                                 </form>
                             <?php endif; ?>
@@ -1106,6 +1132,26 @@ include "includes/layout_start.php";
                     <h5 class="card-title mb-3">Pending Join Requests</h5>
 
                     <?php if ($pendingRequests && $pendingRequests->num_rows > 0): ?>
+    <form method="POST" class="mb-3 d-flex gap-2">
+        <input type="hidden" name="teamID" value="<?= $teamID ?>">
+        <input type="hidden" name="stay_tab" value="requests">
+
+        <button type="submit" name="action" value="approve_all_requests"
+                class="btn btn-success btn-sm"
+                onclick="return confirm('Approve ALL pending requests?');">
+            Approve All
+        </button>
+
+        <button type="submit" name="action" value="reject_all_requests"
+                class="btn btn-danger btn-sm"
+                onclick="return confirm('Reject ALL pending requests?');">
+            Reject All
+        </button>
+    </form>
+<?php endif; ?>
+
+
+                    <?php if ($pendingRequests && $pendingRequests->num_rows > 0): ?>
                         <?php while ($req = $pendingRequests->fetch_assoc()):
                             $reqAvatar = getAvatar($req['avatarURL']);
                         ?>
@@ -1178,5 +1224,19 @@ setTimeout(() => {
     }
 }, 4000);
 </script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    if (document.querySelector('input[name="stay_tab"]')) {
+        const tabBtn = document.querySelector(
+            'button[data-bs-target="#requests"]'
+        );
+        if (tabBtn && window.bootstrap) {
+            new bootstrap.Tab(tabBtn).show();
+        }
+    }
+});
+</script>
+
 
 <?php include "includes/layout_end.php"; ?>
