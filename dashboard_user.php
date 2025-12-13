@@ -10,6 +10,20 @@ if (!isset($_SESSION['userID'])) {
 }
 
 
+$timeFilter = $_GET['time'] ?? 'all';
+$timeSQL = ""; 
+
+if ($timeFilter === '7') {
+    $timeSQL = " AND uploaded_at >= NOW() - INTERVAL 7 DAY ";
+}
+elseif ($timeFilter === '30') {
+    $timeSQL = " AND uploaded_at >= NOW() - INTERVAL 30 DAY ";
+}
+
+
+
+
+
 // --- 1. 获取用户总积分 (My Points) ---
 // --- Fetch User Points Safely ---
 $sql_points = "SELECT walletPoint AS totalPoints FROM user WHERE userID = ?";
@@ -40,8 +54,9 @@ $sql_subs = "
         SUM(CASE WHEN status = 'Denied' THEN 1 ELSE 0 END) AS deniedCount,
         COUNT(submissionID) AS totalSubmission
     FROM sub
-    WHERE userID = ?
+    WHERE userID = ? $timeSQL
 ";
+
 $stmt_subs = $conn->prepare($sql_subs);
 $stmt_subs->bind_param("i", $userID);
 $stmt_subs->execute();
@@ -53,17 +68,18 @@ $deniedCount = $res_subs['deniedCount'] ?? 0;
 $totalSubmission = $res_subs['totalSubmission'] ?? 0;
 $stmt_subs->close();
 
+
 // --- 3. 获取 Submission 详情 (用于 My Submissions Tab: Table) ---
 $submissionDetails = [];
 $sql_sub_details = "
-    SELECT 
-        s.status, s.pointEarned, s.reviewNote, s.uploaded_at, c.challengeTitle 
+    SELECT s.status, s.pointEarned, s.reviewNote, s.uploaded_at, c.challengeTitle
     FROM sub s
     JOIN challenge c ON s.challengeID = c.challengeID
-    WHERE s.userID = ?
+    WHERE s.userID = ? $timeSQL
     ORDER BY s.uploaded_at DESC
     LIMIT 20
 ";
+
 $stmt_sub_details = $conn->prepare($sql_sub_details);
 $stmt_sub_details->bind_param("i", $userID);
 $stmt_sub_details->execute();
@@ -327,35 +343,18 @@ if (isset($conn) && $conn->ping()) {
                         </h2>
                         <p class="text-dark-2 mt-1">View all current data</p>
                     </div>
-                    <div class="flex flex-wrap gap-3">
-                        <div class="flex items-center space-x-3">
-                            <input 
-                                type="date" 
-                                class="bg-white border border-light-2 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                                id="startDate"
-                            >
+                     <div class="flex items-center gap-3">
+                        <label class="text-sm text-gray-700">Filter:</label>
+                        <select id="timeFilter" class="border rounded px-2 py-1" onchange="applyTimeFilter()">
+                            <option value="all" <?= $timeFilter === 'all' ? 'selected' : '' ?>>All</option>
+                            <option value="7" <?= $timeFilter === '7' ? 'selected' : '' ?>>Last 7 Days</option>
+                            <option value="30" <?= $timeFilter === '30' ? 'selected' : '' ?>>Last 30 Days</option>
+                        </select>
 
-                            <span class="text-dark-2 text-sm"> to </span>
-
-                            <input 
-                                type="date" 
-                                class="bg-white border border-light-2 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                                id="endDate"
-                            >
+                        <button onclick="window.location.reload()" class="bg-primary text-white px-3 py-1 rounded shadow">
+                            <i class="fas fa-refresh"></i> Refresh
+                        </button>
                         </div>
-                        <button
-                            class="bg-white border border-light-2 rounded-lg py-2 px-4 text-sm font-medium flex items-center gap-2 hover:bg-gray-50 transition-colors"
-                        >
-                            <i class="fas fa-download text-dark-2"> </i>
-                            <span> Print Report </span>
-                        </button>
-                        <button
-                            class="bg-primary text-white rounded-lg py-2 px-4 text-sm font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors shadow-sm"
-                        >
-                            <i class="fas fa-refresh"> </i>
-                            <span> Refresh </span>
-                        </button>
-                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -407,9 +406,9 @@ if (isset($conn) && $conn->ping()) {
                     </div>
                 </div>
 
-                                <div class="bg-white rounded-2xl shadow-lg p-6">
+                <div class="bg-white rounded-2xl shadow-lg p-6">
 
-                                    <div class="flex border-b border-light-2 mb-6 space-x-6">
+                    <div class="flex border-b border-light-2 mb-6 space-x-6">
 
                         <button class="py-3 px-4 text-sm font-semibold text-primary border-b-2 border-primary transition-all" onclick="showTab('charts')" id="tab-charts"> Overview </button>
                         <button class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('user')" id="tab-user"> My Submissions </button>
@@ -419,7 +418,8 @@ if (isset($conn) && $conn->ping()) {
                     </div>
 
                     <div id="charts" class="tab-content p-4 space-y-6">                            
-                  <div class="bg-white shadow rounded p-4">
+                    <div class="bg-white shadow rounded p-4">
+                        
                     <div class="text-gray-500 mb-2">Team & Personal Rank</div>
                     
                     <?php if ($userHasTeam && !empty($teamRank)) : ?>
@@ -473,7 +473,7 @@ if (isset($conn) && $conn->ping()) {
                 <div>
                    <div id="user" class="tab-content hidden p-4 space-y-6">
                     
-                        div class="bg-white shadow rounded p-4">
+                        <div class="bg-white shadow rounded p-4">
                         <div class="text-gray-500 mb-2">Submission Status Overview</div>
                         <div id="submissionStatusBarChart" style="height: 250px;"></div>
                     </div>
@@ -500,21 +500,24 @@ if (isset($conn) && $conn->ping()) {
                         <div id="rewardBarChart" style="height: 250px;"></div>
                     </div>
 
-                                    <div class="bg-white shadow rounded p-4">
-                        <h3 class="text-lg font-semibold text-dark mb-4">Claimed Rewards</h3>
-                        <div id="claimedRewardsList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <?php if (empty($claimedRewards)): ?>
-                                <div class="col-span-3 text-center p-4 text-gray-400">No claimed rewards found.</div>
-                            <?php else: ?>
-                                <?php foreach ($claimedRewards as $reward): ?>
-                                    <div class="bg-light-1 p-4 rounded shadow text-center">
-                                        <div class="font-medium text-dark"><?= htmlspecialchars($reward['name']); ?></div>
-                                        <div class="text-sm text-dark-2 mt-1">Claimed on: <?= htmlspecialchars($reward['date']); ?></div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
+                  <div class="bg-white shadow rounded p-6">
+                    <h3 class="text-lg font-semibold text-dark mb-4">Claimed Rewards</h3>
+
+                    <?php if (empty($claimedRewards)): ?>
+                        <p class="text-center text-gray-400 py-4">No claimed rewards found.</p>
+                    <?php else: ?>
+                        <div class="relative border-l-2 border-gray-200 ml-4">
+                        <?php foreach ($claimedRewards as $reward): ?>
+                            <div class="mb-6 ml-4">
+                                <div class="absolute w-3 h-3 bg-primary rounded-full -left-[7px] mt-1.5"></div>
+                                <p class="text-dark font-medium"><?= htmlspecialchars($reward['name']); ?></p>
+                                <p class="text-sm text-dark-2">Claimed on: <?= htmlspecialchars($reward['date']); ?></p>
+                            </div>
+                        <?php endforeach; ?>
                         </div>
-                    </div>
+                    <?php endif; ?>
+                </div>
+
 
                 </div>
 
@@ -523,6 +526,18 @@ if (isset($conn) && $conn->ping()) {
     </div>
 
 <script>
+
+    // apply time filter by reloading with ?time=
+function applyTimeFilter(){
+  const val = document.getElementById('timeFilter').value;
+  const url = new URL(window.location.href);
+  url.searchParams.set('time', val);
+  // preserve other query params if you want (e.g., status) - currently only time is used
+  window.location.href = url.toString();
+}
+
+
+
 document.addEventListener('DOMContentLoaded', function () {
 
     // ---------- Tab 切换函数 ----------
@@ -622,21 +637,50 @@ document.addEventListener('DOMContentLoaded', function () {
             const rewardChartEl = document.getElementById('rewardChart');
             if(rewardChartEl){
                 window.rewardChart = echarts.init(rewardChartEl);
-                window.rewardChart.setOption({
-                    title: { text: 'Points Usage', left: 'center', textStyle:{fontSize:14} },
-                    tooltip: { trigger: 'item', formatter: '{b}: {c} points ({d}%)' },
-                    legend: { bottom: 0 },
-                    series: [{
-                        type: 'pie',
-                        radius: ['40%', '70%'],
-                        label: { show: true, formatter: '{b}: {c}' },
-                        data: [
-                            { value: <?= (int)$usedPoints; ?>, name: 'Used Points' },
-                            { value: <?= (int)$availablePoints; ?>, name: 'Available Points' }
-                        ],
-                        color: ['#3b82f6', '#22c55e']
-                    }]
-                });
+
+const totalUserPoints = <?= (int)($usedPoints + $availablePoints); ?>;
+
+window.rewardChart.setOption({
+    title: {
+        text: totalUserPoints,
+        subtext: 'Total Points',
+        left: 'center',
+        top: '36%', 
+        textStyle: {
+            fontSize: 26,
+            fontWeight: 'bold',
+            color: '#1f2937'
+        },
+        subtextStyle: {
+            fontSize: 12,
+            color: '#6b7280'
+        }
+    },
+    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+    legend: {
+        bottom: 0,
+        itemWidth: 12,
+        itemHeight: 12,
+        textStyle: { color: '#374151' }
+    },
+    series: [{
+        type: 'pie',
+        radius: ['55%', '75%'],
+         center: ['50%', '48%'], 
+        avoidLabelOverlap: true,
+        label: { show: false },
+        labelLine: { show: false },
+        itemStyle: {
+            borderWidth: 3,
+            borderColor: '#fff'
+        },
+        data: [
+            { value: <?= $usedPoints ?>, name: 'Used Points', itemStyle:{color:'#60a5fa'} },
+            { value: <?= $availablePoints ?>, name: 'Available Points', itemStyle:{color:'#34d399'} }
+        ]
+    }]
+});
+
                 window.rewardChart.resize();
             }
 
@@ -684,23 +728,40 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const submissionStatusData = [
-        { name:'Approved', value: <?= (int)$approvedCount; ?>, itemStyle:{color:'#22c55e'} },
-        { name:'Pending', value: <?= (int)$pendingCount; ?>, itemStyle:{color:'#facc15'} },
-        { name:'Denied', value: <?= (int)$deniedCount; ?>, itemStyle:{color:'#ef4444'} }
-    ].filter(item=>item.value>0);
+    { name:'Approved', value: <?= (int)$approvedCount; ?>, itemStyle:{color:'#22c55e'} },
+    { name:'Pending', value: <?= (int)$pendingCount; ?>, itemStyle:{color:'#facc15'} },
+    { name:'Denied', value: <?= (int)$deniedCount; ?>, itemStyle:{color:'#ef4444'} }
+].filter(item => item.value > 0);
 
-    const submissionStatusChart = echarts.init(document.getElementById('submissionStatusChart'));
-    submissionStatusChart.setOption({
-        tooltip:{ trigger:'item', formatter:'{b}: {c}' },
-        legend:{ bottom:0 },
-        series:[{
-            type:'pie',
-            radius:['40%','70%'],
-            label:{ show:true, formatter:'{b}: {c}' },
-            data: submissionStatusData,
-            color: submissionStatusData.map(i=>i.itemStyle.color)
-        }]
-    });
+const submissionStatusChart = echarts.init(document.getElementById('submissionStatusChart'));
+
+submissionStatusChart.setOption({
+    tooltip: { trigger: 'item' },
+    legend: { show: false },
+    series: [{
+        type: 'pie',
+        radius: ['40%', '75%'],
+        center: ['50%', '50%'],
+        minAngle: 5,
+        label: {
+            position: 'right',
+            alignTo: 'labelLine',
+            formatter: '{b}: {c} ({d}%)',
+            fontSize: 12
+        },
+        labelLine: {
+            length: 15,
+            length2: 5,
+            maxSurfaceAngle: 120
+        },
+        data: [
+            {value: <?= $approvedCount ?>, name:'Approved', itemStyle:{color:'#22c55e'}},
+            {value: <?= $pendingCount ?>, name:'Pending', itemStyle:{color:'#eab308'}},
+            {value: <?= $deniedCount ?>, name:'Denied', itemStyle:{color:'#ef4444'}}
+        ]
+    }]
+});
+
 
     // ---------- 自适应 ----------
     window.addEventListener('resize', function(){
