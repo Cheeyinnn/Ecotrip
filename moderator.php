@@ -154,12 +154,11 @@ if (isset($_GET['id'])) {
     }
 } else {
 
-    // ❗核心规则：
-    // 只有 pending 才能在 page load 时自动显示
+
     if (!empty($pendingList)) {
         $currentSubmission = $pendingList[0];
     } else {
-        $currentSubmission = null; // pending = 0 → 右边只显示 message
+        $currentSubmission = null; 
     }
 }
 // total pending submission

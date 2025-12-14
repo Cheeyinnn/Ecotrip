@@ -254,27 +254,37 @@ $userDetails = $conn->query("
 //    count redemptions per reward within timeframe
 // ----------------------------------
 
+$rewardWindow = $timeInterval ?? 30;
+
+
 // --- 2. DATA FETCHING ---
 
 // Total Points Burned
-$sql = "SELECT SUM(pointSpent) as total 
-        FROM redemptionrequest 
-        WHERE status NOT IN ('cancelled', 'denied')
-        " . ($timeInterval ? " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)" : "");
+
+$whereReward = "WHERE status NOT IN ('cancelled', 'denied')";
+if ($timeInterval) {
+    $whereReward .= " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)";
+}
+
+$sql = "SELECT SUM(pointSpent) as total FROM redemptionrequest $whereReward";
 $burnedPoints = $conn->query($sql)->fetch_assoc()['total'] ?? 0;
 
 // Pending Requests
-$sql = "SELECT COUNT(*) as total 
-        FROM redemptionrequest 
-        WHERE status = 'pending'
-        " . ($timeInterval ? " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)" : "");
+$whereReward = "WHERE status = 'pending'";
+if ($timeInterval) {
+    $whereReward .= " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)";
+}
+
+$sql = "SELECT COUNT(*) as total FROM redemptionrequest $whereReward";
 $pendingCount = $conn->query($sql)->fetch_assoc()['total'] ?? 0;
 
 // Total Successful Redemptions
-$sql = "SELECT COUNT(*) as total 
-        FROM redemptionrequest 
-        WHERE status IN ('approved', 'outOfDiliver', 'Delivered')
-        " . ($timeInterval ? " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)" : "");
+$whereReward = "WHERE status IN ('approved','outOfDiliver','Delivered')";
+if ($timeInterval) {
+    $whereReward .= " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)";
+}
+
+$sql = "SELECT COUNT(*) as total FROM redemptionrequest $whereReward";
 $successCount = $conn->query($sql)->fetch_assoc()['total'] ?? 0;
 
 

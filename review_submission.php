@@ -18,7 +18,7 @@ if (!$submissionId || !in_array($decision, ['approve', 'reject'])) {
     exit;
 }
 
-/* ===== 查询 submission + challenge ===== */
+/* ===== check submission + challenge ===== */
 $tempSql = "
     SELECT s.userID, c.pointAward
     FROM sub s
@@ -34,18 +34,36 @@ $tempStmt->close();
 $status = $decision === 'approve' ? 'Approved' : 'Denied';
 $points = $decision === 'approve' ? (int)$temp['pointAward'] : 0;
 
-/* ===== 更新 submission ===== */
-$sql = "
-    UPDATE sub
-    SET status=?, pointEarned=?, reviewNote=?
-    WHERE submissionID=?
-";
+/* ===== renew submission (with time) ===== */
+if ($decision === 'approve') {
+    $status = 'Approved';
+    $points = (int)$temp['pointAward'];
+
+    $sql = "
+        UPDATE sub
+        SET status=?, pointEarned=?, reviewNote=?,
+            approved_at=NOW(), denied_at=NULL
+        WHERE submissionID=?
+    ";
+} else {
+    $status = 'Denied';
+    $points = 0;
+
+    $sql = "
+        UPDATE sub
+        SET status=?, pointEarned=?, reviewNote=?,
+            denied_at=NOW(), approved_at=NULL
+        WHERE submissionID=?
+    ";
+}
+
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("sisi", $status, $points, $feedback, $submissionId);
 $stmt->execute();
 $stmt->close();
 
-/* ===== 记录积分（approve 才有）===== */
+
+/* ===== record point（approve ）===== */
 if ($decision === 'approve' && !empty($temp['userID'])) {
     $insert = $conn->prepare("
         INSERT INTO pointtransaction
@@ -57,7 +75,7 @@ if ($decision === 'approve' && !empty($temp['userID'])) {
     $insert->close();
 }
 
-/* ===== 返回 JSON ===== */
+/* ===== back JSON ===== */
 echo json_encode([
     'success' => true,
     'submission_id' => $submissionId,
