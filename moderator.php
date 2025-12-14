@@ -913,7 +913,8 @@ if (searchInput) {
 const reviewForm = document.getElementById('review-form');
 if (reviewForm) {
     reviewForm.addEventListener('submit', function (e) {
-        e.preventDefault(); // 🔴 阻止整页 reload
+        e.preventDefault();  // prevent page reload 
+
 
         const formData = new FormData(reviewForm);
 
@@ -934,10 +935,10 @@ if (reviewForm) {
 
         updateRightPanelAfterReview(data);
 
-        // 1️⃣ Pending -1
+        // Pending -1
         updateAccordionCount('pending', -1);
 
-        // 2️⃣ Approved / Denied +1
+        // Approved / Denied +1
         if (data.status === 'approved') {
             updateAccordionCount('approved', +1);
             moveItemToAccordion(item, 'Approved');
@@ -946,7 +947,6 @@ if (reviewForm) {
             moveItemToAccordion(item, 'Denied');
         }
 
-        // 3️⃣ 自动选下一个 pending
         autoSelectNextPending();
     });
 
