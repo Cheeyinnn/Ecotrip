@@ -94,7 +94,7 @@ if (isset($_POST['register'])) {
                     $mail->Subject = 'EcoTrip - Email Verification Code';
                     $mail->Body    = "
                         <h2>Welcome to EcoTrip!</h2>
-                        <p>Thank Vyou for registering. Your One-Time Password (OTP) for verification is:</p>
+                        <p>Thank You for registering. Your One-Time Password (OTP) for verification is:</p>
                         <h1 style='color:#1f7a4c; text-align:center;'>$otp</h1>
                         <p>Please enter this code on the next screen to activate your account.</p>
                         <p>If you did not register for an account, please ignore this email.</p>
