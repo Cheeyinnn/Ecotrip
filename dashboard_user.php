@@ -881,7 +881,7 @@ if (isset($conn) && $conn->ping()) {
     });
 </script>
 
-
+<?php include "includes/layout_end.php"; ?>
 
 </body>
 </html>
