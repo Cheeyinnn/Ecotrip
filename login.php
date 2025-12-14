@@ -44,17 +44,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = $result->fetch_assoc();
 
         if ((int)$user['is_Active'] === 0) {
-            $error = 'Your account is suspended. Please contact admin.';
-        }
-        elseif (!password_verify($password, $user['password'])) {
-            $error = 'Invalid password.';
-        }
-        elseif ((int)$user['is_verified'] === 0) {
-            $_SESSION['unverified_email'] = $email;
-            header('Location: verify_otp.php?redirected=1');
-            exit;
-        }
-        else {
+    $error = 'Your account is suspended. Please contact admin.';
+}
+elseif (!password_verify($password, $user['password'])) {
+    $error = 'Invalid password.';
+}
+else {
 
             // Security
             session_regenerate_id(true);
