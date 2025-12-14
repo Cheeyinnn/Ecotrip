@@ -134,7 +134,7 @@ body {
     width: calc(100% - 260px);
     display: flex;
     flex-direction: column;
-    min-height: 0;              /* ⭐关键 */
+    min-height: 0;            
     background: #f5f7fb;
 }
 

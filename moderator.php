@@ -306,10 +306,8 @@ include "includes/layout_start.php";
 
 
 
-<body class="font-inter bg-neutral-100 text-neutral-700 min-h-screen flex flex-col">
 
-
-<main class="flex-1 overflow-y-auto bg-neutral-100 p-4 sm:p-6">
+<div class="bg-neutral-100 p-4 sm:p-6">
     <div class="container mx-auto">
         <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -670,7 +668,7 @@ include "includes/layout_start.php";
             </div>
         </div>
    
-</main>
+
 
 <script id="page-interactions">
 
@@ -1059,7 +1057,6 @@ function moveItemToAccordion(item, targetStatus) {
 
 
 </script>
-
 <?php include "includes/layout_end.php"; ?>
 
 </body>
