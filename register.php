@@ -2,9 +2,20 @@
 session_start();
 require "db_connect.php"; // contains $conn
 
+// Load PHPMailer classes
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+use PHPMailer\PHPMailer\SMTP;
+
+// --- UPDATED PATHS based on your folder structure (PHPMailer/src/) ---
+require 'PHPMailer/src/Exception.php';
+require 'PHPMailer/src/PHPMailer.php';
+require 'PHPMailer/src/SMTP.php';
+// -----------------------------------------------------------------------------
+
 $msg = "";
 
-// Initialize variables for sticky form (to retain user input on error)
+// Initialize variables for sticky form
 $first = $_POST['firstName'] ?? '';
 $last  = $_POST['lastName'] ?? '';
 $email = $_POST['email'] ?? '';
@@ -33,6 +44,9 @@ if (isset($_POST['register'])) {
     else {
 
         $pass = password_hash($pass1, PASSWORD_DEFAULT);
+        
+        // Generate a 6-digit numeric OTP
+        $otp = random_int(100000, 999999); 
 
         // Check if email exists
         $check = $conn->prepare("SELECT userID FROM user WHERE email = ?");
@@ -44,17 +58,65 @@ if (isset($_POST['register'])) {
             $msg = "Email already exists!";
         } else {
 
-            // UPDATED: Insert phone and address into the user table
+            // INSERT user with unverified status (is_verified = 0) and the OTP
+            // *** REQUIREMENT: user table must have 'is_verified' (TINYINT default 0) and 'otp' (VARCHAR) columns ***
             $stmt = $conn->prepare("
-                INSERT INTO user (firstName, lastName, email, phone, address, password, role) 
-                VALUES (?, ?, ?, ?, ?, ?, 'user')
+                INSERT INTO user (firstName, lastName, email, phone, address, password, role, is_verified, otp) 
+                VALUES (?, ?, ?, ?, ?, ?, 'user', 0, ?)
             ");
-            // UPDATED: bind_param now includes phone and address
-            $stmt->bind_param("ssssss", $first, $last, $email, $phone, $address, $pass);
+            
+            $stmt->bind_param("sssssss", $first, $last, $email, $phone, $address, $pass, $otp);
 
             if ($stmt->execute()) {
-                header("Location: login.php?registered=1");
-                exit;
+                
+                // === SEND OTP EMAIL USING MAILTRAP/PHPMailer ===
+                $mail = new PHPMailer(true);
+                
+                try {
+                    // MAILTRAP SANDBOX CREDENTIALS (for testing)
+                    $mail->isSMTP();
+                    $mail->Host       = 'smtp.mailtrap.io'; 
+                    $mail->SMTPAuth   = true;
+                    $mail->Port       = 2525; 
+
+                    // Your Mailtrap Sandbox credentials
+                    $mail->Username   = '5dd41c29aa2141'; 
+                    $mail->Password   = '4d68efed9cf9d4'; 
+                    
+                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS; 
+
+                    // Recipients
+                    $mail->setFrom('noreply@ecotrip.com', 'EcoTrip Registration');
+                    $mail->addAddress($email, $first . ' ' . $last); 
+
+                    // Content
+                    $mail->isHTML(true);
+                    $mail->Subject = 'EcoTrip - Email Verification Code';
+                    $mail->Body    = "
+                        <h2>Welcome to EcoTrip!</h2>
+                        <p>Thank Vyou for registering. Your One-Time Password (OTP) for verification is:</p>
+                        <h1 style='color:#1f7a4c; text-align:center;'>$otp</h1>
+                        <p>Please enter this code on the next screen to activate your account.</p>
+                        <p>If you did not register for an account, please ignore this email.</p>
+                    ";
+                    $mail->AltBody = "Your verification code is: $otp";
+
+                    $mail->send();
+                    
+                    // Email sent successfully, redirect to OTP verification page
+                    $_SESSION['unverified_email'] = $email;
+                    header("Location: verify_otp.php");
+                    exit;
+                    
+                } catch (Exception $e) {
+                    // If email sending fails, delete the partially created account 
+                    $delete_stmt = $conn->prepare("DELETE FROM user WHERE email = ?");
+                    $delete_stmt->bind_param("s", $email);
+                    $delete_stmt->execute();
+                    
+                    $msg = "Registration successful, but OTP email could not be sent. Mailer Error: {$mail->ErrorInfo}";
+                }
+
             } else {
                 $msg = "Error creating account: " . $stmt->error;
             }
@@ -82,7 +144,7 @@ if (isset($_POST['register'])) {
 
     .register-card {
         width: 100%;
-        max-width: 650px; /* <--- INCREASED WIDTH HERE */
+        max-width: 650px; 
         background: white;
         padding: 40px;
         border-radius: 12px;
