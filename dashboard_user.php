@@ -545,7 +545,32 @@ include "includes/layout_start.php";
                 </div>
             </div>
 
-           
+            <div class="bg-white rounded-2xl shadow-card p-6 space-y-4">
+              <h4 class="text-lg font-semibold text-dark mb-4 border-b pb-2"><i class="fas fa-compass mr-1 text-secondary"></i> Quick Navigation</h4>
+
+              <div class="reward-summary-card">
+                  <div class="icon-container"><i class="fas fa-trophy"></i></div>
+                  <div class="text-content">
+                      <h3 class="summary-title">My Rewards and Achievements</h3>
+                      <p class="summary-description">View all badges, points, and exclusive benefits unlocked this week.</p>
+                  </div>
+                  <div class="action-link">
+                      <a href="/rewards-page" class="nav-button">View Details<i class="fas fa-arrow-right"></i></a>
+                  </div>
+              </div>
+
+              <div class="reward-nav-links">
+                  <a href="/rewards/points" class="quick-nav-item">
+                      <i class="fas fa-coins text-warning"></i> Point Record
+                  </a>
+                  <a href="/rewards/redeem" class="quick-nav-item">
+                      <i class="fas fa-gift text-danger"></i> Redemption Center
+                  </a>
+                  <a href="/rewards/badges" class="quick-nav-item">
+                      <i class="fas fa-medal text-primary"></i> Badge List
+                  </a>
+              </div>
+          </div>
         
         </div>
     </main>
