@@ -318,8 +318,6 @@ include "includes/layout_start.php";
 
 
 ?>
-
-    <title>Member Eco-Dashboard (Single Page)</title>
     <script src="https://res.gemcoder.com/js/reload.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
