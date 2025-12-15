@@ -22,8 +22,9 @@ if ($teamID <= 0) {
 }
 
 // --------------------
-// VERIFY USER IS IN TEAM
+// VERIFY USER IS IN TEAM & FETCH TEAM DATA
 // --------------------
+// We still join the team table to get team details, but we no longer rely on t.teamPoint.
 $stmt = $conn->prepare("
     SELECT u.firstName, u.lastName, u.role, u.avatarURL, u.teamID,
             t.teamName, t.teamDesc, t.teamLeaderID, t.teamImage, t.created_at
@@ -51,7 +52,8 @@ $teamDesc  = $data['teamDesc'];
 $teamImage = $data['teamImage'] ?: 'uploads/team/default_team.png';
 
 // --------------------
-// ⭐ NEW: CALCULATE TOTAL TEAM POINTS (Sum of all members' scorePoint)
+// ⭐ REINTRODUCED: CALCULATE TOTAL TEAM POINTS (Functional Fix)
+// This sums up all member scores directly, providing the accurate, current value.
 // --------------------
 $stmtPoints = $conn->prepare("
     SELECT COALESCE(SUM(scorePoint), 0) AS total
@@ -63,6 +65,7 @@ $stmtPoints->execute();
 $resPoints = $stmtPoints->get_result();
 $totalTeamPoints = (int)$resPoints->fetch_assoc()['total'];
 $stmtPoints->close();
+
 
 // --------------------
 // FETCH TEAM MEMBERS (Includes scorePoint for display and sorting)
