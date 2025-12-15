@@ -28,7 +28,7 @@ function sendResetEmail($email, $reset_link) {
             <p>You requested a password reset.</p>
             <p>Click below to reset your password:</p>
             <p><a href='$reset_link'>$reset_link</a></p>
-            <p>This link expires in 1 hour.</p>
+            <p>This link expires in 5 minutes.</p>
         ";
 
         $mail->send();

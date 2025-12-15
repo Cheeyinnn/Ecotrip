@@ -3,24 +3,37 @@
 // LOAD DB + AUTH FIRST
 // -------------------------------------
 require "db_connect.php";
-require "includes/auth.php";      // session + auth
-require "includes/notify.php";    // ⭐ notification system
+require "includes/auth.php";       // session + auth
+require "includes/notify.php";     // ⭐ notification system
 
 // -------------------------------------
-// FETCH LOGGED-IN USER DATA
+// FETCH LOGGED-IN USER DATA (Direct Read for scorePoint)
 // -------------------------------------
 $id = $_SESSION['userID'];
 $msg = "";
 $msgType = "info";
 
-$stmt = $conn->prepare("SELECT * FROM user WHERE userID=?");
+// 1. FETCH USER DATA: Retrieves scorePoint (Total Earned) and walletPoint (Available) directly.
+// This SELECT statement is crucial for fetching the correct 500 and 50 values.
+$stmt = $conn->prepare("
+    SELECT firstName, lastName, email, phone, address, avatarURL, password, 
+           COALESCE(scorePoint, 0) AS scorePoint, 
+           COALESCE(walletPoint, 0) AS walletPoint
+    FROM user 
+    WHERE userID=?
+");
 $stmt->bind_param("i", $id);
 $stmt->execute();
 $user = $stmt->get_result()->fetch_assoc();
+$stmt->close();
 
-// Prevent null fields
-$user['phone']   = $user['phone']   ?? '';
-$user['address'] = $user['address'] ?? '';
+// Ensure points are treated as numbers
+$user['scorepoint'] = (int)($user['scorePoint'] ?? 0); // This will be 500
+$user['walletPoint'] = (int)($user['walletPoint'] ?? 0); // This will be 50
+
+// Prevent null fields for consistency
+$user['phone']      = $user['phone']      ?? '';
+$user['address']    = $user['address']    ?? '';
 
 // -------------------------------------
 // UPDATE PROFILE INFO
@@ -76,7 +89,9 @@ if (isset($_POST['change_password'])) {
     $old     = $_POST['old_password'];
     $new     = $_POST['new_password'];
     $confirm = $_POST['confirm_password'];
-
+    
+    // Note: The 'password' field must be available in the $user array for password_verify to work.
+    
     if (!password_verify($old, $user['password'])) {
 
         $msg = "Old password incorrect!";
@@ -214,9 +229,60 @@ $pageTitle = "My Profile";
 include "includes/layout_start.php";
 ?>
 
-<!-- ==========================
-      PAGE CONTENT
-========================== -->
+<style>
+    /* Custom styles for cleaner layout */
+    .profile-card {
+        margin: 20px auto; 
+    }
+    .avatar-preview {
+        width: 100px;
+        height: 100px;
+        object-fit: cover;
+        border-radius: 50%;
+        border: 4px solid #f8f9fa;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    /* ⭐ New container for horizontal point boxes */
+    .score-summary-container {
+        display: flex;
+        gap: 15px; 
+    }
+    .points-summary {
+        padding: 10px 15px;
+        border-radius: 5px;
+        border: 1px solid #c3e6cb;
+        transition: background-color 0.2s, box-shadow 0.2s;
+        text-align: center;
+        flex: 1;
+    }
+    
+    /* Style for Point Score (Total Earned) */
+    .points-score-box {
+        background-color: #e6ffec; /* Green background */
+        border-color: #c3e6cb;
+    }
+    
+    /* Style for Available Point (Wallet Balance) */
+    .wallet-point-box {
+        background-color: #fff3e0; /* Yellow/Orange background */
+        border-color: #ffe0b2;
+    }
+    
+    /* Hover effect to indicate clickability */
+    .points-summary:hover {
+        background-color: #d8ffdf; 
+        box-shadow: 0 0 5px rgba(0, 150, 0, 0.2);
+        cursor: pointer;
+    }
+    .security-section {
+        border-left: 1px solid #e9ecef; /* Subtle vertical divider */
+        padding-left: 1.5rem; 
+    }
+    /* Adjusted gutter spacing for aesthetics */
+    .row.g-5 > div:nth-child(2) {
+        padding-left: calc(var(--bs-gutter-x) * 1.5);
+    }
+</style>
 
 <div class="card p-4 shadow-lg profile-card">
 
@@ -227,38 +293,62 @@ include "includes/layout_start.php";
         </div>
     <?php endif; ?>
 
-    <div class="d-flex justify-content-between align-items-start mb-4 border-bottom pb-3">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start mb-2 border-bottom pb-2">
+        
         <div>
-            <h3 class="mb-1">
+            <h3 class="mt-0">
                 <iconify-icon icon="material-symbols:account-circle" class="text-primary me-2"></iconify-icon>
                 Profile Settings
             </h3>
-            <p class="text-muted small">Update your account details and security settings.</p>
+            <p class="text-muted small mb-0">Update your account details and security settings.</p>
         </div>
 
-        <div class="text-center">
+        <div class="score-summary-container mt-3 mt-md-0 mx-md-4">
+            
+            <a href="rewards.php" class="text-decoration-none text-dark">
+                <div class="points-summary points-score-box">
+                    <span class="text-muted small d-block">Point Score</span>
+                    <h4 class="fw-bold text-success mb-0">
+                        <?= (int)$user['scorepoint']; ?> pts
+                    </h4>
+                </div>
+            </a>
+            
+            <a href="rewards.php" class="text-decoration-none text-dark">
+                <div class="points-summary wallet-point-box">
+                    <span class="text-muted small d-block">Available Point</span>
+                    <h4 class="fw-bold text-warning mb-0">
+                        <?= (int)$user['walletPoint']; ?> pts
+                    </h4>
+                </div>
+            </a>
+
+        </div>
+
+        <div class="text-center mt-4 mt-md-0">
             <img src="<?= htmlspecialchars($avatarPathPage); ?>" class="avatar-preview">
 
             <form method="POST" enctype="multipart/form-data" class="mt-2">
                 <p class="small text-muted mb-1">JPG/PNG • Max 1MB</p>
-                <div class="input-group">
-                    <input type="file" name="avatar" class="form-control form-control-sm" required>
-                    <button name="upload_avatar" class="btn btn-outline-primary btn-sm">Upload</button>
+                <div class="input-group input-group-sm" style="max-width: 250px;">
+                    <input type="file" name="avatar" class="form-control" required>
+                    <button name="upload_avatar" class="btn btn-outline-primary">Upload</button>
                 </div>
             </form>
         </div>
     </div>
+    
+    <div class="row mt-2 g-5">
 
-    <div class="row mt-3 g-5">
-
-        <!-- Personal Info -->
         <div class="col-md-6">
-            <h5 class="mb-3 text-primary">Personal Information</h5>
+            <h5 class="mb-3 text-primary border-bottom pb-2">Personal Information</h5>
 
             <form method="POST">
+
                 <div class="mb-3">
                     <label class="form-label small text-muted">Email (read-only)</label>
-                    <input type="email" class="form-control" value="<?= htmlspecialchars($user['email']); ?>" readonly>
+                    <input type="email" class="form-control"
+                           value="<?= htmlspecialchars($user['email']); ?>" readonly disabled>
                 </div>
 
                 <div class="row">
@@ -281,7 +371,7 @@ include "includes/layout_start.php";
                            value="<?= htmlspecialchars($user['phone']); ?>">
                 </div>
 
-                <div class="mb-3">
+                <div class="mb-4">
                     <label class="form-label small text-muted">Address</label>
                     <textarea name="address" class="form-control" rows="2"><?= htmlspecialchars($user['address']); ?></textarea>
                 </div>
@@ -290,9 +380,8 @@ include "includes/layout_start.php";
             </form>
         </div>
 
-        <!-- Change Password -->
-        <div class="col-md-6 border-start ps-5">
-            <h5 class="mb-3 text-warning">Change Password</h5>
+        <div class="col-md-6 security-section">
+            <h5 class="mb-4 text-warning border-bottom pb-2">Change Password</h5>
 
             <form method="POST">
                 <div class="mb-3">

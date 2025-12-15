@@ -44,10 +44,15 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
             My Profile
         </a>
 
-        <a href="index.php" class="sidebar-link <?= isActive('index.php') ?>">
+        <a href="userReward_board.php" class="sidebar-link <?= isActive('userReward_board.php') ?>">
             <iconify-icon icon="solar:chart-square-line-duotone"></iconify-icon>
-            Dashboard
+            Reward Analysis(User)
         </a>
+
+        <a href="adminReward_board.php" class="sidebar-link <?= isActive('adminReward_board.php') ?>">
+                <iconify-icon icon="solar:bag-4-line-duotone"></iconify-icon>
+                Reward Analysis(Admin)
+            </a>
 
         <?php if ($role === 'admin'): ?>
 
@@ -85,11 +90,6 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
             <a href="leaderboard.php" class="sidebar-link <?= isActive('leaderboard.php') ?>">
                 <iconify-icon icon="solar:cup-star-line-duotone"></iconify-icon>
                 Leaderboard
-            </a>
-
-            <a href="LbDetail.php" class="sidebar-link <?= isActive('LbDetail.php') ?>">
-                <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
-                lbdetail
             </a>
 
             <a href="rewardAdmin.php" class="sidebar-link <?= isActive('rewardAdmin.php') ?>">
@@ -139,14 +139,26 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
 
             <div class="sidebar-nav-title">Dashboard</div>
 
-            <a href="dashboard_user.php" class="sidebar-link <?= isActive('dashboard_user.php') ?>">
+            <a href="tryuserdash.php" class="sidebar-link <?= isActive('dashboard_user.php') ?>">
                 <iconify-icon icon="solar:list-check-line-duotone"></iconify-icon>
                 User Dashboard
             </a>
 
-            <a href="userdashboard.php" class="sidebar-link <?= isActive('userdashboard.php') ?>">
+            <a href="dashboard_user.php" class="sidebar-link <?= isActive('userdashboard.php') ?>">
                 <iconify-icon icon="solar:list-check-line-duotone"></iconify-icon>
                 Submission Dashboard
+            </a>
+
+            <a href="leaderboard.php" class="sidebar-link <?= isActive('leaderboard.php') ?>">
+                <iconify-icon icon="solar:cup-star-line-duotone"></iconify-icon>
+                Leaderboard
+            </a>
+        
+            <div class="sidebar-nav-title">Redemption</div>
+
+            <a href="rewards.php" class="sidebar-link <?= isActive('rewards.php') ?>">
+                <iconify-icon icon="solar:gift-line-duotone"></iconify-icon>
+                Rewards
             </a>
 
             <div class="sidebar-nav-title">EcoTrip</div>
@@ -158,6 +170,10 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
 
             <div class="sidebar-nav-title">Team Management</div>
 
+            <a href="team.php" class="sidebar-link <?= isActive('team.php') ?>">
+                <iconify-icon icon="solar:users-group-rounded-line-duotone"></iconify-icon>
+                My Team
+
             <a href="join_team.php" class="sidebar-link <?= isActive('join_team.php') ?>">
                 <iconify-icon icon="solar:users-group-two-rounded-line-duotone"></iconify-icon>
                 Join Team
@@ -166,11 +182,6 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
             <a href="create_team.php" class="sidebar-link <?= isActive('create_team.php') ?>">
                 <iconify-icon icon="solar:pen-new-round-line-duotone"></iconify-icon>
                 Create Team
-            </a>
-
-            <a href="team.php" class="sidebar-link <?= isActive('team.php') ?>">
-                <iconify-icon icon="solar:users-group-rounded-line-duotone"></iconify-icon>
-                My Team
 
                 <?php if ($teamPendingCountSidebar > 0): ?>
                     <span class="badge bg-danger ms-2"

@@ -134,9 +134,10 @@ body {
     width: calc(100% - 260px);
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    min-height: 0;            
     background: #f5f7fb;
 }
+
 
 .content-wrapper {
     padding: 24px 32px;
@@ -188,3 +189,4 @@ body {
     object-fit: cover;
     border: 3px solid #3b82f6; /* blue ring like screenshot */
 }
+

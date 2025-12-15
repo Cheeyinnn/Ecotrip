@@ -10,6 +10,7 @@ if (!isset($_SESSION['userID'])) {
     exit;
 }
 $userID = $_SESSION['userID'];
+$pageTitle = "Leaderboard";
 
 // Fetch Current User
 $stmt = $conn->prepare("SELECT firstName, lastName, email, role, avatarURL, teamID FROM user WHERE userID = ?");
@@ -150,7 +151,7 @@ if ($team_result) {
     }
 }
 
-include "includes/layout_start.php";
+include 'includes/layout_start.php';
 ?>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
@@ -158,6 +159,8 @@ include "includes/layout_start.php";
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
         body { margin: 0; background: #f5f7fb; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; }
         
         .content-wrapper { padding: 20px 24px 24px; }
@@ -473,8 +476,19 @@ include "includes/layout_start.php";
                     document.getElementById('modalTitle').innerText = name + "'s Performance";
                     
                     fetch(`lbDetail.php?id=${id}&type=${type}`)
-                        .then(response => response.json())
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error('Network response was not ok: ' + response.statusText);
+                            }
+                            return response.json();
+                        })
                         .then(data => {
+                            if (data.error) {
+                                console.error('API Error:', data.error);
+                                alert('Could not load data: ' + data.error);
+                                return;
+                            }
+
                             const ctx = document.getElementById('statsChart').getContext('2d');
                             if (statsChart) statsChart.destroy();
                             
@@ -513,13 +527,15 @@ include "includes/layout_start.php";
                             });
 
                             modal.show();
+                        })
+                        .catch(error => {
+                            console.error('Fetch Error:', error);
+                            alert('An error occurred while fetching details. Check console.');
                         });
                 });
             });
         });
     </script>
-
-<body>
         <div class="content-wrapper">
             <div class="lb-container">
                 <div class="title-wrapper">
@@ -694,5 +710,3 @@ include "includes/layout_start.php";
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>

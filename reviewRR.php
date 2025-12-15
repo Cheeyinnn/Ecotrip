@@ -2,6 +2,14 @@
 session_start();
 include 'db_connect.php';
 
+// Notification Function
+function sendNotification($conn, $userID, $message, $link = null) {
+    $stmt = $conn->prepare("INSERT INTO notifications (userID, message, link) VALUES (?, ?, ?)");
+    $stmt->bind_param("iss", $userID, $message, $link);
+    $stmt->execute();
+    $stmt->close();
+}
+
 // 1. Authentication
 if (!isset($_SESSION['userID'])) {
     header("Location: login.php");
@@ -29,11 +37,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['updateStatusID'])) {
     $rID = $_POST['updateStatusID'];
     $newStatus = $_POST['newStatus'];
     
-    // Get current details to handle refunds if denied
-    $stmt = $conn->prepare("SELECT userID, pointSpent, quantity, rewardID, status FROM redemptionrequest WHERE redemptionID = ?");
+    // Get current details AND reward name to handle refunds and notifications
+    // UPDATED QUERY: Added JOIN to reward table to get rewardName
+    $stmt = $conn->prepare("SELECT rr.userID, rr.pointSpent, rr.quantity, rr.rewardID, rr.status, r.rewardName 
+                            FROM redemptionrequest rr 
+                            LEFT JOIN reward r ON rr.rewardID = r.rewardID 
+                            WHERE rr.redemptionID = ?");
     $stmt->bind_param("i", $rID);
     $stmt->execute();
-    $stmt->bind_result($r_userID, $r_points, $r_qty, $r_rewardID, $currentStatus);
+    $stmt->bind_result($r_userID, $r_points, $r_qty, $r_rewardID, $currentStatus, $r_rewardName);
     $stmt->fetch();
     $stmt->close();
 
@@ -59,6 +71,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['updateStatusID'])) {
         
         $msg = "Request #$rID updated to " . ucfirst($displayMsgStatus);
         $msgType = "success";
+
+        // --- SEND NOTIFICATION TO USER ---
+        $notifMessage = "Your redemption request for '" . ($r_rewardName ?? 'Item') . "' is now " . ucfirst($displayMsgStatus) . ".";
+        sendNotification($conn, $r_userID, $notifMessage, "rewards.php");
+
     } else {
         $msg = "Error updating status.";
         $msgType = "danger";
@@ -128,10 +145,18 @@ $requests = $stmt->get_result();
 
 include 'includes/layout_start.php';
 ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Review Requests - EcoTrip</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
     <style>
-        body { margin: 0; background: #f5f7fb; font-family: 'Plus Jakarta Sans', sans-serif; } 
+
+        body { margin: 0; background: #f5f7fb; font-family: 'Plus Jakarta Sans', sans-serif; }
+        
         .content-wrapper { padding: 15px 24px; } 
         .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
         .stat-card { background: white; padding: 15px; border-radius: 12px; border: 1px solid #e5e9f2; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.02); text-decoration: none; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; cursor: pointer; }
@@ -170,6 +195,7 @@ include 'includes/layout_start.php';
         .cat-voucher { background: #f3e8ff; color: #7e22ce; }
         h4.card-title { margin-bottom: 15px !important; font-size: 1.1rem; }
     </style>
+</head>
 <body>
         <div class="content-wrapper">
             <div class="stats-row">

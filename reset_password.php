@@ -1,70 +1,96 @@
 <?php
 require 'db_connect.php';
 
-$token = $_GET['token'] ?? null;
+$token = $_GET['token'] ?? '';
 
-$message = "";
+$error = '';
 $showForm = false;
+$userID = null;
 
-// ================================
-// VALIDATE TOKEN
-// ================================
-$stmt = $conn->prepare("
-    SELECT vt.tokenID, vt.expires_at, vt.used_at, u.userID
-    FROM verificationtoken vt
-    JOIN user u ON vt.userID = u.userID
-    WHERE vt.otpCode = ?
-");
-$stmt->bind_param("s", $token);
-$stmt->execute();
+// ===================================================
+// 1. VALIDATE TOKEN (GET)
+// ===================================================
+if ($token !== '') {
 
-$result = $stmt->get_result();
+    $stmt = $conn->prepare(
+        "SELECT vt.tokenID, vt.expires_at, vt.used_at, vt.userID
+         FROM verificationtoken vt
+         WHERE vt.otpCode = ?
+         LIMIT 1"
+    );
+    $stmt->bind_param("s", $token);
+    $stmt->execute();
+    $result = $stmt->get_result();
 
-// Token not found
-if ($result->num_rows !== 1) {
-    $error = "Invalid or expired reset link.";
+    if ($result->num_rows !== 1) {
+        $error = "Invalid or expired reset link.";
+    } else {
+        $data = $result->fetch_assoc();
+
+        if (!empty($data['used_at'])) {
+            $error = "This reset link has already been used.";
+        } elseif (strtotime($data['expires_at']) < time()) {
+            $error = "This reset link has expired.";
+        } else {
+            $showForm = true;
+            $userID = (int)$data['userID'];
+        }
+    }
 } else {
-    $data = $result->fetch_assoc();
-
-    // Check expiry
-    if (strtotime($data['expires_at']) < time()) {
-        $error = "This reset link has expired.";
-    }
-    // Check if already used
-    elseif (!is_null($data['used_at'])) {
-        $error = "This reset link was already used.";
-    }
-    else {
-        // Valid token → allow form
-        $showForm = true;
-        $userID = $data['userID'];
-    }
+    $error = "Invalid reset request.";
 }
 
-// ================================
-// UPDATE PASSWORD
-// ================================
+// ===================================================
+// 2. HANDLE PASSWORD UPDATE (POST)
+// ===================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $showForm) {
 
-    $newpass = password_hash($_POST['new_password'], PASSWORD_DEFAULT);
+    $pass1 = $_POST['new_password'] ?? '';
+    $pass2 = $_POST['confirm_password'] ?? '';
 
-    // Update password
-    $update = $conn->prepare("UPDATE user SET password=? WHERE userID=?");
-    $update->bind_param("si", $newpass, $userID);
-    $update->execute();
+    if (strlen($pass1) < 6) {
+        $error = "Password must be at least 6 characters long.";
+    } elseif ($pass1 !== $pass2) {
+        $error = "Passwords do not match.";
+    } else {
 
-    // Mark token used
-    $mark = $conn->prepare("UPDATE verificationtoken SET used_at=NOW() WHERE otpCode=?");
-    $mark->bind_param("s", $token);
-    $mark->execute();
+        $newHash = password_hash($pass1, PASSWORD_DEFAULT);
 
-    $message = "Your password has been updated successfully!";
-    $showForm = false;
+        // Use transaction for safety
+        $conn->begin_transaction();
+
+        try {
+            // Update password
+            $update = $conn->prepare(
+                "UPDATE user SET password = ? WHERE userID = ?"
+            );
+            $update->bind_param("si", $newHash, $userID);
+            $update->execute();
+
+            // Mark token as used
+            $mark = $conn->prepare(
+                "UPDATE verificationtoken SET used_at = NOW() WHERE otpCode = ?"
+            );
+            $mark->bind_param("s", $token);
+            $mark->execute();
+
+            $conn->commit();
+
+            header("Location: login.php?reset=1");
+            exit;
+
+        } catch (Exception $e) {
+            $conn->rollback();
+            $error = "An error occurred. Please try again.";
+            $showForm = true;
+        }
+    }
 }
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Reset Password - EcoTrip</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -72,18 +98,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $showForm) {
 
     <style>
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: Inter, Arial, sans-serif;
             background: #f8f9fa;
-            margin: 0;
             display: flex;
-            justify-content: center;
             align-items: center;
+            justify-content: center;
             height: 100vh;
         }
         .reset-card {
-            width: 100%;
-            max-width: 420px;
-            background: white;
+            width: 420px;
+            background: #fff;
             padding: 40px;
             border-radius: 12px;
             box-shadow: 0 4px 25px rgba(0,0,0,0.1);
@@ -91,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $showForm) {
         .btn-update {
             background-color: #1f7a4c;
             border-color: #1f7a4c;
-            color: white;
+            color: #fff;
         }
         .btn-update:hover {
             background-color: #145a32;
@@ -109,28 +133,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $showForm) {
         <h3 class="fw-bold mb-0">Password Recovery</h3>
     </div>
 
-    <?php if (!empty($error)): ?>
+    <?php if ($error): ?>
         <div class="alert alert-danger text-center fw-semibold">
             <?= htmlspecialchars($error) ?>
         </div>
-        <a href="login.php" class="btn btn-secondary w-100 mt-2">Back to Login</a>
-
-    <?php elseif ($message): ?>
-        <div class="alert alert-success text-center fw-semibold">
-            <?= htmlspecialchars($message) ?>
-        </div>
-        <a href="login.php" class="btn btn-update w-100">
-            <iconify-icon icon="ic:round-login"></iconify-icon>
-            Proceed to Login
-        </a>
+        <a href="login.php" class="btn btn-secondary w-100">Back to Login</a>
 
     <?php elseif ($showForm): ?>
         <p class="text-muted small text-center mb-4">Enter your new password below.</p>
 
         <form method="post">
+            <div class="form-floating mb-3">
+                <input type="password" class="form-control" name="new_password" placeholder="New Password" required>
+                <label>New Password (Min 6 chars)</label>
+            </div>
+
             <div class="form-floating mb-4">
-                <input type="password" class="form-control" id="newPassword" name="new_password" placeholder="New Password" required>
-                <label for="newPassword">New Password</label>
+                <input type="password" class="form-control" name="confirm_password" placeholder="Confirm Password" required>
+                <label>Confirm Password</label>
             </div>
 
             <button class="btn btn-update btn-lg w-100 fw-bold" type="submit">
@@ -138,10 +158,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $showForm) {
                 Update Password
             </button>
         </form>
-
     <?php endif; ?>
 
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -177,83 +177,93 @@ if (
 
 // ====================== OWNER: APPROVE / REJECT REQUESTS ======================
 
-// APPROVE REQUEST
+// ====================== OWNER: APPROVE SINGLE REQUEST ======================
 if (
     $_SERVER['REQUEST_METHOD'] === 'POST' &&
     isset($_POST['action']) &&
-    $_POST['action'] === "approve_request"
+    $_POST['action'] === 'approve_request' &&
+    isset($_POST['userID'], $_POST['teamID'])
 ) {
-    $targetID       = intval($_POST['userID']);
-    $teamIDFromForm = intval($_POST['teamID']);
+    $targetID = (int)$_POST['userID'];
+    $teamIDFromForm = (int)$_POST['teamID'];
 
-    // Only proceed if current user is leader of this team
-    $stmtTeam = $conn->prepare("SELECT teamLeaderID, teamName FROM team WHERE teamID = ?");
+    // Verify ownership
+    $stmtTeam = $conn->prepare("
+        SELECT teamName, teamLeaderID 
+        FROM team 
+        WHERE teamID = ?
+    ");
     $stmtTeam->bind_param("i", $teamIDFromForm);
     $stmtTeam->execute();
     $teamRow = $stmtTeam->get_result()->fetch_assoc();
     $stmtTeam->close();
 
     if ($teamRow && (int)$teamRow['teamLeaderID'] === $userID) {
-        $teamName = $teamRow['teamName'];
 
-        // Get target user's name for notification
-        $stmtUserInfo = $conn->prepare("SELECT firstName, lastName FROM user WHERE userID = ?");
-        $stmtUserInfo->bind_param("i", $targetID);
-        $stmtUserInfo->execute();
-        $userRow = $stmtUserInfo->get_result()->fetch_assoc();
-        $stmtUserInfo->close();
+        // Capacity check
+        $cnt = $conn->query("
+            SELECT COUNT(*) AS c 
+            FROM user 
+            WHERE teamID = $teamIDFromForm
+        ")->fetch_assoc()['c'];
 
-        $targetName = $userRow ? ($userRow['firstName'] . " " . $userRow['lastName']) : "A user";
-
-        $stmt = $conn->prepare("
-            UPDATE user 
-            SET teamID = ?, pendingTeamID = NULL 
-            WHERE userID = ? AND pendingTeamID = ?
-        ");
-        $stmt->bind_param("iii", $teamIDFromForm, $targetID, $teamIDFromForm);
-
-        if ($stmt->execute() && $stmt->affected_rows > 0) {
-            $message     = "Join request approved.";
-            $messageType = "success";
-
-            // ⭐ Notify MEMBER: approved
-            sendNotification(
-                $conn,
-                $targetID,
-                "Your request to join team '{$teamName}' has been approved.",
-                "team.php"
-            );
-
+        if ($cnt >= 4) {
+            $message = "Team is full (max 4 members).";
+            $messageType = "warning";
         } else {
-            $message     = "Unable to approve (might be already processed).";
-            $messageType = "info";
+            $stmt = $conn->prepare("
+                UPDATE user 
+                SET teamID = ?, pendingTeamID = NULL 
+                WHERE userID = ? AND pendingTeamID = ?
+            ");
+            $stmt->bind_param("iii", $teamIDFromForm, $targetID, $teamIDFromForm);
+            $stmt->execute();
+
+            if ($stmt->affected_rows > 0) {
+                $message = "Join request approved.";
+                $messageType = "success";
+
+                sendNotification(
+                    $conn,
+                    $targetID,
+                    "Your request to join team '{$teamRow['teamName']}' has been approved.",
+                    "team.php"
+                );
+            } else {
+                $message = "Request already processed.";
+                $messageType = "info";
+            }
+            $stmt->close();
         }
-        $stmt->close();
+
     } else {
-        $message     = "You are not the leader of this team.";
+        $message = "You are not authorized.";
         $messageType = "danger";
     }
 }
 
-// REJECT REQUEST
+
+// ====================== OWNER: REJECT SINGLE REQUEST ======================
 if (
     $_SERVER['REQUEST_METHOD'] === 'POST' &&
     isset($_POST['action']) &&
-    $_POST['action'] === "reject_request"
+    $_POST['action'] === 'reject_request' &&
+    isset($_POST['userID'], $_POST['teamID'])
 ) {
-    $targetID       = intval($_POST['userID']);
-    $teamIDFromForm = intval($_POST['teamID']);
+    $targetID = (int)$_POST['userID'];
+    $teamIDFromForm = (int)$_POST['teamID'];
 
-    // Verify current user is leader of this team
-    $stmtTeam = $conn->prepare("SELECT teamLeaderID, teamName FROM team WHERE teamID = ?");
+    $stmtTeam = $conn->prepare("
+        SELECT teamName, teamLeaderID 
+        FROM team 
+        WHERE teamID = ?
+    ");
     $stmtTeam->bind_param("i", $teamIDFromForm);
     $stmtTeam->execute();
     $teamRow = $stmtTeam->get_result()->fetch_assoc();
     $stmtTeam->close();
 
     if ($teamRow && (int)$teamRow['teamLeaderID'] === $userID) {
-
-        $teamName = $teamRow['teamName'];
 
         $stmt = $conn->prepare("
             UPDATE user 
@@ -261,29 +271,30 @@ if (
             WHERE userID = ? AND pendingTeamID = ?
         ");
         $stmt->bind_param("ii", $targetID, $teamIDFromForm);
+        $stmt->execute();
 
-        if ($stmt->execute()) {
-            $message     = "Join request rejected.";
+        if ($stmt->affected_rows > 0) {
+            $message = "Join request rejected.";
             $messageType = "info";
 
-            // ⭐ Notify MEMBER: rejected
             sendNotification(
                 $conn,
                 $targetID,
-                "Your request to join team '{$teamName}' has been rejected.",
+                "Your request to join team '{$teamRow['teamName']}' has been rejected.",
                 "team.php"
             );
-
         } else {
-            $message     = "Unable to reject request.";
-            $messageType = "danger";
+            $message = "Request already handled.";
+            $messageType = "info";
         }
         $stmt->close();
+
     } else {
-        $message     = "You are not the leader of this team.";
+        $message = "You are not authorized.";
         $messageType = "danger";
     }
 }
+
 
 // ====================== HANDLE TEAM ACTIONS (ONLY IF IN A TEAM) ======================
 if (
@@ -392,7 +403,7 @@ if (
             $stmt->execute();
             $stmt->close();
 
-            $message     = "Member kicked successfully!";
+            $message     = "Member removed successfully!";
             $messageType = "success";
 
             // ⭐ Notify kicked MEMBER
@@ -412,7 +423,7 @@ if (
             );
 
         } else {
-            $message     = "Cannot kick this user!";
+            $message     = "Cannot remove this user!";
             $messageType = "info";
         }
     }
@@ -859,6 +870,7 @@ include "includes/layout_start.php";
                     Settings
                 </button>
             </li>
+            
             <?php if ($userID == $ownerID): ?>
                 <?php 
                     $pendingCount = ($pendingRequests && $pendingRequests->num_rows > 0) 
@@ -874,6 +886,16 @@ include "includes/layout_start.php";
                     </button>
                 </li>
             <?php endif; ?>
+
+            <!-- 🔗 Dashboard Nav Link (ADDED ONLY) -->
+<li class="nav-item">
+    <a class="nav-link"
+       href="team_dashboard.php?teamID=<?= (int)$teamID ?>">
+        <iconify-icon icon="mdi:view-dashboard-outline"></iconify-icon>
+        Dashboard
+    </a>
+</li>
+
 
         </ul>
 
@@ -946,7 +968,7 @@ include "includes/layout_start.php";
                                     <input type="hidden" name="action" value="kick_member">
                                     <input type="hidden" name="targetID" value="<?= $m['userID'] ?>">
                                     <button class="btn btn-sm btn-outline-danger">
-                                        <iconify-icon icon="ic:round-person-remove"></iconify-icon> Kick
+                                        <iconify-icon icon="ic:round-person-remove"></iconify-icon> Remove
                                     </button>
                                 </form>
                             <?php endif; ?>
@@ -1095,6 +1117,26 @@ include "includes/layout_start.php";
                     <h5 class="card-title mb-3">Pending Join Requests</h5>
 
                     <?php if ($pendingRequests && $pendingRequests->num_rows > 0): ?>
+    <form method="POST" class="mb-3 d-flex gap-2">
+        <input type="hidden" name="teamID" value="<?= $teamID ?>">
+        <input type="hidden" name="stay_tab" value="requests">
+
+        <button type="submit" name="action" value="approve_all_requests"
+                class="btn btn-success btn-sm"
+                onclick="return confirm('Approve ALL pending requests?');">
+            Approve All
+        </button>
+
+        <button type="submit" name="action" value="reject_all_requests"
+                class="btn btn-danger btn-sm"
+                onclick="return confirm('Reject ALL pending requests?');">
+            Reject All
+        </button>
+    </form>
+<?php endif; ?>
+
+
+                    <?php if ($pendingRequests && $pendingRequests->num_rows > 0): ?>
                         <?php while ($req = $pendingRequests->fetch_assoc()):
                             $reqAvatar = getAvatar($req['avatarURL']);
                         ?>
@@ -1167,5 +1209,19 @@ setTimeout(() => {
     }
 }, 4000);
 </script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    if (document.querySelector('input[name="stay_tab"]')) {
+        const tabBtn = document.querySelector(
+            'button[data-bs-target="#requests"]'
+        );
+        if (tabBtn && window.bootstrap) {
+            new bootstrap.Tab(tabBtn).show();
+        }
+    }
+});
+</script>
+
 
 <?php include "includes/layout_end.php"; ?>

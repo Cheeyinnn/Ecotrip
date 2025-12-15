@@ -115,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (move_uploaded_file($fileTmp, $savePath)) {
                     
                     if ($existingSubmission) {
-                        // ------------------ 限制每个 submission 只能 resubmit 一次 ------------------
+
                         $resubmitCount = $existingSubmission['resubmitCount'] ?? 0;
 
                         if ($resubmitCount >= 1) {
@@ -123,7 +123,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         } else {
                             $newResubmitCount = $resubmitCount + 1;
 
-                            // ------------------ renew submission and challengeID ------------------
                             $stmt = $conn->prepare("
                                 UPDATE sub 
                                 SET 
@@ -159,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ");
                         $status = "pending";
-                        $resubmitCount = 0; // 新提交初始化为0
+                        $resubmitCount = 0;
                         $stmt->bind_param("issssssii", $userId, $fileNewName, $savePath, $fileHash, $fileName, $caption, $status, $challengeID, $resubmitCount);
                         $stmt->execute();
                         $submissionId = $conn->insert_id;
@@ -428,7 +427,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     const previewImage = document.getElementById("preview-image");
     const uploadPlaceholder = document.getElementById("upload-placeholder");
 
-    // 初始化显示
     if (hasExisting) {
         previewImage.src = existingFilePath;
         previewContainer.classList.remove("hidden");
@@ -438,7 +436,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         uploadPlaceholder.classList.remove("hidden");
     }
 
-    // 用户选择新文件
     fileInput.addEventListener('change', function() {
         const file = fileInput.files[0];
         if (file && file.type.startsWith("image/")) {
@@ -463,7 +460,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     });
 
-    // Cancel 按钮
     cancelBtn.addEventListener('click', function () {
         fileInput.value = "";
         fileNameDisplay.textContent = "";
@@ -481,4 +477,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 
 </script>
+
+<?php include "includes/layout_end.php"; ?>
 
