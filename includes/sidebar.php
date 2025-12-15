@@ -139,7 +139,7 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
 
             <div class="sidebar-nav-title">Dashboard</div>
 
-            <a href="dashboard_user.php" class="sidebar-link <?= isActive('dashboard_user.php') ?>">
+            <a href="tryuserdash.php" class="sidebar-link <?= isActive('dashboard_user.php') ?>">
                 <iconify-icon icon="solar:list-check-line-duotone"></iconify-icon>
                 User Dashboard
             </a>
