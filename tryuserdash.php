@@ -326,50 +326,182 @@ include "includes/layout_start.php";
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
 
-    <style>
-        /* Base styles */
-        body { font-family: 'Inter', sans-serif; background: #f8fafc; color: #1e293b; }
-        
-        /* Eco-Themed Colors */
-        .eco-primary { color: #10b981; } /* Emerald Green */
-        .eco-bg-primary { background-color: #10b981; }
-        .eco-secondary { color: #06b6d4; } /* Cyan */
-        .eco-text-point { color: #f59e0b; } /* Amber/Gold for Points */
+<style>
+    /* Base styles */
+    body { font-family: 'Inter', sans-serif; background: #f8fafc; color: #1e293b; }
+    
+    /* Eco-Themed Colors */
+    .eco-primary { color: #10b981; } /* Emerald Green */
+    .eco-bg-primary { background-color: #10b981; }
+    .eco-secondary { color: #06b6d4; } /* Cyan */
+    .eco-text-point { color: #f59e0b; } /* Amber/Gold for Points */
 
-        /* Card Styles */
-        .card-eco {
-            background: white;
-            border-radius: 16px;
-            padding: 24px;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            transition: all 0.3s ease;
-            height: 100%;
-        }
-        .card-eco:hover { 
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            transform: translateY(-2px);
-        }
-        
-        /* Stats Styling */
-        .stat-value-large { font-size: 2.25rem; font-weight: 800; line-height: 1; }
-        .stat-label-small { font-size: 0.875rem; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 8px; }
+    /* Card Styles */
+    .card-eco {
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+    .card-eco:hover { 
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        transform: translateY(-2px);
+    }
+    
+    /* Stats Styling */
+    .stat-value-large { font-size: 2.25rem; font-weight: 800; line-height: 1; }
+    .stat-label-small { font-size: 0.875rem; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 8px; }
 
-        /* Chart specific styling adjustments */
-        .chart-section { min-height: 350px; }
+    /* Chart specific styling adjustments */
+    .chart-section { min-height: 350px; }
 
-        /* Utility for status badges */
-        .status-badge {
-            @apply px-3 py-1 text-xs font-semibold rounded-full;
-        }
-        .status-Approved { @apply bg-green-100 text-green-700; }
-        .status-Pending { @apply bg-yellow-100 text-yellow-700; }
-        .status-Denied { @apply bg-red-100 text-red-700; }
+    /* Utility for status badges (Tailwind apply usage requires Tailwind to be running or processed) */
+    .status-badge {
+        /* If using unprocessed CSS, replace @apply with explicit styles */
+        display: inline-flex;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+        font-size: 0.75rem;
+        line-height: 1rem;
+        font-weight: 600;
+        border-radius: 9999px;
+    }
+    .status-Approved { background-color: #d1fae5; color: #047857; }
+    .status-Pending { background-color: #fef3c7; color: #b45309; }
+    .status-Denied { background-color: #fee2e2; color: #b91c1c; }
 
-        /* Table Style */
-        .table-header { @apply px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider; }
-        
-    </style>
+    /* Table Style */
+    .table-header { 
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+        background-color: #f9fafb; /* Gray-50 */
+        text-align: left;
+        font-size: 0.75rem;
+        line-height: 1rem;
+        font-weight: 500;
+        color: #6b7280; /* Gray-500 */
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    /* --- START: Quick Navigation Custom Styles (ECO-THEME ADAPTED) --- */
+
+/* 容器样式 (reward-summary-card) */
+.reward-summary-card {
+    display: flex; 
+    align-items: center; 
+    padding: 15px 20px;
+    border: 1px solid #e2e8f0; /* 使用 card-eco 的边框色 */
+    border-radius: 8px; 
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); 
+    background-color: #ffffff;
+}
+
+/* 1. 图标容器 */
+.icon-container {
+    font-size: 28px;
+    color: #f59e0b; /* 使用 eco-text-point (Amber/Gold) */
+    margin-right: 20px;
+}
+.icon-container .fas {
+    font-size: 32px;
+}
+
+/* 2. 文本内容 */
+.text-content {
+    flex-grow: 1; 
+    margin-right: 20px;
+}
+
+.summary-title {
+    margin: 0 0 5px 0;
+    font-size: 16px;
+    color: #1e293b; /* Base dark color */
+    font-weight: bold;
+}
+
+.summary-description {
+    margin: 0;
+    font-size: 13px;
+    color: #64748b; /* Base secondary color */
+}
+
+/* 3. 导航链接/按钮 */
+.action-link {
+    flex-shrink: 0; 
+}
+
+.nav-button {
+    text-decoration: none;
+    padding: 8px 12px;
+    background-color: #10b981; /* 适配 eco-primary */
+    color: white;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.3s;
+    display: flex;
+    align-items: center;
+}
+
+.nav-button:hover {
+    background-color: #059669; /* eco-primary 的 hover 颜色 */
+}
+
+/* 按钮内的箭头图标 */
+.nav-button .fas {
+    margin-left: 8px;
+    font-size: 12px;
+}
+
+/* ---------------------------------- */
+/* 4. 次要快速导航样式 (reward-nav-links) */
+/* ---------------------------------- */
+.reward-nav-links {
+    display: flex; 
+    gap: 10px; 
+}
+
+.quick-nav-item {
+    flex: 1; 
+    display: flex;
+    align-items: center;
+    justify-content: center; 
+    padding: 10px 15px;
+    
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    color: #475569; /* dark-2 */
+    
+    border: 1px solid #d1d5db; /* Gray-300 */
+    border-radius: 4px;
+    background-color: #f9fafb; /* Light Gray */
+    
+    transition: all 0.2s ease;
+}
+
+.quick-nav-item:hover {
+    background-color: #ecfdf5; /* Green-50 */
+    border-color: #34d399; /* Green-400 */
+    color: #10b981; /* eco-primary */
+}
+
+/* 导航项内部图标 */
+.quick-nav-item .fas {
+    margin-right: 8px;
+    font-size: 16px;
+}
+/* --- END: Quick Navigation Custom Styles --- */
+
+</style>
 
     <script>
     tailwind.config = {
@@ -534,6 +666,33 @@ include "includes/layout_start.php";
                     </div>
                 </div>
             </div>
+
+            <div class="bg-white rounded-2xl shadow-card p-6 space-y-4">
+              <h4 class="text-lg font-semibold text-dark mb-4 border-b pb-2"><i class="fas fa-compass mr-1 text-secondary"></i> Quick Navigation</h4>
+
+              <div class="reward-summary-card">
+                  <div class="icon-container"><i class="fas fa-trophy"></i></div>
+                  <div class="text-content">
+                      <h3 class="summary-title">My Rewards and Achievements</h3>
+                      <p class="summary-description">View all badges, points, and exclusive benefits unlocked this week.</p>
+                  </div>
+                  <div class="action-link">
+                      <a href="rewards.php" class="nav-button">View Details<i class="fas fa-arrow-right"></i></a>
+                  </div>
+              </div>
+
+              <div class="reward-nav-links">
+                  <a href="view.php" class="quick-nav-item">
+                      <i class="fas fa-coins text-warning"></i> View Challenge
+                  </a>
+                  <a href="userdashboard.php" class="quick-nav-item">
+                      <i class="fas fa-gift text-danger"></i> My Submission 
+                  </a>
+                  <a href="leaderboard.php" class="quick-nav-item">
+                      <i class="fas fa-medal text-primary"></i> Leaderboards
+                  </a>
+              </div>
+          </div>
 
            
         

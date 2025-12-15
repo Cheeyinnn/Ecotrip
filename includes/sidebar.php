@@ -144,7 +144,7 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
                 User Dashboard
             </a>
 
-            <a href="userdashboard.php" class="sidebar-link <?= isActive('userdashboard.php') ?>">
+            <a href="dashboard_user.php" class="sidebar-link <?= isActive('userdashboard.php') ?>">
                 <iconify-icon icon="solar:list-check-line-duotone"></iconify-icon>
                 Submission Dashboard
             </a>
