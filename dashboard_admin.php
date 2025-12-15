@@ -10,177 +10,116 @@ $timeInterval = null;
 if ($timeFilter === '7') $timeInterval = 7;
 elseif ($timeFilter === '30') $timeInterval = 30;
 
-// helper to return SQL condition (string or empty)
-function time_sql_condition($col, $interval) {
-    if (!$interval) return "";
+// -----------------------------
+// Helper: SQL WHERE 条件，根据时间筛选
+// -----------------------------
+function sql_time_filter($col, $interval) {
+    if (!$interval) return ""; // all 时不加限制
     return " AND {$col} >= DATE_SUB(CURDATE(), INTERVAL {$interval} DAY) ";
 }
 
 // -----------------------------
-// 1. Total Users (respect time filter: count created within range when filtered)
+// 1. Total Users
 // -----------------------------
-if ($timeInterval) {
-    $totalUsers = (int)($conn->query("SELECT COUNT(*) AS cnt FROM user WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)")->fetch_assoc()['cnt'] ?? 0);
-} else {
-    $totalUsers = (int)($conn->query("SELECT COUNT(*) AS cnt FROM user")->fetch_assoc()['cnt'] ?? 0);
-}
+$totalUsersQuery = "SELECT COUNT(*) AS cnt FROM user WHERE 1 " . sql_time_filter('created_at', $timeInterval);
+$totalUsers = (int)($conn->query($totalUsersQuery)->fetch_assoc()['cnt'] ?? 0);
 
-// ----------------------------------
-// 2. New Users (Last 7 days OR last interval)
-// ----------------------------------
-// For display we always return last 7 days series for charting; but counts reflect chosen time scope when applicable.
-// We'll return DB rows within last (30 days) if timeInterval==30, else last 7 days if 7, else last 7 days by default.
-$trendDaysBack = $timeInterval ?? 7;
-$newUsers = $conn->query("
+// -----------------------------
+// 2. New Users Trend
+// -----------------------------
+$newUsersQuery = "
     SELECT COUNT(*) AS cnt, DATE(created_at) AS day
     FROM user
-    WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL {$trendDaysBack} DAY)
+    WHERE 1 " . sql_time_filter('created_at', $timeInterval) . "
     GROUP BY DATE(created_at)
     ORDER BY day ASC
-")->fetch_all(MYSQLI_ASSOC);
+";
+$newUsers = $conn->query($newUsersQuery)->fetch_all(MYSQLI_ASSOC);
 
-// ----------------------------------
+// -----------------------------
 // 3. Active Teams
-//   We'll count teams that have had user activity in the timeframe if filtered, else total teams
-// ----------------------------------
-if ($timeInterval) {
-    // count distinct teams of users created in timeframe
-    $activeTeams = (int)($conn->query("
-        SELECT COUNT(DISTINCT t.teamID) AS cnt
-        FROM team t
-        JOIN user u ON u.teamID = t.teamID
-        WHERE u.created_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)
-    ")->fetch_assoc()['cnt'] ?? 0);
-} else {
-    $activeTeams = (int)($conn->query("SELECT COUNT(*) AS cnt FROM team")->fetch_assoc()['cnt'] ?? 0);
-}
+// -----------------------------
+$activeTeamsQuery = "
+    SELECT COUNT(DISTINCT t.teamID) AS cnt
+    FROM team t
+    JOIN user u ON u.teamID = t.teamID
+    WHERE 1 " . sql_time_filter('u.created_at', $timeInterval);
+$activeTeams = (int)($conn->query($activeTeamsQuery)->fetch_assoc()['cnt'] ?? 0);
 
-// ----------------------------------
-// Challenge Analytics (统一时间 filter)
-// ----------------------------------
-
-// 1. Active / Inactive / Total Challenges
+// -----------------------------
+// 4. Challenge Analytics
+// -----------------------------
 $challengeStatusQuery = "
     SELECT 
         SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS activeCount,
         SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS inactiveCount
     FROM challenge
-    WHERE 1
-";
-
-if ($timeInterval) {
-    $challengeStatusQuery .= " AND created_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
+    WHERE 1 " . sql_time_filter('start_date', $timeInterval);
 $challengeStatus = $conn->query($challengeStatusQuery)->fetch_assoc();
 $activeCount = (int)$challengeStatus['activeCount'];
 $inactiveCount = (int)$challengeStatus['inactiveCount'];
 
-// 2. City Distribution
 $cityDataQuery = "
     SELECT city, COUNT(*) AS cnt
     FROM challenge
-    WHERE is_active = 1
+    WHERE is_active = 1 " . sql_time_filter('start_date', $timeInterval) . "
+    GROUP BY city
 ";
-
-if ($timeInterval) {
-    $cityDataQuery .= " AND created_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$cityDataQuery .= " GROUP BY city";
 $cityData = $conn->query($cityDataQuery)->fetch_all(MYSQLI_ASSOC);
 $cityLabels = array_column($cityData, 'city');
 $cityCounts = array_column($cityData, 'cnt');
 
-// 3. Category Split
 $catDataQuery = "
     SELECT c.categoryName AS category, COUNT(*) AS cnt
     FROM challenge ch
     JOIN category c ON ch.categoryID = c.categoryID
-    WHERE 1
+    WHERE 1 " . sql_time_filter('ch.start_date', $timeInterval) . "
+    GROUP BY c.categoryName
 ";
-
-if ($timeInterval) {
-    $catDataQuery .= " AND ch.created_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$catDataQuery .= " GROUP BY c.categoryName";
 $catData = $conn->query($catDataQuery)->fetch_all(MYSQLI_ASSOC);
 $catLabels = array_column($catData, 'category');
 $catCounts = array_column($catData, 'cnt');
 
-// 4. Top Points
 $pointsDataQuery = "
     SELECT challengeTitle, pointAward
     FROM challenge
-    WHERE is_active = 1
+    WHERE is_active = 1 " . sql_time_filter('start_date', $timeInterval) . "
+    ORDER BY pointAward DESC LIMIT 5
 ";
-
-if ($timeInterval) {
-    $pointsDataQuery .= " AND created_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$pointsDataQuery .= " ORDER BY pointAward DESC LIMIT 5";
 $pointsData = $conn->query($pointsDataQuery)->fetch_all(MYSQLI_ASSOC);
 $topPointsLabels = array_column($pointsData, 'challengeTitle');
 $topPointsValues = array_column($pointsData, 'pointAward');
 
-// 5. Expiring Soon
 $expiringChallengesQuery = "
     SELECT challengeTitle, city, end_date
     FROM challenge
-    WHERE is_active = 1
-      AND end_date >= CURDATE()
+    WHERE is_active = 1 AND end_date >= CURDATE() " . sql_time_filter('start_date', $timeInterval) . "
+    ORDER BY end_date ASC LIMIT 5
 ";
-
-if ($timeInterval) {
-    $expiringChallengesQuery .= " AND created_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$expiringChallengesQuery .= " ORDER BY end_date ASC LIMIT 5";
 $expiringChallenges = $conn->query($expiringChallengesQuery)->fetch_all(MYSQLI_ASSOC);
 
+// -----------------------------
+// 5. Total Submissions
+// -----------------------------
+$totalSubmissionsQuery = "SELECT COUNT(*) AS cnt FROM sub WHERE 1 " . sql_time_filter('uploaded_at', $timeInterval);
+$totalSubmissions = (int)($conn->query($totalSubmissionsQuery)->fetch_assoc()['cnt'] ?? 0);
 
-// ===== Global time condition helper =====
-$timeWhere = '';
-if ($timeInterval !== null) {
-    $timeWhere = " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-
-// ----------------------------------
-// 4. Total Submissions (respect time filter)
-// ----------------------------------
-if ($timeInterval) {
-    $totalSubmissions = (int)($conn->query("SELECT COUNT(*) AS cnt FROM sub WHERE uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)")->fetch_assoc()['cnt'] ?? 0);
-} else {
-    $totalSubmissions = (int)($conn->query("SELECT COUNT(*) AS cnt FROM sub")->fetch_assoc()['cnt'] ?? 0);
-}
-
-// ----------------------------------
-// 5. Submission counts by status (respect time filter)
-// ----------------------------------
-$submissionStatusQuery = $conn->query("
+// Submission counts by status
+$submissionStatusQuery = "
     SELECT status, COUNT(*) AS cnt
     FROM sub
-    WHERE 1 " . ($timeInterval ? " AND uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY) " : "") . "
+    WHERE 1 " . sql_time_filter('uploaded_at', $timeInterval) . "
     GROUP BY status
-")->fetch_all(MYSQLI_ASSOC);
-
+";
 $submissionCounts = ['pending'=>0,'approved'=>0,'denied'=>0];
-
-foreach ($submissionStatusQuery as $row) {
+foreach ($conn->query($submissionStatusQuery)->fetch_all(MYSQLI_ASSOC) as $row) {
     $key = strtolower(trim($row['status']));
-    if (isset($submissionCounts[$key])) {
-        $submissionCounts[$key] = (int)$row['cnt'];
-    }
+    if (isset($submissionCounts[$key])) $submissionCounts[$key] = (int)$row['cnt'];
 }
 
-// ----------------------------------
-// 6. Recent Submissions (most recent 10 within timeframe if filtered else overall)
-// ----------------------------------
+// Recent submissions
 $recentLimitWhere = $timeInterval ? " WHERE s.uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY) " : "";
-$recentSubmissions = $conn->query("
+$recentSubmissionsQuery = "
     SELECT s.*, u.firstName AS username, t.teamName, c.challengeTitle 
     FROM sub s
     LEFT JOIN user u ON s.userID = u.userID
@@ -189,137 +128,94 @@ $recentSubmissions = $conn->query("
     {$recentLimitWhere}
     ORDER BY s.uploaded_at DESC
     LIMIT 10
-")->fetch_all(MYSQLI_ASSOC);
+";
+$recentSubmissions = $conn->query($recentSubmissionsQuery)->fetch_all(MYSQLI_ASSOC);
 
-// ----------------------------------
-// 7. Submission Trend (Last 30 days, but we apply time filter interval if set)
-// ----------------------------------
+// Submission trend
 $submissionTrendQuery = "
     SELECT DATE(uploaded_at) AS day,
         SUM(CASE WHEN status='Pending' THEN 1 ELSE 0 END) AS pending,
         SUM(CASE WHEN status='Approved' THEN 1 ELSE 0 END) AS approved,
         SUM(CASE WHEN status='Denied' THEN 1 ELSE 0 END) AS denied
     FROM sub
-    WHERE 1
-";
-
-if ($timeInterval) {
-    $submissionTrendQuery .= " AND uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY) ";
-}
-
-$submissionTrendQuery .= "
+    WHERE 1 " . sql_time_filter('uploaded_at', $timeInterval) . "
     GROUP BY DATE(uploaded_at)
     ORDER BY day ASC
 ";
-
 $submissionTrend = $conn->query($submissionTrendQuery)->fetch_all(MYSQLI_ASSOC);
 
-// ----------------------------------
-// 8. Top Categories (challenge) within timeframe
-// ----------------------------------
-
+// -----------------------------
+// 6. Top Categories (challenge) within timeframe
+// -----------------------------
 $topCategoriesQuery = "
     SELECT COALESCE(c.challengeTitle, 'Unknown') AS category, COUNT(*) AS cnt
     FROM sub s
     LEFT JOIN challenge c ON s.challengeID = c.challengeID
-    WHERE 1
-";
-
-// 只有在不是 "all" 時才加時間篩選
-if ($timeInterval) {
-    $topCategoriesQuery .= " AND s.uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$topCategoriesQuery .= "
+    WHERE 1 " . sql_time_filter('s.uploaded_at', $timeInterval) . "
     GROUP BY s.challengeID
     ORDER BY cnt DESC
     LIMIT 5
 ";
-
 $topCategories = $conn->query($topCategoriesQuery)->fetch_all(MYSQLI_ASSOC);
 
-
-// ----------------------------------
-// 9. Users by Role distribution (not strictly time bound — show current distribution)
-//    If you prefer to make this time-bound, change accordingly.
-// ----------------------------------
+// -----------------------------
+// 7. Users by Role
+// -----------------------------
 $roleDistribution = [];
-$roleData = $conn->query("SELECT role, COUNT(*) AS cnt FROM user GROUP BY role")->fetch_all(MYSQLI_ASSOC);
+$roleDataQuery = "
+    SELECT role, COUNT(*) AS cnt
+    FROM user
+    WHERE 1 " . sql_time_filter('created_at', $timeInterval) . "
+    GROUP BY role
+";
+$roleData = $conn->query($roleDataQuery)->fetch_all(MYSQLI_ASSOC);
 foreach ($roleData as $row) $roleDistribution[$row['role']] = (int)$row['cnt'];
 
-// ----------------------------------
-// 10. Login trend (last 7 or last interval)
-// ----------------------------------
+
+// -----------------------------
+// 8. Login Trend
+// -----------------------------
 $loginWindow = $timeInterval ?? 7;
-$loginTrend = $conn->query("
+$loginTrendQuery = "
     SELECT DATE(last_online) AS date, COUNT(*) AS count
     FROM user
     WHERE last_online >= DATE_SUB(CURDATE(), INTERVAL {$loginWindow} DAY)
     GROUP BY DATE(last_online)
-")->fetch_all(MYSQLI_ASSOC);
+";
+$loginTrend = $conn->query($loginTrendQuery)->fetch_all(MYSQLI_ASSOC);
 
-// ----------------------------------
-// 11. Submission Activity Top Users (count submissions within timeframe)
-// ----------------------------------
 // -----------------------------
-// Top 5 Active Users
+// 9. Submission Activity Top Users
 // -----------------------------
 $submissionActivityQuery = "
     SELECT u.firstName AS name, COUNT(s.submissionID) AS submissions
     FROM user u
     LEFT JOIN sub s ON u.userID = s.userID
-    WHERE 1
-";
-
-// 只有在不是 "all" 時才加時間篩選
-if ($timeInterval) {
-    $submissionActivityQuery .= " AND s.uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$submissionActivityQuery .= "
+    WHERE 1 " . sql_time_filter('s.uploaded_at', $timeInterval) . "
     GROUP BY u.userID
     ORDER BY submissions DESC
     LIMIT 5
 ";
-
 $submissionActivity = $conn->query($submissionActivityQuery)->fetch_all(MYSQLI_ASSOC);
 
-
-// ----------------------------------
-// 12. Points Earned vs Burned (transactions within timeframe)
-//    assumes pointtransaction.created_at exists
-// ----------------------------------
-
+// -----------------------------
+// 10. Points Earned vs Burned
+// -----------------------------
 $pointsActivityQuery = "
     SELECT u.firstName AS name,
         COALESCE(SUM(CASE WHEN p.transactionType='earned' THEN p.pointsTransaction ELSE 0 END),0) AS earned,
         COALESCE(SUM(CASE WHEN p.transactionType='burned' THEN p.pointsTransaction ELSE 0 END),0) AS burned
     FROM user u
     LEFT JOIN pointtransaction p ON p.userID = u.userID
-    WHERE 1
-";
-
-// 只有在不是 "all" 時才加時間篩選
-if ($timeInterval) {
-    $pointsActivityQuery .= " AND p.generate_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$pointsActivityQuery .= "
+    WHERE 1 " . sql_time_filter('p.generate_at', $timeInterval) . "
     GROUP BY u.userID
     ORDER BY earned DESC
     LIMIT 5
 ";
-
 $pointsActivity = $conn->query($pointsActivityQuery)->fetch_all(MYSQLI_ASSOC);
 
-
-
-
-// ----------------------------------
-// 13. User Details (not needed if you removed tables; return minimal if wanted)
-// ----------------------------------
 // -----------------------------
-// User Details with Activity Stats
+// 11. User Details
 // -----------------------------
 $userDetailsQuery = "
     SELECT u.userID as id, u.firstName AS name, u.email, u.role,
@@ -327,161 +223,100 @@ $userDetailsQuery = "
            (
                SELECT COUNT(*) 
                FROM sub s 
-               WHERE s.userID=u.userID
-           ";
-
-// 只有在不是 "all" 時加時間篩選
-if ($timeInterval) {
-    $userDetailsQuery .= " AND s.uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$userDetailsQuery .= "
+               WHERE s.userID=u.userID " . sql_time_filter('s.uploaded_at', $timeInterval) . "
            ) AS submissions,
            (
                SELECT COALESCE(SUM(pointsTransaction),0) 
                FROM pointtransaction p 
-               WHERE p.userID=u.userID AND p.transactionType='earned'
-           ";
-
-if ($timeInterval) {
-    $userDetailsQuery .= " AND p.generate_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$userDetailsQuery .= "
+               WHERE p.userID=u.userID AND p.transactionType='earned' " . sql_time_filter('p.generate_at', $timeInterval) . "
            ) AS earned,
            (
                SELECT COALESCE(SUM(pointsTransaction),0) 
                FROM pointtransaction p 
-               WHERE p.userID=u.userID AND p.transactionType='burned'
-           ";
-
-if ($timeInterval) {
-    $userDetailsQuery .= " AND p.generate_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$userDetailsQuery .= "
+               WHERE p.userID=u.userID AND p.transactionType='burned' " . sql_time_filter('p.generate_at', $timeInterval) . "
            ) AS burned,
            u.last_online AS lastLogin
     FROM user u
     LEFT JOIN team t ON u.teamID = t.teamID
 ";
-
 $userDetails = $conn->query($userDetailsQuery)->fetch_all(MYSQLI_ASSOC);
 
-// ----------------------------------
-// 14. Rewards: use redemptionrequest as data source (Option A)
-//    count redemptions per reward within timeframe
-// ----------------------------------
-
-$whereReward = "WHERE status NOT IN ('cancelled', 'denied')";
-
-// only apply time filter if not "all"
-if ($timeInterval) {
-    $whereReward .= " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$sql = "SELECT SUM(pointSpent) as total FROM redemptionrequest $whereReward";
-$burnedPoints = $conn->query($sql)->fetch_assoc()['total'] ?? 0;
-
 // -----------------------------
-// 2. Pending Requests
+// 12. Rewards / Redemption
 // -----------------------------
-$whereReward = "WHERE status = 'pending'";
-if ($timeInterval) {
-    $whereReward .= " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
+$whereReward = "WHERE status NOT IN ('cancelled', 'denied')" . sql_time_filter('requested_at', $timeInterval);
+$burnedPoints = $conn->query("SELECT SUM(pointSpent) as total FROM redemptionrequest $whereReward")->fetch_assoc()['total'] ?? 0;
 
-$sql = "SELECT COUNT(*) as total FROM redemptionrequest $whereReward";
-$pendingCount = $conn->query($sql)->fetch_assoc()['total'] ?? 0;
+$whereReward = "WHERE status = 'pending'" . sql_time_filter('requested_at', $timeInterval);
+$pendingCount = $conn->query("SELECT COUNT(*) as total FROM redemptionrequest $whereReward")->fetch_assoc()['total'] ?? 0;
 
-// -----------------------------
-// 3. Successful Redemptions
-// -----------------------------
-$whereReward = "WHERE status IN ('approved','outOfDiliver','Delivered')";
-if ($timeInterval) {
-    $whereReward .= " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
+$whereReward = "WHERE status IN ('approved','outOfDiliver','Delivered')" . sql_time_filter('requested_at', $timeInterval);
+$successCount = $conn->query("SELECT COUNT(*) as total FROM redemptionrequest $whereReward")->fetch_assoc()['total'] ?? 0;
 
-$sql = "SELECT COUNT(*) as total FROM redemptionrequest $whereReward";
-$successCount = $conn->query($sql)->fetch_assoc()['total'] ?? 0;
-
-
-
-// ----------------------------------
-// B. CHART 1: REDEMPTION TREND (by day, follow time filter)
-// ----------------------------------
-
-$sql = "
-    SELECT DATE(requested_at) AS day,
-           COUNT(*) AS cnt
+$rewardTrendQuery = "
+    SELECT DATE(requested_at) AS day, COUNT(*) AS cnt
     FROM redemptionrequest
-    WHERE status != 'cancelled'
-    $timeWhere
+    WHERE status != 'cancelled' " . sql_time_filter('requested_at', $timeInterval) . "
     GROUP BY DATE(requested_at)
     ORDER BY day ASC
 ";
-
-$rewardTrend = $conn->query($sql)->fetch_all(MYSQLI_ASSOC);
-
-$months    = array_column($rewardTrend, 'day');
+$rewardTrend = $conn->query($rewardTrendQuery)->fetch_all(MYSQLI_ASSOC);
+$months = array_column($rewardTrend, 'day');
 $trendData = array_column($rewardTrend, 'cnt');
 
-// C. CHART 2: TOP 5 POPULAR REWARDS
 $popLabels = [];
 $popData = [];
-$popColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']; // Blue, Green, Orange, Purple, Pink
+$popColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+$rewardWindow = $timeInterval ?? 30;
 
-$rewardWindow = $timeInterval ?? 30; // 7 / 30 / default 30
-
-$sql = "
+$popQuery = "
     SELECT r.rewardName, COUNT(rr.redemptionID) AS count 
     FROM redemptionrequest rr
     JOIN reward r ON rr.rewardID = r.rewardID
-    WHERE rr.status != 'cancelled'
+    WHERE rr.status != 'cancelled' " . sql_time_filter('rr.requested_at', $rewardWindow) . "
+    GROUP BY rr.rewardID 
+    ORDER BY count DESC 
+    LIMIT 5
 ";
-
-if ($timeInterval) {
-    $sql .= " AND rr.requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)";
-}
-
-$sql .= " GROUP BY rr.rewardID 
-          ORDER BY count DESC 
-          LIMIT 5";
-
-$res = $conn->query($sql);
+$res = $conn->query($popQuery);
 while($row = $res->fetch_assoc()){
     $popLabels[] = $row['rewardName'];
     $popData[] = $row['count'];
 }
 
-// D. RECENT PENDING REQUESTS (Actionable List)
-$pendingSql = "SELECT rr.redemptionID, u.firstName, u.lastName, r.rewardName, rr.requested_at, r.imageURL 
-               FROM redemptionrequest rr 
-               JOIN user u ON rr.userID = u.userID
-               JOIN reward r ON rr.rewardID = r.rewardID
-               WHERE rr.status = 'pending'
-               " . ($timeInterval ? " AND rr.requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)" : "") . "
-               ORDER BY rr.requested_at ASC LIMIT 5";
-
+// -----------------------------
+// 13. Recent Pending Requests
+// -----------------------------
+$pendingSql = "
+    SELECT rr.redemptionID, u.firstName, u.lastName, r.rewardName, rr.requested_at, r.imageURL 
+    FROM redemptionrequest rr 
+    JOIN user u ON rr.userID = u.userID
+    JOIN reward r ON rr.rewardID = r.rewardID
+    WHERE rr.status = 'pending' " . sql_time_filter('rr.requested_at', $rewardWindow) . "
+    ORDER BY rr.requested_at ASC 
+    LIMIT 5
+";
 $pendingRes = $conn->query($pendingSql);
 
-// E. INVENTORY ALERTS (Low Stock or Expiring Soon)
-// Leveraging the new expiry_date column from rewardAdmin.php
-$alertSql = "SELECT rewardName, stockQuantity, expiry_date, imageURL 
-             FROM reward 
-             WHERE (stockQuantity < 5 OR (expiry_date IS NOT NULL AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY))) 
-             AND is_active = 1 
-             LIMIT 5";
+// -----------------------------
+// 14. Inventory Alerts
+// -----------------------------
+$alertSql = "
+    SELECT rewardName, stockQuantity, expiry_date, imageURL 
+    FROM reward 
+    WHERE (stockQuantity < 5 OR (expiry_date IS NOT NULL AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY))) 
+    AND is_active = 1 
+    LIMIT 5
+";
 $alertRes = $conn->query($alertSql);
-
 
 $lowStockCount = $conn->query("SELECT COUNT(*) as cnt FROM reward WHERE stockQuantity < 5 AND is_active = 1")->fetch_assoc()['cnt'] ?? 0;
 
-
-
 include "includes/layout_start.php";
-
 ?>
+
+
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -797,93 +632,102 @@ function formatDate(dateStr) {
 
 </div>
 
+        <div id="user" class="tab-content hidden">
 
-    <div id="user" class="tab-content hidden">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="bg-white p-5 rounded-xl shadow-card h-56">
-          <h3 class="font-semibold mb-4">Users by Role</h3>
-          <canvas id="roleDistributionChart" class="w-full h-full"></canvas>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+                <div class="bg-gray-50 p-6 rounded-xl shadow-md border border-gray-200 h-64"> 
+                    <h3 class="font-bold text-lg mb-4 text-gray-800">Users by Role</h3>
+                    <div class="h-4/5"> <canvas id="roleDistributionChart" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-6 rounded-xl shadow-md border border-gray-200 h-64">
+                    <h3 class="font-bold text-lg mb-4 text-gray-800">Login Trend</h3>
+                    <div class="h-4/5">
+                        <canvas id="loginTrendChart" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-6 rounded-xl shadow-md border border-gray-200 h-64">
+                    <h3 class="font-bold text-lg mb-4 text-gray-800">Submission Activity (Top Users)</h3>
+                    <div class="h-4/5">
+                        <canvas id="submissionActivityChart" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-6 rounded-xl shadow-md border border-gray-200 h-64">
+                    <h3 class="font-bold text-lg mb-4 text-gray-800">Points Earned vs Burned</h3>
+                    <div class="h-4/5">
+                        <canvas id="pointsActivityChart" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+
+            </div>
+
         </div>
-        <div class="bg-white p-5 rounded-xl shadow-card h-56">
-          <h3 class="font-semibold mb-4">Login Trend</h3>
-          <canvas id="loginTrendChart" class="w-full h-full"></canvas>
-        </div>
-        <div class="bg-white p-5 rounded-xl shadow-card h-56">
-          <h3 class="font-semibold mb-4">Submission Activity (Top Users)</h3>
-          <canvas id="submissionActivityChart" class="w-full h-full"></canvas>
-        </div>
-        <div class="bg-white p-5 rounded-xl shadow-card h-56">
-          <h3 class="font-semibold mb-4">Points Earned vs Burned</h3>
-          <canvas id="pointsActivityChart" class="w-full h-full"></canvas>
-        </div>
-      </div>
-    </div>
   
 
 
-  <div id="Challenge" class="tab-content hidden">
-
-    <div class="p-4">
-  
-        <!-- Stats -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-
-            <div class="bg-white p-6 rounded-2xl shadow-card flex justify-between items-center">
+ <div id="Challenge" class="tab-content hidden bg-white-100"> <div class="p-4">
+ 
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6"> <div class="bg-white p-4 rounded-xl shadow-lg flex justify-between items-center transform transition duration-300 hover:scale-[1.02]">
                 <div>
                     <p class="text-sm text-gray-500">Active Challenges</p>
-                    <h2 id="challengeActive" class="text-3xl font-bold">0</h2>
+                    <h2 id="challengeActive" class="text-3xl font-extrabold text-indigo-700">0</h2>
                 </div>
                 <div class="text-indigo-600 text-4xl"><i class="bi bi-lightning-charge-fill"></i></div>
             </div>
 
-            <div class="bg-white p-6 rounded-2xl shadow-card flex justify-between items-center">
+            <div class="bg-white p-4 rounded-xl shadow-lg flex justify-between items-center transform transition duration-300 hover:scale-[1.02]">
                 <div>
                     <p class="text-sm text-gray-500">Inactive</p>
-                    <h2 id="challengeInactive" class="text-3xl font-bold">0</h2>
+                    <h2 id="challengeInactive" class="text-3xl font-extrabold text-pink-700">0</h2>
                 </div>
                 <div class="text-pink-600 text-4xl"><i class="bi bi-archive-fill"></i></div>
             </div>
 
-            <div class="bg-white p-6 rounded-2xl shadow-card flex justify-between items-center">
+            <div class="bg-white p-4 rounded-xl shadow-lg flex justify-between items-center transform transition duration-300 hover:scale-[1.02]">
                 <div>
                     <p class="text-sm text-gray-500">Total</p>
-                    <h2 id="challengeTotal" class="text-3xl font-bold">0</h2>
+                    <h2 id="challengeTotal" class="text-3xl font-extrabold text-teal-700">0</h2>
                 </div>
                 <div class="text-teal-600 text-4xl"><i class="bi bi-layers-fill"></i></div>
             </div>
 
         </div>
 
-        <!-- Row -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-            <!-- City Chart -->
-            <div class="col-span-2 bg-white p-6 rounded-2xl shadow-card h-[350px]">
-                <h3 class="font-semibold mb-4">Geographic Distribution</h3>
-                <canvas id="challengeCityChart"></canvas>
+            <div class="col-span-1 lg:col-span-2 bg-white p-6 rounded-2xl shadow-xl h-[450px]">
+                <h2 class="font-bold text-lg mb-4 text-gray-800">Geographic Distribution</h2>
+                <div class="h-[calc(100%-40px)]"> 
+                    <canvas id="challengeCityChart" class="w-full h-full"></canvas>
+                </div>
             </div>
 
-            <!-- Expiring Soon -->
-            <div class="bg-white p-6 rounded-2xl shadow-card h-[350px] overflow-auto">
-                <h3 class="font-semibold mb-4 text-red-500">Ending Soon</h3>
-                <div id="expiringList"></div>
+            <div class="bg-white p-6 rounded-2xl shadow-xl h-[450px] overflow-auto">
+                <h2 class="font-bold text-lg mb-4 text-red-600">Ending Soon</h2>
+                <div id="expiringList">
+                    </div>
             </div>
 
         </div>
 
-        <!-- Row 2 -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
 
-            <!-- Category Split -->
-            <div class="bg-white p-6 rounded-2xl shadow-card h-[330px]">
-                <h3 class="font-semibold mb-4">Category Split</h3>
-                <canvas id="challengeCatChart"></canvas>
+            <div class="bg-white p-6 rounded-2xl shadow-xl h-[350px]">
+                <h2 class="font-bold text-lg mb-4 text-gray-800">Category Split</h2>
+                 <div class="h-[calc(100%-40px)]"> 
+                    <canvas id="challengeCatChart" class="w-full h-full"></canvas>
+                 </div>
             </div>
 
-            <!-- Top Points -->
-            <div class="bg-white p-6 rounded-2xl shadow-card h-[330px]">
-                <h3 class="font-semibold mb-4">Top Rewards</h3>
-                <canvas id="challengePointsChart"></canvas>
+            <div class="bg-white p-6 rounded-2xl shadow-xl h-[350px]">
+                <h2 class="font-bold text-lg mb-4 text-gray-800">Top Rewards</h2>
+                <div class="h-[calc(100%-40px)]">
+                    <canvas id="challengePointsChart" class="w-full h-full"></canvas>
+                </div>
             </div>
 
         </div>
@@ -891,8 +735,6 @@ function formatDate(dateStr) {
     </div>
 
 </div>
-
-
 
 
 
@@ -1051,102 +893,110 @@ window.onload = () => showTab("charts");
 /* Growth (ECharts) */
 function initGrowthChart(dashboardData) {
     const el = document.getElementById('growthChart');
+    if (!el) return;
 
-    // 清理旧 chart
-    if (window.dashboardCharts && window.dashboardCharts.growth) {
-        try { window.dashboardCharts.growth.dispose(); } catch(e){/* ignore */ }
-        window.dashboardCharts = {};
+    // 防止在 hidden 状态初始化
+    if (el.offsetHeight === 0) {
+        setTimeout(() => initGrowthChart(dashboardData), 100);
+        return;
     }
 
-    try {
-        const prev = echarts.getInstanceByDom(el);
-        if (prev) echarts.dispose(prev);
-    } catch(e){ /* ignore */ }
+    window.dashboardCharts = window.dashboardCharts || {};
+
+    // dispose 旧实例
+    if (window.dashboardCharts.growth) {
+        try { window.dashboardCharts.growth.dispose(); } catch(e){}
+    }
 
     const chart = echarts.init(el);
 
-    const trendWindow = dashboardData.trendWindow || 30; // PHP -> JS
-    const trend = dashboardData.submissionTrend || [];
+    // -----------------------------
+    // 1️⃣ 整理日期轴（以 submissionTrend 为主）
+    // -----------------------------
+    const submissionTrend = dashboardData.submissionTrend || [];
+    const newUsers = dashboardData.newUsers || [];
 
-    // 生成连续日期数组
-    const labels = [];
-    const today = new Date();
-    for (let i = trendWindow - 1; i >= 0; i--) {
-        const dt = new Date(today);
-        dt.setDate(today.getDate() - i);
-        const yyyy = dt.getFullYear();
-        const mm = ('0' + (dt.getMonth() + 1)).slice(-2);
-        const dd = ('0' + dt.getDate()).slice(-2);
-        labels.push(`${yyyy}-${mm}-${dd}`);
-    }
+    const dateSet = new Set();
 
-    // 新用户 series
+    submissionTrend.forEach(r => r.day && dateSet.add(r.day));
+    newUsers.forEach(r => r.day && dateSet.add(r.day));
+
+    const labels = Array.from(dateSet).sort();
+
+    // -----------------------------
+    // 2️⃣ 映射数据
+    // -----------------------------
     const newUsersMap = {};
-    (dashboardData.newUsers || []).forEach(r => {
-        if (r.day) newUsersMap[r.day] = parseInt(r.cnt || 0, 10);
-    });
-    const newUsersSeries = labels.map(day => newUsersMap[day] || 0);
+    newUsers.forEach(r => newUsersMap[r.day] = Number(r.cnt || 0));
 
-    // 提交数 series
-    const subsMap = {};
-    (trend || []).forEach(r => {
-        const key = r.day;
-        subsMap[key] = (parseInt(r.pending || 0, 10) || 0) +
-                       (parseInt(r.approved || 0, 10) || 0) +
-                       (parseInt(r.denied || 0, 10) || 0);
+    const submissionMap = {};
+    submissionTrend.forEach(r => {
+        submissionMap[r.day] =
+            Number(r.pending || 0) +
+            Number(r.approved || 0) +
+            Number(r.denied || 0);
     });
-    const submissionsSeries = labels.map(day => subsMap[day] || 0);
 
+    const newUsersSeries = labels.map(d => newUsersMap[d] || 0);
+    const submissionsSeries = labels.map(d => submissionMap[d] || 0);
+
+    // -----------------------------
+    // 3️⃣ ECharts 配置
+    // -----------------------------
     chart.setOption({
         tooltip: { trigger: 'axis' },
         legend: {
             data: ['New Users', 'Submissions'],
-            top: 10,
-            textStyle: { fontSize: 12 }
+            top: 10
         },
         grid: {
             top: 60,
-            left: '8%',
-            right: '6%',
-            bottom: '15%'
+            left: '6%',
+            right: '4%',
+            bottom: '12%',
+            containLabel: true
         },
         xAxis: {
             type: 'category',
-            data: labels
+            data: labels,
+            axisLabel: { rotate: 30 }
         },
         yAxis: {
-            type: 'value'
+            type: 'value',
+            minInterval: 1
         },
         series: [
             {
                 name: 'New Users',
                 type: 'line',
                 smooth: true,
-                data: newUsersSeries
+                data: newUsersSeries,
+                symbolSize: 6,
+                lineStyle: { width: 3 }
             },
             {
                 name: 'Submissions',
                 type: 'line',
                 smooth: true,
-                data: submissionsSeries
+                data: submissionsSeries,
+                symbolSize: 6,
+                lineStyle: { width: 3 }
             }
         ]
     });
 
-    // 保存 chart 实例
-    window.dashboardCharts = window.dashboardCharts || {};
+    // 保存实例
     window.dashboardCharts.growth = chart;
 
-
-
-
-    window.dashboardCharts = window.dashboardCharts || {};
-    window.dashboardCharts.growth = chart;
-
-    window.addEventListener('resize', () => {
-        try { chart.resize(); } catch(e) {}
-    });
+    // resize（只绑一次）
+    if (!window._growthResizeBound) {
+        window.addEventListener('resize', () => {
+            try { window.dashboardCharts.growth.resize(); } catch(e){}
+        });
+        window._growthResizeBound = true;
+    }
 }
+
 
 
 function initChallengeTab() {
@@ -1220,17 +1070,44 @@ dashboardData.challenge.cityLabels.forEach((label, index) => {
     });
 
 
-    const catCtx = document.getElementById("challengeCatChart").getContext("2d");
-    new Chart(catCtx, {
-        type: "doughnut",
-        data: {
-            labels: dashboardData.challenge.catLabels,
-            datasets: [{
-                data: dashboardData.challenge.catCounts,
-                backgroundColor: ['#6366f1','#ec4899','#06b6d4','#f59e0b','#10b981']
-            }]
-        }
-    });
+const catCtx = document.getElementById("challengeCatChart").getContext("2d");
+new Chart(catCtx, {
+    type: "doughnut",
+    data: {
+        labels: dashboardData.challenge.catLabels,
+        datasets: [{
+            data: dashboardData.challenge.catCounts,
+            backgroundColor: ['#6366f1','#ec4899','#06b6d4','#f59e0b','#10b981']
+        }]
+    },
+    options: {
+        // 1. **减少中心空白区域 (甜甜圈变厚)**
+        cutout: '40%', // 将中心空白区域设置为 40%，圆环会更粗
+        
+        // 2. **图例左置**
+        plugins: {
+            legend: {
+                display: true, 
+                position: 'left',
+                align: 'center' 
+            }
+        },
+        
+        // 3. **尝试让圆环向左侧移动 (可选，可能需要调试)**
+        // 通过调整布局的内边距，给右侧留出更多空间
+        layout: {
+             // 增加右侧内边距，理论上会将图表内容向左推
+             padding: {
+                 right: -200 // 可以尝试更大的值
+             }
+        },
+        
+        // 其他设置
+        responsive: true,
+        // position: 'right' 属性在 Chart 根配置中无效，已移除
+    }
+});
+
 
     const pointsCtx = document.getElementById("challengePointsChart").getContext("2d");
     new Chart(pointsCtx, {
