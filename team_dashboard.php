@@ -24,7 +24,6 @@ if ($teamID <= 0) {
 // --------------------
 // VERIFY USER IS IN TEAM & FETCH TEAM DATA
 // --------------------
-// We still join the team table to get team details, but we no longer rely on t.teamPoint.
 $stmt = $conn->prepare("
     SELECT u.firstName, u.lastName, u.role, u.avatarURL, u.teamID,
             t.teamName, t.teamDesc, t.teamLeaderID, t.teamImage, t.created_at
@@ -52,19 +51,32 @@ $teamDesc  = $data['teamDesc'];
 $teamImage = $data['teamImage'] ?: 'uploads/team/default_team.png';
 
 // --------------------
-// ⭐ REINTRODUCED: CALCULATE TOTAL TEAM POINTS (Functional Fix)
-// This sums up all member scores directly, providing the accurate, current value.
+// ⭐ FUNCTIONAL FIX: CALCULATE TOTAL TEAM POINTS
+// 1. Calculate the actual current total from all member scores.
 // --------------------
 $stmtPoints = $conn->prepare("
-    SELECT COALESCE(SUM(scorePoint), 0) AS total
+    SELECT COALESCE(SUM(scorePoint), 0) AS calculatedTotal
     FROM user
     WHERE teamID = ?
 ");
 $stmtPoints->bind_param("i", $teamID);
 $stmtPoints->execute();
 $resPoints = $stmtPoints->get_result();
-$totalTeamPoints = (int)$resPoints->fetch_assoc()['total'];
+$totalTeamPoints = (int)$resPoints->fetch_assoc()['calculatedTotal'];
 $stmtPoints->close();
+
+// --------------------
+// ⭐ DB WRITE: Store the calculated total back into team.teamPoint
+// This ensures the database field has the correct, current value.
+// --------------------
+$stmtUpdate = $conn->prepare("
+    UPDATE team
+    SET teamPoint = ?
+    WHERE teamID = ?
+");
+$stmtUpdate->bind_param("ii", $totalTeamPoints, $teamID);
+$stmtUpdate->execute();
+$stmtUpdate->close();
 
 
 // --------------------
@@ -167,8 +179,8 @@ include "includes/layout_start.php";
         <ul class="list-group list-group-flush">
             <li class="list-group-item d-flex justify-content-between align-items-center bg-light small text-muted fw-bold py-2">
                 <div style="flex-basis: 50%;">MEMBER NAME</div>
-                <div class="text-center" style="flex-basis: 30%;">LAST SEEN</div>
-                <div class="text-end" style="flex-basis: 20%;">SCORE</div>
+                <div style="flex-basis: 30%; text-align: center;">LAST SEEN</div>
+                <div style="flex-basis: 20%; text-align: right;">SCORE</div>
             </li>
             
             <?php 
