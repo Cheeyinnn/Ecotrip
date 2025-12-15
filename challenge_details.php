@@ -337,6 +337,8 @@ include "includes/layout_start.php";
         margin-bottom: 0.5rem;
         letter-spacing: 0.5px;
     }
+    
+
 
     /* --- ACTION SIDEBAR --- */
     .action-card {
@@ -438,6 +440,16 @@ include "includes/layout_start.php";
                     <?= nl2br(htmlspecialchars($challenge['description'])) ?>
                 </p>
                 
+                <div class="desc-text mb-4">
+                    <h5><i class=""></i> Rules: </h5>
+                    <p class="m-0"><?= htmlspecialchars($details['r']) ?></p>
+                </div>
+
+                <div class="desc-text mb-4">
+                    <h5><i class=""></i> Benefits: </h5>
+                    <p class="m-0"><?= htmlspecialchars($details['b']) ?></p>
+                </div>
+
             </div>
 
             <?php if (!empty($challenge['city'])): ?>
