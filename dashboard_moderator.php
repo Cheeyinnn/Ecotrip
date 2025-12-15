@@ -1,15 +1,50 @@
 <?php
 require_once "db_connect.php";
 
-$timeFilter = $_GET['time'] ?? 'all';  
+
+$timeFilter = $_GET['time'] ?? 'all';
+
+$days = null;
+if ($timeFilter === '7') {
+    $days = 7;
+} elseif ($timeFilter === '30') {
+    $days = 30;
+}
+
+$timeCondition = '';
+if ($days !== null) {
+    $timeCondition = " AND uploaded_at >= NOW() - INTERVAL $days DAY";
+}
+
+
 
 // ======================
 // 1. Overall Counts
 // ======================
-$totalSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub")->fetch_assoc()['c'];
-$pendingSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='pending'")->fetch_assoc()['c'];
-$approvedSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='approved'")->fetch_assoc()['c'];
-$deniedSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='denied'")->fetch_assoc()['c'];
+$totalSubmission = $conn->query("
+    SELECT COUNT(*) AS c
+    FROM sub
+    WHERE 1=1 $timeCondition
+")->fetch_assoc()['c'];
+
+$pendingSubmission = $conn->query("
+    SELECT COUNT(*) AS c
+    FROM sub
+    WHERE status='pending' $timeCondition
+")->fetch_assoc()['c'];
+
+$approvedSubmission = $conn->query("
+    SELECT COUNT(*) AS c
+    FROM sub
+    WHERE status='approved' $timeCondition
+")->fetch_assoc()['c'];
+
+$deniedSubmission = $conn->query("
+    SELECT COUNT(*) AS c
+    FROM sub
+    WHERE status='denied' $timeCondition
+")->fetch_assoc()['c'];
+
 
 
 
@@ -27,20 +62,29 @@ $challengeTypeSQL = "
     FROM sub
     JOIN challenge ON sub.challengeID = challenge.challengeID
     JOIN category ON challenge.categoryID = category.categoryID
+    WHERE 1=1
+";
+
+if ($days !== null) {
+    $challengeTypeSQL .= " AND sub.uploaded_at >= NOW() - INTERVAL $days DAY";
+}
+
+$challengeTypeSQL .= "
     GROUP BY category.categoryName
     ORDER BY total DESC
 ";
+
+// --- 执行查询 ---
 $challengeType = $conn->query($challengeTypeSQL);
 
-
-
+// --- 准备数组给 JS ---
 $challengeLabels = [];
 $challengeValues = [];
-mysqli_data_seek($challengeType, 0);
 while ($c = $challengeType->fetch_assoc()) {
     $challengeLabels[] = $c['categoryName'];
     $challengeValues[] = (int)$c['total'];
 }
+
 
 // 6. Approval Trend - FIXED
 
@@ -49,10 +93,18 @@ $trendSQL = "
            SUM(status='approved') AS approved,
            SUM(status='denied') AS denied
     FROM sub
-    WHERE uploaded_at >= DATE(NOW() - INTERVAL 7 DAY)
+    WHERE 1=1
+";
+
+if ($days !== null) {
+    $trendSQL .= " AND uploaded_at >= NOW() - INTERVAL $days DAY";
+}
+
+$trendSQL .= "
     GROUP BY DATE(uploaded_at)
     ORDER BY d
 ";
+
 $trendData = $conn->query($trendSQL);
 
 // Convert to arrays
@@ -81,10 +133,11 @@ while ($t = $trendData->fetch_assoc()) {
 $dailySQL = "
     SELECT DATE(uploaded_at) AS d, COUNT(*) AS total
     FROM sub
-    WHERE uploaded_at >= DATE(NOW() - INTERVAL 7 DAY)
+    WHERE 1=1 $timeCondition
     GROUP BY DATE(uploaded_at)
     ORDER BY d
 ";
+
 $dailyData = $conn->query($dailySQL);
 
 // Convert to arrays
@@ -101,7 +154,18 @@ while ($d = $dailyData->fetch_assoc()) {
 // 8. Participant stats
 // ======================
 $totalUsers = $conn->query("SELECT COUNT(*) AS c FROM user")->fetch_assoc()['c'];
-$activeUsers = $conn->query("SELECT COUNT(*) AS c FROM user WHERE last_online >= NOW() - INTERVAL 7 DAY")->fetch_assoc()['c'];
+$activeUsersSQL = "
+    SELECT COUNT(*) AS c 
+    FROM user
+    WHERE 1=1
+";
+
+if ($timeFilter !== 'all') {
+    $activeUsersSQL .= " AND last_online >= NOW() - INTERVAL $days DAY";
+}
+
+
+$activeUsers = $conn->query($activeUsersSQL)->fetch_assoc()['c'];
 
 $topUsersSQL = "
     SELECT user.firstName, user.scorePoint
@@ -111,7 +175,10 @@ $topUsersSQL = "
 ";
 $topUsers = $conn->query($topUsersSQL);
 
+
+
 include "includes/layout_start.php";
+
 ?>
 
 
@@ -188,6 +255,120 @@ include "includes/layout_start.php";
               @apply text-xs font-medium;
           }
       }
+
+      /* 容器样式 */
+        .reward-summary-card {
+            display: flex; /* 启用 Flexbox 进行横向布局 */
+            align-items: center; /* 垂直居中对齐所有项目 */
+            padding: 15px 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px; /* 轻微圆角 */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); /* 轻微阴影 */
+            background-color: #ffffff;
+            margin-bottom: 20px; /* 如果卡片下面还有其他内容 */
+        }
+
+        /* 1. 图标容器 */
+        .icon-container {
+            font-size: 28px;
+            color: #FFC107; /* 使用金色或您主题的强调色 */
+            margin-right: 20px;
+        }
+        /* 假设 Font Awesome 的类名 */
+        .icon-container .fas {
+            /* 增加图标大小，使其更突出 */
+            font-size: 32px;
+        }
+
+        /* 2. 文本内容 */
+        .text-content {
+            flex-grow: 1; /* 占据中间所有可用空间 */
+            margin-right: 20px;
+        }
+
+        .summary-title {
+            margin: 0 0 5px 0;
+            font-size: 16px;
+            color: #1D2129; /* 深色文字 */
+            font-weight: bold;
+        }
+
+        .summary-description {
+            margin: 0;
+            font-size: 13px;
+            color: #606771; /* 较浅的辅助文字 */
+        }
+
+        /* 3. 导航链接/按钮 */
+        .action-link {
+            flex-shrink: 0; /* 防止按钮被压缩 */
+        }
+
+        .nav-button {
+            text-decoration: none;
+            padding: 8px 12px;
+            background-color: #1677FF; /* 主题蓝色 */
+            color: white;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.3s;
+            display: flex;
+            align-items: center;
+        }
+
+        .nav-button:hover {
+            background-color: #0958d9;
+        }
+
+        /* 按钮内的箭头图标 */
+        .nav-button .fas {
+            margin-left: 8px;
+            font-size: 12px;
+        }
+
+/* ---------------------------------- */
+/* 2. 次要快速导航样式 (新增) */
+/* ---------------------------------- */
+.reward-nav-links {
+    /* 使用 Flexbox 或 Grid 进行横向布局 */
+    display: flex; 
+    gap: 10px; /* 导航项之间的间距 */
+    margin-top: 15px; /* 与上方摘要卡片的距离 */
+}
+
+.quick-nav-item {
+    flex: 1; /* 每个项目平均占据空间 */
+    
+    /* 样式 */
+    display: flex;
+    align-items: center;
+    justify-content: center; /* 文字居中 */
+    padding: 10px 15px;
+    
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    color: #4C4C4C; /* 略深的颜色 */
+    
+    border: 1px solid #D9D9D9;
+    border-radius: 4px;
+    background-color: #F7F7F7; /* 浅灰色背景 */
+    
+    transition: all 0.2s ease;
+}
+
+.quick-nav-item:hover {
+    background-color: #E6F7FF; /* 鼠标悬停变蓝 */
+    border-color: #91D5FF;
+    color: #1677FF; /* 悬停颜色加深 */
+}
+
+/* 导航项内部图标 */
+.quick-nav-item .fas {
+    margin-right: 8px;
+    font-size: 16px;
+}
     </style>
   </head>
   <body class="font-inter bg-gray-50 text-dark min-h-screen flex flex-col">
@@ -275,7 +456,7 @@ include "includes/layout_start.php";
 
                 </div>
                 <div class="w-12 h-12 rounded-lg bg-success/10 flex items-center justify-center text-success">
-                  <i class="fas fa-server text-xl"> </i>
+                  <i class="fas fa-server text-xl" > </i>
                 </div>
               </div>
               
@@ -290,7 +471,7 @@ include "includes/layout_start.php";
                     <button class="py-3 px-4 text-sm font-semibold text-primary border-b-2 border-primary transition-all" onclick="showTab('charts')" id="tab-charts"> Overview </button>
                     <button class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('user')" id="tab-user"> Approval Trend</button>
                     <button class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('tables')" id="tab-tables"> Submission Trend </button>
-                    <button class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('reward')" id="tab-reward"> Participant </button>
+                    <button class="py-3 px-4 text-sm font-semibold text-dark-2 hover:text-dark hover:border-dark/20 transition-all" onclick="showTab('reward')" id="tab-reward"> Quick Navigation </button>
 
                 </div>
 
@@ -299,13 +480,13 @@ include "includes/layout_start.php";
                 <div class="flex flex-col lg:flex-row gap-6">
 
                 <div class="bg-white rounded-2xl shadow-lg p-6 flex-1 flex flex-col items-center">
-                    <h4 class="text-lg font-semibold text-dark mb-4">总审批率 (Approved vs Rejected)</h4>
+                    <h4 class="text-lg font-semibold text-dark mb-4">Reviewed Rate (Approved vs Rejected)</h4>
                     <div id="approvalRateChart" class="w-full h-80"></div>
                 </div>
 
   
                 <div class="bg-white rounded-2xl shadow-lg p-6 flex-1 flex flex-col">
-                    <h4 class="text-lg font-semibold text-dark mb-4">提交最多的挑战类别</h4>
+                    <h4 class="text-lg font-semibold text-center text-dark mb-4">Most Particaipate Challenge</h4>
                     <div id="challengeTypeChart" class="w-full h-80"></div>
                 </div>
                 </div>
@@ -327,79 +508,37 @@ include "includes/layout_start.php";
         <div id="user" class="tab-content hidden">
 
             <div class="bg-white rounded-2xl shadow-lg p-6 flex-1">
-            <h4 class="text-lg font-semibold text-dark mb-4">最近7天审批趋势</h4>
+            <h4 class="text-lg font-semibold text-dark mb-4">Approval Trend</h4>
             <div id="approvalTrendChart" class="w-full h-64"></div>
             </div>
 
         </div>
 
 
-        <div id="reward" class="tab-content hidden">
-            <!-- Participant Tab Content -->
-              <div class="space-y-6">
-
-                <div class="flex flex-wrap gap-4">
-                  <!-- Total Users -->
-                  <div class="flex-1 min-w-[120px] bg-gray-100 rounded-lg px-4 py-2 flex flex-col items-center justify-center">
-                    <p class="text-xs text-gray-500 font-medium">Total Users</p>
-                    <h3 class="text-lg font-bold text-dark">1,245</h3>
-                  </div>
-
-                  <!-- Active Users -->
-                  <div class="flex-1 min-w-[120px] bg-green-50 rounded-lg px-4 py-2 flex flex-col items-center justify-center">
-                    <p class="text-xs text-gray-500 font-medium">Active Users</p>
-                    <h3 class="text-lg font-bold text-success">324</h3>
-                  </div>
-
-                  <!-- Top 5 Users -->
-                  <div class="flex-1 min-w-[120px] bg-yellow-50 rounded-lg px-4 py-2 flex flex-col items-center justify-center">
-                    <p class="text-xs text-gray-500 font-medium">Top 5 Users</p>
-                    <h3 class="text-lg font-bold text-warning">See List Below</h3>
-                  </div>
+        <div id="reward" class="tab-content">
+            <div class="reward-summary-card">
+                <div class="icon-container"><i class="fas fa-trophy"></i></div>
+                <div class="text-content">
+                    <h3 class="summary-title">我的奖励与成就</h3>
+                    <p class="summary-description">查看您在本周内解锁的所有徽章、积分和专属福利。</p>
                 </div>
-
-                <div class="bg-white rounded-2xl shadow-lg p-4">
-                  <h4 class="text-md font-semibold text-dark mb-4">Top Participants</h4>
-                  <div class="divide-y divide-gray-200">
-                    <!-- Row Example -->
-                    <div class="flex items-center justify-between py-2">
-                      <div class="flex items-center gap-3">
-                        <span class="font-medium text-sm w-5">1</span>
-                        <span class="text-sm font-medium">Alice</span>
-                      </div>
-                      <div class="flex items-center gap-2 w-1/2">
-                        <div class="h-2 w-full rounded-full bg-gradient-to-r from-blue-400 to-blue-600" style="width: 80%;"></div>
-                        <span class="text-sm text-gray-500">120</span>
-                      </div>
-                    </div>
-
-
-                    <div class="flex items-center justify-between py-2">
-                      <div class="flex items-center gap-3">
-                        <span class="font-medium text-sm w-5">2</span>
-                        <span class="text-sm font-medium">Bob</span>
-                      </div>
-                      <div class="flex items-center gap-2">
-                        <div class="bg-primary/70 h-2 w-20 rounded-full"></div>
-                        <span class="text-sm text-gray-500">100</span>
-                      </div>
-                    </div>
-
-                    <div class="flex items-center justify-between py-2">
-                      <div class="flex items-center gap-3">
-                        <span class="font-medium text-sm w-5">3</span>
-                        <span class="text-sm font-medium">Charlie</span>
-                      </div>
-                      <div class="flex items-center gap-2">
-                        <div class="bg-primary/50 h-2 w-16 rounded-full"></div>
-                        <span class="text-sm text-gray-500">80</span>
-                      </div>
-                    </div>
-                  </div>
+                <div class="action-link">
+                    <a href="/rewards-page" class="nav-button">查看详情<i class="fas fa-arrow-right"></i></a>
                 </div>
+            </div>
 
-              </div>
-
+            <div class="reward-nav-links">
+                <a href="/rewards/points" class="quick-nav-item">
+                    <i class="fas fa-coins"></i> 积分记录
+                </a>
+                <a href="/rewards/redeem" class="quick-nav-item">
+                    <i class="fas fa-gift"></i> 兑换中心
+                </a>
+                <a href="/rewards/badges" class="quick-nav-item">
+                    <i class="fas fa-medal"></i> 徽章列表
+                </a>
+            </div>
+        </div>
         
       </main>
     </div>
@@ -407,123 +546,184 @@ include "includes/layout_start.php";
 
 <script>
 
+const approveCount = <?= $approveCount ?>;
+const rejectCount = <?= $rejectCount ?>;
+const totalCount = approveCount + rejectCount;
+
 const challengeLabels = <?= json_encode($challengeLabels) ?>;
 const challengeValues = <?= json_encode($challengeValues) ?>;
 
+// 统一变量名：使用顶部的 trendApproved/trendDenied
 const trendDates = <?= json_encode($trendDates) ?>;
 const trendApproved = <?= json_encode($trendApproved) ?>;
 const trendDenied = <?= json_encode($trendDenied) ?>;
 
 const dailyDates = <?= json_encode($dailyDates) ?>;
-const dailyTotals = <?= json_encode($dailyTotals) ?>;
+const dailyTotals = <?= json_encode($dailyTotals) ?>; 
+// 确保这里是 dailyTotals 而非 dailyTotal
 
 document.addEventListener('DOMContentLoaded', function () {
 
-    const approvalRateChart = echarts.init(document.getElementById('approvalRateChart'));
-    approvalRateChart.setOption({
-        tooltip: {
-            trigger: 'item',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            borderColor: '#E5E6EB',
-            borderWidth: 1,
-            textStyle: { color: '#1D2129' },
-            padding: 10,
-            formatter: '{b}: {c} ({d}%)',
-            extraCssText: 'box-shadow:0 4px 12px rgba(0,0,0,0.08); border-radius:8px;'
-        },
-        legend: { show: false },
-        series: [{
-            name: '审批率',
-            type: 'pie',
-            radius: ['70%', '90%'],
-            avoidLabelOverlap: false,
-            itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 3 },
-            label: { show: true, position: 'center', formatter: '审批率', fontSize: 14, color: '#1D2129' },
-            emphasis: {
-                scale: true,
-                scaleSize: 8,
-                label: { show: true, formatter: '{d}%', fontSize: 18, fontWeight: 'bold', color: '#1D2129' }
-            },
-            labelLine: { show: false },
-           data: [
-                { value: <?= $approveCount ?>, name: 'Approved', itemStyle: { color: '#52C41A' } },
-                { value: <?= $rejectCount ?>, name: 'Rejected', itemStyle: { color: '#FF4D4F' } }
-            ]
+  showTab('charts');
 
-        }]
-    });
+       const approvalRateChart = echarts.init(document.getElementById('approvalRateChart'));
+    approvalRateChart.setOption({
+        tooltip: {
+            trigger: 'item',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            borderColor: '#E5E6EB',
+            borderWidth: 1,
+            textStyle: { color: '#1D2129' },
+            padding: 10,
+            formatter: '{b}: {c} ({d}%)',
+            extraCssText: 'box-shadow:0 4px 12px rgba(0,0,0,0.08); border-radius:8px;'
+        },
+        legend: {
+            show: true,
+            orient: 'horizontal',  // 水平显示
+            top: -8,               // 距离容器顶部
+            left: 'center',        // 居中
+            textStyle: { color: '#1D2129', fontSize: 14 },
+        },
+        series: [{
+            name: 'Rate',
+            type: 'pie',
+            radius: ['70%', '90%'],
+            avoidLabelOverlap: true,
+            itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 3 },
+            label: { show: true, position: 'center', formatter: 'Rate', fontSize: 14, color: '#1D2129' },
+            emphasis: {
+                scale: true,
+                scaleSize: 8,
+                label: { show: true, formatter: '{d}%', fontSize: 18, fontWeight: 'bold', color: '#1D2129' }
+            },
+            labelLine: { show: false },
+           data: [
+                { value: <?= $approveCount ?>, name: 'Approved', itemStyle: { color: '#52C41A' } },
+                { value: <?= $rejectCount ?>, name: 'Rejected', itemStyle: { color: '#FF4D4F' } }
+            ]
+
+        }]
+    });
 
         const challengeTypeChart = echarts.init(document.getElementById('challengeTypeChart'));
 
-        challengeTypeChart.setOption({
-            tooltip: { trigger: 'axis' },
-            xAxis: {
-                type: 'category',
-                data: challengeLabels.length ? challengeLabels : ['No Data']
-            },
-            yAxis: { type: 'value' },
-            series: [{
-                type: 'bar',
-                data: challengeValues.length ? challengeValues : [0],
-                barWidth: 28,
-                itemStyle: {
-                    borderRadius: [6, 6, 6, 6]
-                }
-            }]
-        });
+      challengeTypeChart.setOption({
+
+          // 工具提示：优化为悬停时显示阴影
+          tooltip: { 
+              trigger: 'axis',
+              axisPointer: { type: 'shadow' }
+          },
+          // 坐标轴区域优化：增加边距，确保标签不被截断
+          grid: {
+              left: '3%',
+              right: '4%',
+              bottom: '3%',
+              containLabel: true
+          },
+          // X 轴：隐藏轴线和刻度，更简洁
+          xAxis: {
+              type: 'category',
+              // 如果数据为空，显示'No Data'
+              data: challengeLabels.length ? challengeLabels : ['No Data'],
+              axisLine: { show: false }, 
+              axisTick: { show: false } 
+          },
+          // Y 轴：隐藏轴线和刻度，网格线使用虚线
+          yAxis: { 
+              type: 'value',
+              axisLine: { show: false },
+              axisTick: { show: false },
+              splitLine: { lineStyle: { type: 'dashed', color: '#ccc' } }
+          },
+          series: [{
+              type: 'bar',
+              // 如果数据为空，显示 [0]
+              data: challengeValues.length ? challengeValues : [0],
+              barWidth: '40%', // 优化为更通用的百分比宽度
+              // 数据标签：在柱子上方显示具体数值
+              label: {
+                  show: true,
+                  position: 'top',
+                  formatter: '{c}',
+                  color: '#111',
+                  fontWeight: 'bold'
+              },
+              // 样式：圆角和渐变色
+              itemStyle: {
+                  borderRadius: [6, 6, 0, 0], // 仅顶部圆角
+                  color: new echarts.graphic.LinearGradient(
+                      0, 0, 0, 1, 
+                      [
+                          { offset: 0, color: '#4facfe' }, // 浅蓝
+                          { offset: 1, color: '#00f2fe' }  // 青色
+                      ]
+                  )
+              }
+          }]
+      });
 
 
   // ============================
 // Daily Review Trend (from DB)
 // ============================
-const dailyDates = [
-<?php mysqli_data_seek($dailyData, 0); while($d = $dailyData->fetch_assoc()): ?>
-    "<?= $d['d'] ?>",
-<?php endwhile; ?>
-];
 
-const dailyTotal = [
-<?php mysqli_data_seek($dailyData, 0); while($d = $dailyData->fetch_assoc()): ?>
-    <?= $d['total'] ?>,
-<?php endwhile; ?>
-];
 
 const dailyReviewChart = echarts.init(document.getElementById('dailyReviewChart'));
 
 dailyReviewChart.setOption({
-    tooltip: { trigger: 'axis' },
-    xAxis: {
-        type: 'category',
-        data: dailyDates.length ? dailyDates : ['No Data']
+    title: {
+        text: '每日提交总量统计',
+        left: 'center',
+        textStyle: { fontSize: 16, fontWeight: 'bold', color: '#1D2129' }
     },
-    yAxis: { type: 'value' },
+    tooltip: { 
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' }
+    },
+    grid: {
+        left: '3%', right: '4%', bottom: '3%', containLabel: true
+    },
+    // *** 关键修改 1: xAxis 变为数值轴 (value) ***
+    xAxis: {
+        type: 'value',
+        minInterval: 1, 
+        axisLine: { show: false },
+        splitLine: { lineStyle: { type: 'solid', color: '#f0f0f0' } } // 使用实线网格，与虚线区分
+    },
+    // *** 关键修改 2: yAxis 变为类目轴 (category) ***
+    yAxis: { 
+        type: 'category',
+        data: dailyDates.length ? dailyDates : ['No Data'],
+        axisLine: { show: false }, 
+        axisTick: { show: false }
+    },
     series: [{
+        name: '提交总量',
         type: 'bar',
         data: dailyTotals.length ? dailyTotals : [0],
-        barWidth: 28
+        barWidth: '60%', // 相对宽一点
+        // 样式：柔和的圆角和纯色
+        itemStyle: {
+            borderRadius: 5, // 轻微圆角
+            color: '#36CBCB' // 使用您的 Secondary (青色/蓝绿色)
+        },
+        // 数据标签：在条形图右侧显示数值
+        label: {
+            show: true,
+            // *** 关键修改 3: 标签位置改为 'right' ***
+            position: 'right', 
+            formatter: '{c}',
+            color: '#1D2129',
+            fontSize: 10 // 字体小一些，避免拥挤
+        }
     }]
 });
 
 // ============================
 // Approval Trend (from DB)
 // ============================
-const trendDates = [
-<?php mysqli_data_seek($trendData, 0); while($t = $trendData->fetch_assoc()): ?>
-    "<?= $t['d'] ?>",
-<?php endwhile; ?>
-];
-
-const approved = [
-<?php mysqli_data_seek($trendData, 0); while($t = $trendData->fetch_assoc()): ?>
-    <?= $t['approved'] ?>,
-<?php endwhile; ?>
-];
-
-const rejected = [
-<?php mysqli_data_seek($trendData, 0); while($t = $trendData->fetch_assoc()): ?>
-    <?= $t['denied'] ?>,
-<?php endwhile; ?>
-];
 
 
 const approvalTrendChart = echarts.init(document.getElementById('approvalTrendChart'));
