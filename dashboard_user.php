@@ -43,6 +43,7 @@ $stmt_points->close();
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
+//submission section
 
 $sql_subs = "SELECT 
         SUM(CASE WHEN status = 'Approved' THEN 1 ELSE 0 END) AS approvedCount,
@@ -132,24 +133,31 @@ $stmt->close();
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 //reward section
 
-// 1. Security Check
-if (!isset($_SESSION['userID'])) { header("Location: login.php"); exit(); }
-$userID = $_SESSION['userID'];
+
 
 // 2. Data Fetching for Dashboard
 
 // A. User Summary Stats
-$stmt = $conn->prepare("SELECT walletPoint, 
-    (SELECT SUM(pointSpent) FROM redemptionrequest WHERE userID = ?) as totalSpent,
-    (SELECT COUNT(*) FROM redemptionrequest WHERE userID = ?) as totalRedeemed
-    FROM user WHERE userID = ?");
-$stmt->bind_param("iii", $userID, $userID, $userID);
+$stmt = $conn->prepare("
+    SELECT 
+        u.walletPoint, 
+        (SELECT SUM(pointSpent) FROM redemptionrequest WHERE userID = ?) AS totalSpent,
+        (SELECT COUNT(*) FROM redemptionrequest WHERE userID = ?) AS totalRedeemed,
+        (SELECT teamName FROM team WHERE userID = ? LIMIT 1) AS teamName
+    FROM user u
+    WHERE u.userID = ?
+");
+$stmt->bind_param("iiii", $userID, $userID, $userID, $userID);
 $stmt->execute();
 $summary = $stmt->get_result()->fetch_assoc();
+
 $currentPoints = $summary['walletPoint'];
 $totalSpent = $summary['totalSpent'] ?? 0;
 $totalRedeemed = $summary['totalRedeemed'] ?? 0;
+$teamName = $summary['teamName'] ?? null; // 这里就是团队名字，如果没加入返回 null
+
 $stmt->close();
+
 
 // B. Chart Data 1: Points Spent Trend (根据 filter)
 $trendSql = "SELECT DATE(requested_at) AS date, SUM(pointSpent) AS total 
@@ -247,53 +255,62 @@ if ($teamID === null) {
     // 时间过滤条件
     $ptTimeCondition = '';
     if ($days !== null) {
-        $ptTimeCondition = " AND pt.created_at >= NOW() - INTERVAL $days DAY";
+        $ptTimeCondition = " AND pt.generate_at >= NOW() - INTERVAL $days DAY";
     }
 
     // 查询 team leaderboard
-    $sql_leaderboard = "
-        SELECT 
-            u.userID,
-            u.firstName,
-            u.lastName,
-            SUM(pt.pointsTransaction) AS totalPoints
-        FROM user u
-        LEFT JOIN pointtransaction pt ON u.userID = pt.userID $ptTimeCondition
-        WHERE u.teamID = ?
-        GROUP BY u.userID, u.firstName, u.lastName
-        ORDER BY totalPoints DESC
-    ";
+$sql_leaderboard = "
+    SELECT 
+        u.userID,
+        u.firstName,
+        u.lastName,
+        SUM(pt.pointsTransaction) AS totalPoints,
+        (SELECT SUM(pt2.pointsTransaction) 
+         FROM user u2
+         LEFT JOIN pointtransaction pt2 ON u2.userID = pt2.userID $ptTimeCondition
+         WHERE u2.teamID = u.teamID) AS teamTotalPoints
+    FROM user u
+    LEFT JOIN pointtransaction pt ON u.userID = pt.userID $ptTimeCondition
+    WHERE u.teamID = ?
+    GROUP BY u.userID, u.firstName, u.lastName
+    ORDER BY totalPoints DESC
+";
+
 
     $stmt2 = $conn->prepare($sql_leaderboard);
     $stmt2->bind_param("i", $teamID);
     $stmt2->execute();
     $res = $stmt2->get_result();
 
-    $rankCounter = 1;
-    while ($row = $res->fetch_assoc()) {
-        $fullName = $row['firstName'] . ' ' . substr($row['lastName'], 0, 1) . '.';
-        $name = ($row['userID'] == $userID) ? 'You' : $fullName;
+$teamTotalPoint = 0; // 初始化
 
-        $teamRank[] = [
-            'name' => $name,
-            'value' => (int)($row['totalPoints'] ?? 0)
-        ];
+$rankCounter = 1;
+while ($row = $res->fetch_assoc()) {
+    $fullName = $row['firstName'] . ' ' . substr($row['lastName'],0,1) . '.';
+    $name = ($row['userID'] == $userID) ? 'You' : $fullName;
 
-        if ($row['userID'] == $userID) {
-            $personalRank = $rankCounter;
-        }
-        $rankCounter++;
+    $teamRank[] = [
+        'name' => $name,
+        'value' => (int)($row['totalPoints'] ?? 0)
+    ];
+
+    if ($row['userID'] == $userID) {
+        $personalRank = $rankCounter;
     }
+
+    // 拿到团队总积分，只用一次即可
+    if ($rankCounter === 1) {
+        $teamTotalPoint = (int)($row['teamTotalPoints'] ?? 0);
+    }
+
+    $rankCounter++;
+}
+
 
     $stmt2->close();
 }
 
-
-include "includes/layout_start.php";    
-
-if (isset($conn) && $conn->ping()) {
-    $conn->close();
-}
+include "includes/layout_start.php";
 
 ?>
 
@@ -437,7 +454,7 @@ if (isset($conn) && $conn->ping()) {
                         <h2 class="text-[clamp(1.5rem,3vw,2rem)] font-bold text-dark">
                             Member Dashboard
                         </h2>
-                        <p class="text-dark-2 mt-1">View all current data</p>
+                        <p class="text-dark-2 mt-1">View all personal data</p>
                     </div>
                      <div class="flex items-center gap-3">
                         <label class="text-sm text-gray-700">Filter:</label>
@@ -453,54 +470,67 @@ if (isset($conn) && $conn->ping()) {
                         </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
 
-                                            <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <p class="stat-card-label"> My Points</p>
-                                <h3 class="stat-card-value mt-1"><?= number_format($myPoints); ?></h3>
-                            </div>
-                            <div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                                <i class="fas fa-coins text-xl"> </i> 
-                            </div>
+                <!-- My Points -->
+                <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="stat-card-label">My Points</p>
+                            <h3 class="stat-card-value mt-1"><?= number_format($myPoints); ?></h3>
                         </div>
-                    </div>
-                                            <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <p class="stat-card-label">Approved Submission</p>
-                                <h3 class="stat-card-value mt-1"><?= number_format($approvedCount); ?></h3>
-                            </div>
-                            <div class="w-12 h-12 rounded-lg bg-secondary/10 flex items-center justify-center text-secondary">
-                                <i class="fas fa-check-circle text-xl"> </i>
-                            </div>
-                        </div>
-                    </div>
-                                            <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <p class="stat-card-label"> Pending Submission </p>
-                                <h3 class="stat-card-value mt-1"><?= number_format($pendingCount); ?></h3>
-                            </div>
-
-                            <div class="w-12 h-12 rounded-lg bg-warning/10 flex items-center justify-center text-warning">
-                                <i class="fas fa-hourglass-half text-xl"> </i>
-                            </div>
-                        </div>
-                    </div>
-                                            <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <p class="stat-card-label">Total Submission</p>
-                                <h3 class="stat-card-value mt-1"><?= number_format($totalSubmission); ?></h3>
-                            </div>
-                            <div class="w-12 h-12 rounded-lg bg-info/10 flex items-center justify-center text-info">
-                                <i class="fas fa-list-alt text-xl"> </i> 
-                            </div>
+                        <div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                            <i class="fas fa-coins text-xl"></i>
                         </div>
                     </div>
                 </div>
+
+                <!-- Personal Rank -->
+                <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="stat-card-label">Personal Rank</p>
+                            <h3 class="stat-card-value mt-1"><?= number_format($approvedCount); ?></h3>   <!-- Change!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! -->
+                        </div>
+                        <div class="w-12 h-12 rounded-lg bg-secondary/10 flex items-center justify-center text-secondary">
+                            <i class="fas fa-check-circle text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Team Joined -->
+                <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="stat-card-label">Team Joined</p>
+                            <?php if ($userHasTeam): ?>
+                                <div class="text-lg font-semibold mt-1"><?= htmlspecialchars($teamName) ?></div>
+
+                            <?php else: ?>
+                                <p class="text-sm text-gray-500 mt-1">You haven't joined a team yet. <a href="/join-team" class="text-blue-500 underline">Join Now</a></p>
+                            <?php endif; ?>
+                        </div>
+                        <div class="w-12 h-12 rounded-lg <?= $userHasTeam ? 'bg-warning/10 text-warning' : 'bg-gray-200 text-gray-400' ?> flex items-center justify-center">
+                            <i class="fas fa-users text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Total Submission -->
+                <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="stat-card-label">Total Submission</p>
+                            <h3 class="stat-card-value mt-1"><?= number_format($totalSubmission); ?></h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-lg bg-info/10 flex items-center justify-center text-info">
+                            <i class="fas fa-list-alt text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
 
                 <div class="bg-white rounded-2xl shadow-lg p-6">
 
@@ -513,68 +543,83 @@ if (isset($conn) && $conn->ping()) {
 
                     </div>
 
-                <div id="charts" class="tab-content p-4 space-y-6">                            
+                <div id="charts" class="tab-content p-4 space-y-6">
                     <div class="bg-white shadow rounded p-4">
-                        
-                    <div class="text-gray-500 mb-2">Team & Personal Rank</div>
-                    
-                    <?php if ($userHasTeam && !empty($teamRank)) : ?>
-                        <div id="teamRankChart" style="height: 200px;"></div>
-                        <p class="text-sm mt-2 text-gray-500">Your Personal Rank: <?= $personalRank ?></p>
+                        <?php if ($userHasTeam && !empty($teamRank)) : ?>
+                            <!-- Chart -->
+                            <div id="teamRankChart" class="h-60 w-full mb-6"></div>
 
-                        <script>
-                            const teamRankData = <?= json_encode($teamRank) ?>;
+                            <!-- Info Cards -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div class="flex items-center p-4 bg-blue-50 rounded-lg shadow-sm">
+                                    <div class="flex-1">
+                                        <p class="text-gray-500 text-sm font-medium">Your Rank in Team</p>
+                                        <p class="text-blue-600 font-semibold text-lg"><?= $personalRank ?></p>
+                                    </div>
+                                    <i class="fas fa-user text-blue-400 text-2xl"></i>
+                                </div>
 
-                            if (teamRankData.length > 0) {
-                                let minRankValue = Math.min(...teamRankData.map(item => item.value));
-                                const yAxisMin = Math.max(0, minRankValue - 100);
+                                <div class="flex items-center p-4 bg-green-50 rounded-lg shadow-sm">
+                                    <div class="flex-1">
+                                        <p class="text-gray-500 text-sm font-medium">Team Total Points</p>
+                                        <p class="text-green-600 font-semibold text-lg"><?= number_format($teamTotalPoint) ?></p>
+                                    </div>
+                                    <i class="fas fa-trophy text-green-400 text-2xl"></i>
+                                </div>
+                            </div>
 
-                                const chart = echarts.init(document.getElementById('teamRankChart'));
-                                const option = {
-                                    title: { text: 'Team & Personal Rank', left: 'center', textStyle:{fontSize:14} },
-                                    xAxis: { type: 'category', data: teamRankData.map(t => t.name), axisLabel: { interval:0 } },
-                                    yAxis: { 
-                                        type: 'value',
-                                        min: yAxisMin,
-                                        name: 'Total Points'
-                                    },
-                                    series: [{
-                                        type: 'bar',
-                                        data: teamRankData.map(t => t.value),
-                                        itemStyle: {
-                                            color: params => params.name==='You' ? '#3b82f6' : '#9ca3af'
+                            <script>
+                                const teamRankData = <?= json_encode($teamRank) ?>;
+
+                                if (teamRankData.length > 0) {
+                                    let minRankValue = Math.min(...teamRankData.map(item => item.value));
+                                    const yAxisMin = Math.max(0, minRankValue - 100);
+
+                                    const chart = echarts.init(document.getElementById('teamRankChart'));
+                                    const option = {
+                                        title: { text: 'Team & Personal Rank', left: 'center', textStyle:{fontSize:14} },
+                                        xAxis: { type: 'category', data: teamRankData.map(t => t.name), axisLabel: { interval:0 } },
+                                        yAxis: { 
+                                            type: 'value',
+                                            min: yAxisMin,
+                                            name: 'Total Points'
                                         },
-                                        label: { show: true, position: 'top' }
-                                    }]
-                                };
-                                chart.setOption(option);
-                            }
-                        </script>
+                                        series: [{
+                                            type: 'bar',
+                                            data: teamRankData.map(t => t.value),
+                                            itemStyle: {
+                                                color: params => params.name==='You' ? '#3b82f6' : '#9ca3af'
+                                            },
+                                            label: { show: true, position: 'top' }
+                                        }]
+                                    };
+                                    chart.setOption(option);
+                                }
+                            </script>
 
                         <?php else: ?>
                             <div class="text-center py-16 text-gray-400">
                                 <i class="fas fa-users-slash text-4xl mb-4"></i>
                                 <p class="text-lg font-medium"><?= $teamRankMessage ?></p>
                             </div>
-                            <?php endif; ?>
-                        </div>
-
+                        <?php endif; ?>
+                    </div>
                 </div>
+
 
                 <div>
                    <div id="user" class="tab-content hidden p-4 space-y-6">
                     
-                        <div class="bg-white shadow rounded p-4">
-                            <div class="text-gray-500 mb-2">My Submissions</div>
-                            <div id="submissionStatusChart" style="height: 250px;"></div>
-                         </div>
+                        <div class="bg-white shadow rounded pt-6 pb-6">
+                            <div id="submissionStatusChart" style="height: 350px;"></div>
+                        </div>
 
                     </div>
 
                 </div>
 
                 <div id="tables" class="tab-content hidden p-4">
-                    <h3 class="text-lg font-semibold text-dark mb-4">My Challenges</h3>
+                 
 
 
                     <div id="challengeChart" style="height: 300px;"></div>
@@ -583,80 +628,74 @@ if (isset($conn) && $conn->ping()) {
 
 
                 <div id="reward" class="tab-content hidden p-4 space-y-6">
-                    <div class="row g-4 mb-4">
-                        <div class="col-md-4">
-                            <div class="stat-card">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <div class="card-label">Current Wallet</div>
-                                        <div class="card-value"><?php echo number_format($currentPoints); ?></div>
-                                        <div class="card-sub text-success"><i class="fas fa-arrow-up"></i> Available to spend</div>
-                                    </div>
-                                    <div class="icon-box bg-success bg-opacity-10 p-3 rounded-circle text-success">
-                                        <iconify-icon icon="solar:wallet-money-bold" style="font-size: 24px;"></iconify-icon>
-                                    </div>
+
+                    <!-- Reward Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+                        <div class="stat-card">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="card-label">Current Wallet</div>
+                                    <div class="card-value"><?= number_format($currentPoints); ?></div>
+                                    <div class="card-sub text-success"><i class="fas fa-arrow-up"></i> Available to spend</div>
+                                </div>
+                                <div class="icon-box bg-success bg-opacity-10 p-3 rounded-full text-success">
+                                    <iconify-icon icon="solar:wallet-money-bold" style="font-size: 24px;"></iconify-icon>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="col-md-4">
-                            <div class="stat-card">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <div class="card-label">Total Spent</div>
-                                        <div class="card-value text-purple"><?php echo number_format($totalSpent); ?></div>
-                                        <div class="card-sub">Lifetime points burned</div>
-                                    </div>
-                                    <div class="icon-box bg-purple bg-opacity-10 p-3 rounded-circle text-purple">
-                                        <iconify-icon icon="solar:fire-bold" style="font-size: 24px;"></iconify-icon>
-                                    </div>
+                        <div class="stat-card">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="card-label">Total Spent</div>
+                                    <div class="card-value text-purple"><?= number_format($totalSpent); ?></div>
+                                    <div class="card-sub">Lifetime points burned</div>
                                 </div>
-                                <div class="bg-circle bg-purple"></div>
+                                <div class="icon-box bg-purple bg-opacity-10 p-3 rounded-full text-purple">
+                                    <iconify-icon icon="solar:fire-bold" style="font-size: 24px;"></iconify-icon>
+                                </div>
                             </div>
+                            <div class="bg-circle bg-purple"></div>
                         </div>
 
-                        <div class="col-md-4">
-                            <div class="stat-card">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <div class="card-label">Total Redemptions</div>
-                                        <div class="card-value text-orange"><?php echo number_format($totalRedeemed); ?></div>
-                                        <div class="card-sub">Items & Vouchers claimed</div>
-                                    </div>
-                                    <div class="icon-box bg-orange bg-opacity-10 p-3 rounded-circle text-orange">
-                                        <iconify-icon icon="solar:bag-heart-bold" style="font-size: 24px;"></iconify-icon>
-                                    </div>
+                        <div class="stat-card">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="card-label">Total Redemptions</div>
+                                    <div class="card-value text-orange"><?= number_format($totalRedeemed); ?></div>
+                                    <div class="card-sub">Items & Vouchers claimed</div>
                                 </div>
-                                <div class="bg-circle bg-orange"></div>
+                                <div class="icon-box bg-orange bg-opacity-10 p-3 rounded-full text-orange">
+                                    <iconify-icon icon="solar:bag-heart-bold" style="font-size: 24px;"></iconify-icon>
+                                </div>
                             </div>
+                            <div class="bg-circle bg-orange"></div>
                         </div>
                     </div>
 
-                     <div class="row g-4 mb-4">
-                        <div class="col-lg-8">
-                            <div class="stat-card">
-                                <h5 class="fw-bold mb-4">Spending Analysis</span></h5>
-                                <div class="chart-container">
-                                    <canvas id="trendChart"></canvas>
-                                </div>
+                    <!-- Reward Charts -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2 stat-card">
+                            <h5 class="font-bold mb-4">Spending Analysis</h5>
+                            <div class="chart-container" style="height: 300px;">
+                                <canvas id="trendChart"></canvas>
                             </div>
                         </div>
 
-                        <div class="col-lg-4">
-                            <div class="stat-card">
-                                <h5 class="fw-bold mb-4">Reward Categories</h5>
-                                <div class="chart-container" style="height: 250px;">
-                                    <canvas id="categoryChart"></canvas>
-                                </div>
-                                <div class="text-center mt-3">
-                                    <small class="text-muted">Distribution of your redemptions</small>
-                                </div>
+                        <div class="stat-card">
+                            <h5 class="font-bold mb-4">Reward Categories</h5>
+                            <div class="chart-container h-[250px]">
+                                <canvas id="categoryChart"></canvas>
+                            </div>
+                            <div class="text-center mt-3">
+                                <small class="text-gray-500">Distribution of your redemptions</small>
                             </div>
                         </div>
                     </div>
 
 
                 </div>
+
 
 
 
@@ -722,67 +761,75 @@ if (isset($conn) && $conn->ping()) {
         // --- 3. 初始化函数定义 ---
 
         // A. Submission Status Chart (My Submissions Tab)
-        function initializeSubmissionStatusChart() {
-            if (window.chartInstances.submissionStatusChart) {
-                window.chartInstances.submissionStatusChart.resize();
-                return;
-            }
-            
-            // 注意：使用您 HTML 中 tab-user 内部的 ID: submissionStatusChart
-            const chartEl = document.getElementById('submissionStatusChart');
-            
-            // 确保 PHP 变量被正确嵌入
-            const approvedCount = <?= (int)$approvedCount; ?>;
-            const pendingCount = <?= (int)$pendingCount; ?>;
-            const deniedCount = <?= (int)$deniedCount; ?>;
-            const totalSubmissions = approvedCount + pendingCount + deniedCount;
+function initializeSubmissionStatusChart() {
+    if (window.chartInstances.submissionStatusChart) {
+        window.chartInstances.submissionStatusChart.resize();
+        return;
+    }
 
-            if(chartEl){
-                if (totalSubmissions === 0) {
-                    // 🚨 空状态 (Empty State) 设计
-                    chartEl.style.height = '250px'; 
-                    chartEl.innerHTML = `
-                        <div class="text-center py-12 text-gray-500">
-                            <i class="fas fa-file-upload text-4xl text-info/60 mb-3"></i>
-                            <p class="text-lg font-semibold text-dark-2">No Submissions Found</p>
-                            <p class="text-sm text-gray-500 mt-1">
-                                Start participating in challenges to see your status breakdown here!
-                            </p>
-                        </div>
-                    `;
-                } else {
-                    // ✅ 正确初始化 (如果有数据)
-                    const submissionStatusChart = echarts.init(chartEl);
+    const chartEl = document.getElementById('submissionStatusChart');
+    const approvedCount = <?= (int)$approvedCount; ?>;
+    const pendingCount = <?= (int)$pendingCount; ?>;
+    const deniedCount = <?= (int)$deniedCount; ?>;
+    const totalSubmissions = approvedCount + pendingCount + deniedCount;
 
-                    const submissionStatusOption = {
-                        title: {
-                            text: 'Submission Status Overview',
-                            left: 'center',
-                            top: '5%',
-                            textStyle: { fontWeight: 'bold', fontSize: 16 }
-                        },
-                        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                        legend: { data: ['Approved', 'Pending', 'Denied'], bottom: '2%' },
-                        grid: { left: '3%', right: '4%', bottom: '15%', top: '20%', containLabel: true },
-                        xAxis: { type: 'value', name: 'Total Count' },
-                        yAxis: { type: 'category', data: ['All Submissions'] },
-                        series: [
-                            { name: 'Approved', type: 'bar', stack: 'total', itemStyle: { color: '#22c55e' },
-                              label: { show: true, formatter: approvedCount > 0 ? '{c}' : '', color: '#fff', fontWeight: 'bold', position: 'inside' },
-                              data: [approvedCount] },
-                            { name: 'Pending', type: 'bar', stack: 'total', itemStyle: { color: '#eab308' },
-                              label: { show: true, formatter: pendingCount > 0 ? '{c}' : '', color: '#333', fontWeight: 'bold', position: 'inside' },
-                              data: [pendingCount] },
-                            { name: 'Denied', type: 'bar', stack: 'total', itemStyle: { color: '#ef4444' },
-                              label: { show: true, formatter: deniedCount > 0 ? '{c}' : '', color: '#fff', fontWeight: 'bold', position: 'inside' },
-                              data: [deniedCount] }
-                        ]
-                    };
-                    submissionStatusChart.setOption(submissionStatusOption);
-                    window.chartInstances.submissionStatusChart = submissionStatusChart;
-                }
-            }
+    if(chartEl){
+        chartEl.style.height = '300px'; // 雷达图高度
+        if (totalSubmissions === 0) {
+            chartEl.innerHTML = `
+                <div class="text-center py-12 text-gray-500">
+                    <i class="fas fa-file-upload text-4xl text-info/60 mb-3"></i>
+                    <p class="text-lg font-semibold text-dark-2">No Submissions Found</p>
+                    <p class="text-sm text-gray-500 mt-1">
+                        Start participating in challenges to see your status breakdown here!
+                    </p>
+                </div>
+            `;
+        } else {
+            const submissionStatusChart = echarts.init(chartEl);
+
+            const option = {
+                title: {
+                    text: 'Submission Status Overview',
+                    top: '5%',  // 保持正值，不要负值
+                    left: 'center',
+                    textStyle: { fontWeight: 'bold', fontSize: 16 }
+                },
+                tooltip: {},
+                radar: {
+                    indicator: [
+                        { name: 'Approved', max: Math.max(approvedCount, pendingCount, deniedCount, 1) },
+                        { name: 'Pending', max: Math.max(approvedCount, pendingCount, deniedCount, 1) },
+                        { name: 'Denied', max: Math.max(approvedCount, pendingCount, deniedCount, 1) }
+                    ],
+                    shape: 'circle',
+                    splitNumber: 4,
+                    axisName: { color: '#334155', fontWeight: 600 }
+                },
+                series: [{
+                    name: 'Submission Status',
+                    type: 'radar',
+                    data: [{
+                        value: [approvedCount, pendingCount, deniedCount],
+                        name: 'Submissions',
+                        areaStyle: { color: 'rgba(34,197,94,0.3)' }, // 绿色半透明
+                        lineStyle: { color: '#22c55e', width: 2 },
+                        itemStyle: {
+                            color: '#22c55e',
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        }
+                    }]
+                }]
+            };
+
+            submissionStatusChart.setOption(option);
+            window.chartInstances.submissionStatusChart = submissionStatusChart;
         }
+    }
+}
+
+
         
         // B. Challenge Chart (My Challenges Tab)
 function initializeChallengeChart() {
@@ -900,123 +947,120 @@ function initializeChallengeChart() {
         }
         
         // D. Reward Charts (Chart.js charts, 保持原样)
-        function initializeRewardCharts() {
-            // (保持原有的 Line Chart 和 Doughnut Chart 的 Chart.js 初始化代码)
-            // ... [Your existing Chart.js initialization code here]
-            
-            // 确保在 reward 标签页初始化时执行 (如果用户没有切换到 reward tab，它们不会运行)
-            const ctxTrendEl = document.getElementById('trendChart');
-            if(ctxTrendEl){
-                const ctxTrend = ctxTrendEl.getContext('2d');
-                const gradient = ctxTrend.createLinearGradient(0,0,0,400);
-                gradient.addColorStop(0,'rgba(139,92,246,0.5)');
-                gradient.addColorStop(1,'rgba(139,92,246,0.0)');
+function initializeRewardCharts() {
+    if (window.rewardChartsLoaded) return;
 
-                window.rewardTrendChart = new Chart(ctxTrend,{
-                    type:'line',
-                    data:{
-                        labels: <?= json_encode($trendLabels ?? []) ?>,
-                        datasets:[{
-                            label:'Points Spent',
-                            data: <?= json_encode($trendData ?? []) ?>,
-                            borderColor:'#8b5cf6',
-                            backgroundColor: gradient,
-                            borderWidth:3,
-                            tension:0.4,
-                            fill:true,
-                            pointBackgroundColor:'#ffffff',
-                            pointBorderColor:'#8b5cf6',
-                            pointBorderWidth:2,
-                            pointRadius:6,
-                            pointHoverRadius:8
-                        }]
-                    },
-                    options:{
-                        responsive:true,
-                        maintainAspectRatio:false,
-                        plugins:{
-                            legend:{ display:false },
-                            tooltip:{
-                                backgroundColor:'#1e293b',
-                                padding:12,
-                                titleFont:{ size:13 },
-                                bodyFont:{ size:14, weight:'bold' }
-                            }
-                        },
-                        scales:{
-                            y:{
-                                beginAtZero:true,
-                                grid:{ borderDash:[5,5], color:'#f1f5f9' },
-                                ticks:{ font:{ family:"'Plus Jakarta Sans', sans-serif" } }
-                            },
-                            x:{
-                                grid:{ display:false },
-                                ticks:{ font:{ family:"'Plus Jakarta Sans', sans-serif" } }
-                            }
-                        }
-                    }
-                });
-                window.rewardTrendChartLoaded = true;
-            }
+    const initCharts = () => {
+        // Spending Trend Line Chart
+        const trendEl = document.getElementById('trendChart');
+        if (trendEl) {
+            const ctx = trendEl.getContext('2d');
 
-            const ctxCatEl = document.getElementById('categoryChart');
-            if(ctxCatEl){
-                const ctxCat = ctxCatEl.getContext('2d');
-                window.rewardCategoryChart = new Chart(ctxCat,{
-                    type:'doughnut',
-                    data:{
-                        labels: <?= json_encode($catLabels ?? []) ?>,
-                        datasets:[{
-                            data: <?= json_encode($catData ?? []) ?>,
-                            backgroundColor:['#3b82f6','#10b981','#f59e0b','#6366f1'],
-                            borderWidth:0,
-                            hoverOffset:4
-                        }]
-                    },
-                    options:{
-                        responsive:true,
-                        maintainAspectRatio:false,
-                        cutout:'75%',
-                        plugins:{
-                            legend:{
-                                position:'bottom',
-                                labels:{ usePointStyle:true, padding:20, font:{ family:"'Plus Jakarta Sans'" } }
-                            }
+            const gradient = ctx.createLinearGradient(0, 0, 0, trendEl.offsetHeight || 300);
+            gradient.addColorStop(0, 'rgba(139,92,246,0.5)');
+            gradient.addColorStop(1, 'rgba(139,92,246,0.0)');
+
+            window.rewardTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: <?= json_encode($trendLabels ?? []) ?>,
+                    datasets: [{
+                        label: 'Points Spent',
+                        data: <?= json_encode($trendData ?? []) ?>,
+                        borderColor: '#8b5cf6',
+                        backgroundColor: gradient,
+                        borderWidth: 3,
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: '#8b5cf6',
+                        pointBorderWidth: 2,
+                        pointRadius: 6,
+                        pointHoverRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            padding: 12,
+                            titleFont: { size: 13 },
+                            bodyFont: { size: 14, weight: 'bold' }
                         }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, grid: { borderDash: [5, 5], color: '#f1f5f9' } },
+                        x: { grid: { display: false } }
                     }
-                });
-                window.rewardCategoryChartLoaded = true;
-            }
+                }
+            });
         }
+
+        // Reward Categories Doughnut Chart
+        const catEl = document.getElementById('categoryChart');
+        if (catEl) {
+            const ctx = catEl.getContext('2d');
+            window.rewardCategoryChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: <?= json_encode($catLabels ?? []) ?>,
+                    datasets: [{
+                        data: <?= json_encode($catData ?? []) ?>,
+                        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#6366f1'],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '75%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { usePointStyle: true, padding: 20 }
+                        }
+                    }
+                }
+            });
+        }
+
+        window.rewardChartsLoaded = true;
+    };
+
+    // 延迟初始化，确保 tab 可见
+    requestAnimationFrame(() => {
+        // 小延迟，保证 DOM 完全渲染
+        setTimeout(initCharts, 50);
+    });
+}
+
 
 
         // --- 4. 首次加载和调整大小 ---
         
-        // 在 DOM 加载后立即初始化 Team Rank Chart
+   
         initializeTeamRankChart();
         
-        // 确保 Rewards 图表在切换到该标签页时才初始化
-        // 为了确保它们只初始化一次，我把 reward charts 也放入了初始化函数
-        const originalShowTab = window.showTab;
+
+       const originalShowTab = window.showTab; 
         window.showTab = function(tabId) {
             originalShowTab(tabId);
-            if (tabId === 'reward' && !window.rewardChartsLoaded) {
-                 initializeRewardCharts();
+
+            if (tabId === 'reward' && !window.rewardChartsLoaded){
+                initializeRewardCharts();
             }
+
+            // 调整所有已有 chart 尺寸
+            Object.values(window.chartInstances).forEach(chart => chart?.resize());
+            window.rewardTrendChart?.resize();
+            window.rewardCategoryChart?.resize();
         };
 
-        // Resize charts on window resize
-        window.addEventListener('resize', function(){
-             Object.values(window.chartInstances).forEach(chart => {
-                if (chart) chart.resize();
-            });
-            if(window.rewardTrendChart) window.rewardTrendChart.resize();
-            if(window.rewardCategoryChart) window.rewardCategoryChart.resize();
-        });
-
-        // Show default tab
-        window.showTab('charts');
-    });
+});
 </script>
 
 <?php include "includes/layout_end.php"; ?>
