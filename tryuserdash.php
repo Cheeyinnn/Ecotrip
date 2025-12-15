@@ -319,12 +319,6 @@ include "includes/layout_start.php";
 
 ?>
 
-
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Member Eco-Dashboard (Single Page)</title>
     <script src="https://res.gemcoder.com/js/reload.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -399,10 +393,8 @@ include "includes/layout_start.php";
         }
     };
     </script>
-  </head>
-<body class="font-inter bg-gray-50 text-dark min-h-screen flex">
-    
-    <main class="flex-1 overflow-y-auto p-6 lg:p-10">
+  </head> 
+    <div class="flex-1 overflow-y-auto p-6 lg:p-10">
         <div id="dashboard-page" class="max-w-7xl mx-auto space-y-10">
 
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6 pb-4 border-b border-gray-200">
@@ -548,7 +540,6 @@ include "includes/layout_start.php";
            
         
         </div>
-    </main>
 </div>
 
 <script>
