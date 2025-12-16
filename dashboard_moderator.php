@@ -1,66 +1,46 @@
 <?php
+session_start();
 require_once "db_connect.php";
 
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'moderator') {
+    header("Location: index.php");
+    exit;
+}
+
+$userID = $_SESSION['userID'];
+$moderatorCondition = " AND moderatorID = $userID";
 
 $timeFilter = $_GET['time'] ?? 'all';
-
 $days = null;
-$todayCondition = '';
 
-if ($timeFilter === '7') {
-    $days = 7;
-} elseif ($timeFilter === '30') {
-    $days = 30;
-} elseif ($timeFilter === 'today') {
-    $todayCondition = " AND DATE(uploaded_at) = CURDATE()";
-}
+if ($timeFilter === '7') $days = 7;
+elseif ($timeFilter === '30') $days = 30;
 
-// 对 submissions 的时间条件
+// 时间条件
 $timeCondition = '';
-if ($days !== null) {
-    $timeCondition = " AND uploaded_at >= NOW() - INTERVAL $days DAY";
-} elseif ($timeFilter === 'today') {
-    $timeCondition = " AND DATE(uploaded_at) = CURDATE()";
-}
+if ($days !== null) $timeCondition = " AND uploaded_at >= NOW() - INTERVAL $days DAY";
+elseif ($timeFilter === 'today') $timeCondition = " AND DATE(uploaded_at) = CURDATE()";
 
 // ======================
-// 1. Overall Counts
+// KPI 卡片
 // ======================
+// Total & Pending (全站)
 $totalSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE 1=1 $timeCondition")->fetch_assoc()['c'];
+$pendingSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='pending' $timeCondition")->fetch_assoc()['c'];
 
-
-$pendingSubmission = $conn->query("
-    SELECT COUNT(*) AS c
-    FROM sub
-    WHERE status='pending' $timeCondition
-")->fetch_assoc()['c'];
-
-$approvedSubmission = $conn->query("
-    SELECT COUNT(*) AS c
-    FROM sub
-    WHERE status='approved' $timeCondition
-")->fetch_assoc()['c'];
-
-$deniedSubmission = $conn->query("
-    SELECT COUNT(*) AS c
-    FROM sub
-    WHERE status='denied' $timeCondition
-")->fetch_assoc()['c'];
-
-
-
+// Approved & Denied (当前 moderator)
+$approvedSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='approved' $timeCondition $moderatorCondition")->fetch_assoc()['c'];
+$deniedSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='denied' $timeCondition $moderatorCondition")->fetch_assoc()['c'];
 
 // ======================
-// 4. Approval Rate Donut
+// Approval Rate Donut (当前 moderator)
 // ======================
-$approveCount = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='approved' $timeCondition")->fetch_assoc()['c'];
-$rejectCount  = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='denied' $timeCondition")->fetch_assoc()['c'];
+$approveCount = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='approved' $timeCondition $moderatorCondition")->fetch_assoc()['c'];
+$rejectCount  = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='denied' $timeCondition $moderatorCondition")->fetch_assoc()['c'];
 
-
-
-// 5. Challenge Type Count - FIXED
-
-// Challenge Type SQL
+// ======================
+// Challenge Type (全站)
+// ======================
 $challengeTypeSQL = "
     SELECT category.categoryName, COUNT(*) AS total
     FROM sub
@@ -68,23 +48,11 @@ $challengeTypeSQL = "
     JOIN category ON challenge.categoryID = category.categoryID
     WHERE 1=1
 ";
-
-if ($days !== null) {
-    $challengeTypeSQL .= " AND sub.uploaded_at >= NOW() - INTERVAL $days DAY";
-} elseif ($timeFilter === 'today') {
-    $challengeTypeSQL .= " AND DATE(sub.uploaded_at) = CURDATE()";
-}
-
-
-$challengeTypeSQL .= "
-    GROUP BY category.categoryName
-    ORDER BY total DESC
-";
-
-// --- 执行查询 ---
+if ($days !== null) $challengeTypeSQL .= " AND sub.uploaded_at >= NOW() - INTERVAL $days DAY";
+elseif ($timeFilter === 'today') $challengeTypeSQL .= " AND DATE(sub.uploaded_at) = CURDATE()";
+$challengeTypeSQL .= " GROUP BY category.categoryName ORDER BY total DESC";
 $challengeType = $conn->query($challengeTypeSQL);
 
-// --- 准备数组给 JS ---
 $challengeLabels = [];
 $challengeValues = [];
 while ($c = $challengeType->fetch_assoc()) {
@@ -92,37 +60,23 @@ while ($c = $challengeType->fetch_assoc()) {
     $challengeValues[] = (int)$c['total'];
 }
 
-
-
-// 6. Approval Trend
+// ======================
+// Approval Trend (当前 moderator)
+// ======================
 $trendSQL = "
     SELECT DATE(uploaded_at) AS d,
            SUM(status='approved') AS approved,
            SUM(status='denied') AS denied,
            SUM(status='pending') AS pending
     FROM sub
-    WHERE 1=1
+    WHERE 1=1 $moderatorCondition
 ";
-
-if ($days !== null) {
-    $trendSQL .= " AND uploaded_at >= NOW() - INTERVAL $days DAY";
-} elseif ($timeFilter === 'today') {
-    $trendSQL .= " AND DATE(uploaded_at) = CURDATE()";
-}
-
-$trendSQL .= "
-    GROUP BY DATE(uploaded_at)
-    ORDER BY d
-";
+if ($days !== null) $trendSQL .= " AND uploaded_at >= NOW() - INTERVAL $days DAY";
+elseif ($timeFilter === 'today') $trendSQL .= " AND DATE(uploaded_at) = CURDATE()";
+$trendSQL .= " GROUP BY DATE(uploaded_at) ORDER BY d";
 
 $trendData = $conn->query($trendSQL);
-
-// Convert to arrays
-$trendDates = [];
-$trendApproved = [];
-$trendDenied = [];
-$trendPending = [];
-
+$trendDates = $trendApproved = $trendDenied = $trendPending = [];
 while ($t = $trendData->fetch_assoc()) {
     $trendDates[] = $t['d'];
     $trendApproved[] = (int)$t['approved'];
@@ -130,8 +84,9 @@ while ($t = $trendData->fetch_assoc()) {
     $trendPending[] = (int)$t['pending'];
 }
 
-
-// 7. Daily Trend - FIXED
+// ======================
+// Daily Submission Trend (全站)
+// ======================
 $dailySQL = "
     SELECT DATE(uploaded_at) AS d, COUNT(*) AS total
     FROM sub
@@ -139,63 +94,28 @@ $dailySQL = "
     GROUP BY DATE(uploaded_at)
     ORDER BY d
 ";
-
-
 $dailyData = $conn->query($dailySQL);
-
-// Convert to arrays
-$dailyDates = [];
-$dailyTotals = [];
-
+$dailyDates = $dailyTotals = [];
 while ($d = $dailyData->fetch_assoc()) {
     $dailyDates[] = $d['d'];
     $dailyTotals[] = (int)$d['total'];
 }
 
-
 // ======================
-// 8. Participant stats
+// Average Review Time (当前 moderator)
 // ======================
-$totalUsers = $conn->query("SELECT COUNT(*) AS c FROM user")->fetch_assoc()['c'];
-
-$activeUsersSQL = "SELECT COUNT(*) AS c FROM user WHERE 1=1";
-if ($timeFilter === '7' || $timeFilter === '30') {
-    $activeUsersSQL .= " AND last_online >= NOW() - INTERVAL $days DAY";
-} elseif ($timeFilter === 'today') {
-    $activeUsersSQL .= " AND DATE(last_online) = CURDATE()";
-}
-
-
-$activeUsers = $conn->query($activeUsersSQL)->fetch_assoc()['c'];
-
-
-
-$topUsersSQL = "
-    SELECT user.firstName, user.scorePoint
-    FROM user
-    ORDER BY scorePoint DESC
-    LIMIT 5
-";
-$topUsers = $conn->query($topUsersSQL);
-
-
-// PHP -  Average Review Time 
 $avgReviewTimeSQL = "
     SELECT AVG(TIMESTAMPDIFF(MINUTE, uploaded_at, approved_at)) AS avg_minutes
     FROM sub
-    WHERE status IN ('approved', 'denied') $timeCondition
+    WHERE status IN ('approved', 'denied') $timeCondition $moderatorCondition
     AND approved_at IS NOT NULL
 ";
-
 $avgMinutes = $conn->query($avgReviewTimeSQL)->fetch_assoc()['avg_minutes'];
-
-
 $avgHours = round($avgMinutes / 60, 1);
 
-
 include "includes/layout_start.php";
-
 ?>
+
 
 
 <!DOCTYPE html>
@@ -510,23 +430,16 @@ include "includes/layout_start.php";
 
 
 <script>
-
 const approveCount = <?= $approveCount ?>;
 const rejectCount = <?= $rejectCount ?>;
-const totalCount = approveCount + rejectCount;
-
 const challengeLabels = <?= json_encode($challengeLabels) ?>;
 const challengeValues = <?= json_encode($challengeValues) ?>;
-
-// 统一变量名：使用顶部的 trendApproved/trendDenied
 const trendDates = <?= json_encode($trendDates) ?>;
 const trendApproved = <?= json_encode($trendApproved) ?>;
 const trendDenied = <?= json_encode($trendDenied) ?>;
 const trendPending = <?= json_encode($trendPending) ?>;
-
-
 const dailyDates = <?= json_encode($dailyDates) ?>;
-const dailyTotals = <?= json_encode($dailyTotals) ?>; 
+const dailyTotals = <?= json_encode($dailyTotals) ?>;
 
 
 document.addEventListener('DOMContentLoaded', function () {

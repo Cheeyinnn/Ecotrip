@@ -2,48 +2,108 @@
 session_start();
 require_once "db_connect.php";
 
+
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
+    header("Location: index.php");
+    exit;
+}
+
+
 // -----------------------------
-// Time filter: 'all' | '7' | '30'
+// Time filter: 'all' | '7' | '30' | 'today'
 // -----------------------------
 $timeFilter = $_GET['time'] ?? 'all';
 $timeInterval = null;
-if ($timeFilter === '7') $timeInterval = 7;
-elseif ($timeFilter === '30') $timeInterval = 30;
+$timeConditionToday = false;
+
+switch($timeFilter) {
+    case '7':
+        $timeInterval = 7;
+        break;
+    case '30':
+        $timeInterval = 30;
+        break;
+    case 'today':
+        $timeConditionToday = true;
+        break;
+    default:
+        // 'all' -> keep both null/false
+        break;
+}
 
 // -----------------------------
 // Helper: SQL WHERE 条件，根据时间筛选
 // -----------------------------
-function sql_time_filter($col, $interval) {
-    if (!$interval) return ""; // all 时不加限制
-    return " AND {$col} >= DATE_SUB(CURDATE(), INTERVAL {$interval} DAY) ";
+function sql_time_filter($col, $interval = null, $today = false) {
+    if ($today) return " AND DATE({$col}) = CURDATE() ";
+    if ($interval) return " AND {$col} >= DATE_SUB(CURDATE(), INTERVAL {$interval} DAY) ";
+    return ""; // all 时不加限制
 }
 
 // -----------------------------
-// 1. Total Users
+// Total Users by role
 // -----------------------------
-$totalUsersQuery = "SELECT COUNT(*) AS cnt FROM user WHERE 1 " . sql_time_filter('created_at', $timeInterval);
-$totalUsers = (int)($conn->query($totalUsersQuery)->fetch_assoc()['cnt'] ?? 0);
+function getTotalByRole($conn, $role, $timeInterval, $timeConditionToday) {
+    $sql = "SELECT COUNT(*) AS cnt FROM user WHERE role = ?" . sql_time_filter('created_at', $timeInterval, $timeConditionToday);
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("s", $role);
+    $stmt->execute();
+    $res = $stmt->get_result()->fetch_assoc();
+    return (int)($res['cnt'] ?? 0);
+}
+
+$totalUsers = getTotalByRole($conn, 'user', $timeInterval, $timeConditionToday);
+$totalAdmin = getTotalByRole($conn, 'admin', $timeInterval, $timeConditionToday);
+$totalModerator = getTotalByRole($conn, 'moderator', $timeInterval, $timeConditionToday);
+
+
+
 
 // -----------------------------
-// 2. New Users Trend
+// 3. New Users Trend (role = 'user')
 // -----------------------------
 $newUsersQuery = "
     SELECT COUNT(*) AS cnt, DATE(created_at) AS day
     FROM user
-    WHERE 1 " . sql_time_filter('created_at', $timeInterval) . "
+    WHERE role = 'user' " . sql_time_filter('created_at', $timeInterval, $timeConditionToday) . "
     GROUP BY DATE(created_at)
     ORDER BY day ASC
 ";
 $newUsers = $conn->query($newUsersQuery)->fetch_all(MYSQLI_ASSOC);
 
 // -----------------------------
-// 3. Active Teams
+// New Admins Trend
+// -----------------------------
+$newAdminsQuery = "
+    SELECT COUNT(*) AS cnt, DATE(created_at) AS day
+    FROM user
+    WHERE role = 'admin' " . sql_time_filter('created_at', $timeInterval, $timeConditionToday) . "
+    GROUP BY DATE(created_at)
+    ORDER BY day ASC
+";
+$newAdmins = $conn->query($newAdminsQuery)->fetch_all(MYSQLI_ASSOC);
+
+// -----------------------------
+// New Moderator Trend
+// -----------------------------
+$newModeratorsQuery = "
+    SELECT COUNT(*) AS cnt, DATE(created_at) AS day
+    FROM user
+    WHERE role = 'moderator' " . sql_time_filter('created_at', $timeInterval, $timeConditionToday) . "
+    GROUP BY DATE(created_at)
+    ORDER BY day ASC
+";
+$newModerators = $conn->query($newModeratorsQuery)->fetch_all(MYSQLI_ASSOC);
+
+
+// -----------------------------
+// 3. Total Teams
 // -----------------------------
 $activeTeamsQuery = "
     SELECT COUNT(DISTINCT t.teamID) AS cnt
     FROM team t
     JOIN user u ON u.teamID = t.teamID
-    WHERE 1 " . sql_time_filter('u.created_at', $timeInterval);
+    WHERE 1 " . sql_time_filter('u.created_at', $timeInterval,$timeConditionToday);
 $activeTeams = (int)($conn->query($activeTeamsQuery)->fetch_assoc()['cnt'] ?? 0);
 
 // -----------------------------
@@ -159,17 +219,33 @@ $topCategoriesQuery = "
 $topCategories = $conn->query($topCategoriesQuery)->fetch_all(MYSQLI_ASSOC);
 
 // -----------------------------
-// 7. Users by Role
+// 7. Team Overview
 // -----------------------------
-$roleDistribution = [];
-$roleDataQuery = "
-    SELECT role, COUNT(*) AS cnt
-    FROM user
-    WHERE 1 " . sql_time_filter('created_at', $timeInterval) . "
-    GROUP BY role
+// ============================
+// Team Overall Rank - for admin (all teams)
+$team_sql = "
+SELECT t.teamID, t.teamName,
+       COALESCE(SUM(CASE WHEN pt.transactionType='earn' $dateCondition THEN pt.pointsTransaction ELSE 0 END),0) AS teamPoints
+FROM team t
+LEFT JOIN user u ON u.teamID = t.teamID
+LEFT JOIN pointtransaction pt ON pt.userID = u.userID
+GROUP BY t.teamID
+ORDER BY teamPoints DESC
 ";
-$roleData = $conn->query($roleDataQuery)->fetch_all(MYSQLI_ASSOC);
-foreach ($roleData as $row) $roleDistribution[$row['role']] = (int)$row['cnt'];
+
+$teamRanks = [];
+$team_result = $conn->query($team_sql);
+if ($team_result) {
+    while($row = $team_result->fetch_assoc()){
+        $teamRanks[] = [
+            'teamName' => $row['teamName'],
+            'teamPoints' => (int)$row['teamPoint']
+        ];
+    }
+}
+
+$teamRanksJson = json_encode($teamRanks);
+
 
 
 // -----------------------------
@@ -201,18 +277,18 @@ $submissionActivity = $conn->query($submissionActivityQuery)->fetch_all(MYSQLI_A
 // -----------------------------
 // 10. Points Earned vs Burned
 // -----------------------------
-$pointsActivityQuery = "
-    SELECT u.firstName AS name,
-        COALESCE(SUM(CASE WHEN p.transactionType='earned' THEN p.pointsTransaction ELSE 0 END),0) AS earned,
-        COALESCE(SUM(CASE WHEN p.transactionType='burned' THEN p.pointsTransaction ELSE 0 END),0) AS burned
-    FROM user u
-    LEFT JOIN pointtransaction p ON p.userID = u.userID
-    WHERE 1 " . sql_time_filter('p.generate_at', $timeInterval) . "
-    GROUP BY u.userID
-    ORDER BY earned DESC
-    LIMIT 5
-";
-$pointsActivity = $conn->query($pointsActivityQuery)->fetch_all(MYSQLI_ASSOC);
+$pointsOverallSql = "
+SELECT 
+  SUM(CASE WHEN p.transactionType = 'earn' THEN p.pointsTransaction ELSE 0 END) AS earned,
+  SUM(CASE WHEN p.transactionType = 'burn' THEN p.pointsTransaction ELSE 0 END) AS burned
+FROM pointtransaction p
+WHERE 1=1
+" . sql_time_filter('p.generate_at', $timeInterval, $timeConditionToday);
+
+$result = $conn->query($pointsOverallSql);
+$pointsOverall = $result->fetch_assoc() ?? ['earned'=>0,'burned'=>0];
+
+
 
 // -----------------------------
 // 11. User Details
@@ -313,6 +389,8 @@ $alertRes = $conn->query($alertSql);
 $lowStockCount = $conn->query("SELECT COUNT(*) as cnt FROM reward WHERE stockQuantity < 5 AND is_active = 1")->fetch_assoc()['cnt'] ?? 0;
 
 include "includes/layout_start.php";
+
+
 ?>
 
 
@@ -403,7 +481,11 @@ const dashboardData = {
 
     // numbers
     totalUsers: <?= json_encode($totalUsers) ?>,
+    totalAdmin: <?= json_encode($totalAdmin) ?>,
+    totalModerator : <?= json_encode($totalModerator ) ?>,
     activeTeams: <?= json_encode($activeTeams) ?>,
+    newAdmins: <?= json_encode($newAdmins) ?>,
+    newModerators: <?= json_encode($newModerators) ?>,
     totalSubmissions: <?= json_encode($totalSubmissions) ?>,
     submissionCounts: <?= json_encode($submissionCounts) ?>,
 
@@ -413,10 +495,10 @@ const dashboardData = {
     topCategories: <?= json_encode($topCategories) ?>,
 
     // user analytics
-    roleDistribution: <?= json_encode($roleDistribution) ?>,
+    teamScores: <?= json_encode($teamScores ?? []) ?>,
     loginTrend: <?= json_encode($loginTrend) ?>,
     submissionActivity: <?= json_encode($submissionActivity) ?>,
-    pointsActivity: <?= json_encode($pointsActivity) ?>,
+      pointsOverall: <?= json_encode($pointsOverall) ?>,
 
     // challenge analytics
     challenge: {
@@ -446,7 +528,7 @@ const dashboardData = {
         trendData: <?= json_encode($trendData) ?>,
         topLabels: <?= json_encode($popLabels) ?>,
         topData: <?= json_encode($popData) ?>
-      
+
     }
 
 
@@ -465,6 +547,7 @@ function formatDate(dateStr) {
 </script>
 
 <div class="max-w-7xl mx-auto p-6">
+
   <div class="flex items-center justify-between mb-6">
     <div>
       <h1 class="text-2xl font-bold">Admin Dashboard</h1>
@@ -472,78 +555,87 @@ function formatDate(dateStr) {
     </div>
 
     <div class="flex items-center gap-3">
-      <label class="text-sm text-gray-700">Time Filter:</label>
       <select id="timeFilter" class="border rounded px-2 py-1" onchange="applyTimeFilter()">
         <option value="all" <?= $timeFilter === 'all' ? 'selected' : '' ?>>All</option>
+        <option value="today" <?= $timeFilter === 'today' ? 'selected' : '' ?>>Today</option>
         <option value="7" <?= $timeFilter === '7' ? 'selected' : '' ?>>Last 7 Days</option>
         <option value="30" <?= $timeFilter === '30' ? 'selected' : '' ?>>Last 30 Days</option>
       </select>
 
-      <button onclick="window.location.reload()" class="bg-blue-600 text-white px-3 py-1 rounded shadow">
-        <i class="fas fa-refresh"></i> Refresh
-      </button>
+        <button 
+            onclick="window.location = '?time=all'" 
+            class="bg-primary hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-md transition-colors"
+        >
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+
     </div>
   </div>
 
-    <!-- summary cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+<!-- summary cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 mb-2">
 
-        <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
+    <!-- Total Users -->
+    <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
         <div class="p-2 bg-blue-100 text-blue-600 rounded-xl">
             <!-- Users Icon -->
             <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M17 20h5v-2a4 4 0 00-4-4h-1M9 20H4v-2a4 4 0 014-4h1m4-4a4 4 0 100-8 4 4 0 000 8zm6 4a4 4 0 10-8 0" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M17 20h5v-2a4 4 0 00-4-4h-1M9 20H4v-2a4 4 0 014-4h1m4-4a4 4 0 100-8 4 4 0 000 8zm6 4a4 4 0 10-8 0" />
             </svg>
         </div>
         <div>
             <p class="stat-card-label">Total Users</p>
             <div class="stat-card-value" id="cardTotalUsers">—</div>
         </div>
-        </div>
+    </div>
 
-        <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
+    <!-- Total Admin -->
+    <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
         <div class="p-2 bg-green-100 text-green-600 rounded-xl">
-            <!-- User Plus -->
+            <!-- User Plus Icon -->
             <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M18 9a4 4 0 11-8 0 4 4 0 018 0zM12 14a6 6 0 00-6 6v1m13-7v4m0 0h4m-4 0h-4" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M18 9a4 4 0 11-8 0 4 4 0 018 0zM12 14a6 6 0 00-6 6v1m13-7v4m0 0h4m-4 0h-4" />
             </svg>
         </div>
         <div>
-            <p class="stat-card-label">New User (period)</p>
-            <div class="stat-card-value" id="cardNewUsers">—</div>
-        </div>
-        </div>
-
-        <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
-        <div class="p-2 bg-purple-100 text-purple-600 rounded-xl">
-            <!-- Team -->
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M17 20h5v-2a4 4 0 00-4-4h-1M7 20H2v-2a4 4 0 014-4h1m5-4a4 4 0 100-8 4 4 0 000 8z" />
-            </svg>
-        </div>
-        <div>
-            <p class="stat-card-label">Active Teams (period)</p>
-            <div class="stat-card-value" id="cardActiveTeams">—</div>
-        </div>
-        </div>
-
-        <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
-        <div class="p-2 bg-orange-100 text-orange-600 rounded-xl">
-            <!-- Document -->
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z" />
-            </svg>
-        </div>
-        <div>
-            <p class="stat-card-label">Total Submission (period)</p>
-            <div class="stat-card-value" id="cardTotalSubmissions">—</div>
-        </div>
+            <p class="stat-card-label">Total Admin</p>
+            <div class="stat-card-value" id="cardTotalAdmin">—</div>
         </div>
     </div>
+
+    <!-- Total Teams -->
+    <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
+        <div class="p-2 bg-purple-100 text-purple-600 rounded-xl">
+            <!-- Team Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M17 20h5v-2a4 4 0 00-4-4h-1M7 20H2v-2a4 4 0 014-4h1m5-4a4 4 0 100-8 4 4 0 000 8z" />
+            </svg>
+        </div>
+        <div>
+            <p class="stat-card-label">Total Teams</p>
+            <div class="stat-card-value" id="cardActiveTeams">—</div>
+        </div>
+    </div>
+
+    <!-- Total Submission -->
+    <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
+        <div class="p-2 bg-orange-100 text-orange-600 rounded-xl">
+            <!-- Document Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z" />
+            </svg>
+        </div>
+        <div>
+            <p class="stat-card-label">Total Moderator</p>
+            <div class="stat-card-value" id="cardTotalSubmissions">—</div>
+        </div>
+    </div>
+
+</div>
 
   <!-- tabs -->
     <div class="bg-white rounded-2xl shadow-lg p-6">
@@ -637,8 +729,8 @@ function formatDate(dateStr) {
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
                 <div class="bg-gray-50 p-6 rounded-xl shadow-md border border-gray-200 h-64"> 
-                    <h3 class="font-bold text-lg mb-4 text-gray-800">Users by Role</h3>
-                    <div class="h-4/5"> <canvas id="roleDistributionChart" class="w-full h-full"></canvas>
+                    <h3 class="font-bold text-lg mb-4 text-gray-800">Team Overview</h3>
+                    <div class="h-4/5"> <canvas id="teamScoreChart" class="w-full h-full"></canvas>
                     </div>
                 </div>
 
@@ -657,7 +749,7 @@ function formatDate(dateStr) {
                 </div>
 
                 <div class="bg-gray-50 p-6 rounded-xl shadow-md border border-gray-200 h-64">
-                    <h3 class="font-bold text-lg mb-4 text-gray-800">Points Earned vs Burned</h3>
+                    <h3 class="font-bold text-lg mb-4 text-gray-800">Overall Points Earned vs Burned</h3>
                     <div class="h-4/5">
                         <canvas id="pointsActivityChart" class="w-full h-full"></canvas>
                     </div>
@@ -819,12 +911,13 @@ function applyTimeFilter(){
 dashboardData.trendWindow = <?= $timeInterval ?? 30 ?>; // 7 / 30 / all default 30
 
 // fill summary cards
+
 function loadSummaryCards(){
-  document.getElementById('cardTotalUsers').innerText = dashboardData.totalUsers ?? 0;
-  const newUsersCount = (dashboardData.newUsers || []).reduce((s, d) => s + (parseInt(d.cnt)||0), 0);
-  document.getElementById('cardNewUsers').innerText = newUsersCount;
-  document.getElementById('cardActiveTeams').innerText = dashboardData.activeTeams ?? 0;
-  document.getElementById('cardTotalSubmissions').innerText = dashboardData.totalSubmissions ?? 0;
+    // dashboardData 从后端 PHP JSON 输出
+    document.getElementById('cardTotalUsers').innerText = dashboardData.totalUsers ?? 0;
+    document.getElementById('cardTotalAdmin').innerText = dashboardData.totalAdmin ?? 0;
+    document.getElementById('cardActiveTeams').innerText = dashboardData.activeTeams ?? 0;
+    document.getElementById('cardTotalSubmissions').innerText = dashboardData.totalModerator ?? 0;
 }
 loadSummaryCards();
 
@@ -913,12 +1006,14 @@ function initGrowthChart(dashboardData) {
     // -----------------------------
     // 1️⃣ 整理日期轴（以 submissionTrend 为主）
     // -----------------------------
-    const submissionTrend = dashboardData.submissionTrend || [];
+    
     const newUsers = dashboardData.newUsers || [];
+    const newAdmins = dashboardData.newAdmins || [];
+    const newModerators = dashboardData.newModerators || [];
 
     const dateSet = new Set();
 
-    submissionTrend.forEach(r => r.day && dateSet.add(r.day));
+    
     newUsers.forEach(r => r.day && dateSet.add(r.day));
 
     const labels = Array.from(dateSet).sort();
@@ -928,27 +1023,30 @@ function initGrowthChart(dashboardData) {
     // -----------------------------
     const newUsersMap = {};
     newUsers.forEach(r => newUsersMap[r.day] = Number(r.cnt || 0));
+    
+    const newAdminsMap = {};
+    newAdmins.forEach(r => newAdminsMap[r.day] = Number(r.cnt || 0));
 
-    const submissionMap = {};
-    submissionTrend.forEach(r => {
-        submissionMap[r.day] =
-            Number(r.pending || 0) +
-            Number(r.approved || 0) +
-            Number(r.denied || 0);
-    });
 
+    const newModeratorsMap = {};
+    newModerators.forEach(r => newModeratorsMap[r.day] = Number(r.cnt || 0));
+
+ 
+
+    const newModeratorsSeries = labels.map(d => newModeratorsMap[d] || 0);
     const newUsersSeries = labels.map(d => newUsersMap[d] || 0);
-    const submissionsSeries = labels.map(d => submissionMap[d] || 0);
+    const newAdminsSeries = labels.map(d => newAdminsMap[d] || 0);
 
     // -----------------------------
     // 3️⃣ ECharts 配置
     // -----------------------------
     chart.setOption({
-        tooltip: { trigger: 'axis' },
-        legend: {
-            data: ['New Users', 'Submissions'],
-            top: 10
-        },
+    tooltip: { trigger: 'axis' },
+    legend: {
+        data: ['New Users', 'New Admins', 'New Moderators'],
+        top: 10,
+        textStyle: { fontSize: 12 }
+    },
         grid: {
             top: 60,
             left: '6%',
@@ -965,7 +1063,7 @@ function initGrowthChart(dashboardData) {
             type: 'value',
             minInterval: 1
         },
-        series: [
+       series: [
             {
                 name: 'New Users',
                 type: 'line',
@@ -975,12 +1073,20 @@ function initGrowthChart(dashboardData) {
                 lineStyle: { width: 3 }
             },
             {
-                name: 'Submissions',
+                name: 'New Admins',
                 type: 'line',
                 smooth: true,
-                data: submissionsSeries,
+                data: newAdminsSeries,
                 symbolSize: 6,
-                lineStyle: { width: 3 }
+                lineStyle: { width: 3, color:'red' } 
+            },
+            {
+                name: 'New Moderators',
+                type: 'line',
+                smooth: true,
+                data: newModeratorsSeries,
+                symbolSize: 6,
+                lineStyle: { width: 3, color:'purple' } 
             }
         ]
     });
@@ -1242,16 +1348,50 @@ window.submissionCharts.cat = new Chart(ctxCat, {
 function initUsersTab(){
   window.usersCharts = {};
 
-  // role doughnut
-  const roleCtx = document.getElementById('roleDistributionChart').getContext('2d');
-  window.usersCharts.role = new Chart(roleCtx, {
-    type:'doughnut',
-    data:{
-      labels: Object.keys(dashboardData.roleDistribution || {}),
-      datasets:[{ data: Object.values(dashboardData.roleDistribution || {}), backgroundColor:['#4F46E5','#22C55E','#F59E0B','#EF4444'] }]
+  // team doughnut
+
+const teamCtx = document.getElementById('teamScoreChart').getContext('2d');
+
+window.usersCharts.teamScore = new Chart(teamCtx, {
+    type: 'bar', // 横向条形图
+    data: {
+        labels: (dashboardData.teamScores || []).map(t => t.teamName),
+        datasets: [{
+            label: 'Team Score',
+            data: (dashboardData.teamScores || []).map(t => t.teamPoints),
+            backgroundColor: '#4F46E5',
+            borderRadius: 16, // 和 KPI 卡圆角一致
+            barThickness: 18
+        }]
     },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
-  });
+    options: {
+        indexAxis: 'y', // 横向 bar
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: ctx => `Score: ${ctx.parsed.x}`
+                }
+            }
+        },
+        scales: {
+            x: {
+                beginAtZero: true,
+                grid: { color: '#E5E7EB' },
+                ticks: { color: '#374151' } // 字体颜色统一
+            },
+            y: {
+                grid: { display: false },
+                ticks: { color: '#374151' }
+            }
+        }
+    }
+});
+
+
+
 
   // login trend
   const loginCtx = document.getElementById('loginTrendChart').getContext('2d');
@@ -1270,18 +1410,38 @@ function initUsersTab(){
   });
 
   // points earned vs burned
-  const pointsCtx = document.getElementById('pointsActivityChart').getContext('2d');
-  window.usersCharts.points = new Chart(pointsCtx, {
-    type:'bar',
-    data:{
-      labels:(dashboardData.pointsActivity||[]).map(r=>r.name),
-      datasets:[
-        { label:'Earned', data:(dashboardData.pointsActivity||[]).map(r=>r.earned), backgroundColor:'#4F46E5' },
-        { label:'Burned', data:(dashboardData.pointsActivity||[]).map(r=>r.burned), backgroundColor:'#F59E0B' }
-      ]
-    },
-    options:{ responsive:true, maintainAspectRatio:false }
-  });
+const pointsCtx = document
+  .getElementById('pointsActivityChart')
+  .getContext('2d');
+
+window.usersCharts.points = new Chart(pointsCtx, {
+  type: 'doughnut',
+  data: {
+    labels: ['Earned', 'Burned'],
+    datasets: [{
+      data: [
+        dashboardData.pointsOverall.earned,
+        dashboardData.pointsOverall.burned
+      ],
+      backgroundColor: ['#4F46E5', '#F59E0B']
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom' },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => `${ctx.label}: ${ctx.parsed}`
+        }
+      }
+    }
+  }
+});
+
+
+
 }
 
 /* Reward tab */

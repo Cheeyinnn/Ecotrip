@@ -2,10 +2,13 @@
 session_start();
 date_default_timezone_set('Asia/Kuala_Lumpur'); // for timing
 require 'db_connect.php';
-require_once "includes/auth.php";  // <--- REQUIRED FIRST
+require_once "includes/auth.php";  
 
-// moderator_id
-$moderatorId = $_SESSION['userID'] ?? 6;
+
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'moderator') {
+    header("Location: index.php");
+    exit;
+}
 
 
 $pageTitle = "Moderator Review";
@@ -686,11 +689,6 @@ const paginationState = {
     denied: 1
 };
 
-function capitalize(str) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-
     document.addEventListener('DOMContentLoaded', function () {
 
         initSubmitItemClick();
@@ -934,34 +932,24 @@ if (searchInput) {
    AJAX Review Submit
 ========================= */
 const reviewForm = document.getElementById('review-form');
+
 if (reviewForm) {
-    reviewForm.addEventListener('submit', function (e) {
-        e.preventDefault();  // prevent page reload 
+   reviewForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(reviewForm);
 
-
-        const formData = new FormData(reviewForm);
-
-        fetch('review_submission.php', {
-            method: 'POST',
-            body: formData
-        })
-        .then(res => res.json())
+    fetch('review_submission.php', { method:'POST', body: formData })
+    .then(res => res.json())
     .then(data => {
         if (!data.success) {
             alert(data.message || 'Review failed');
             return;
         }
 
-        const item = document.querySelector(
-            `.submit-item[data-id="${data.submission_id}"]`
-        );
-
+        const item = document.querySelector(`.submit-item[data-id="${data.submission_id}"]`);
         updateRightPanelAfterReview(data);
-
-        // Pending -1
         updateAccordionCount('pending', -1);
 
-        // Approved / Denied +1
         if (data.status === 'approved') {
             updateAccordionCount('approved', +1);
             moveItemToAccordion(item, 'Approved');
@@ -975,10 +963,19 @@ if (reviewForm) {
         renderAccordionPage('denied');
 
         autoSelectNextPending();
+    })
+    .catch(err => {
+        console.error(err);
+        alert('AJAX request failed. See console.');
     });
+});
 
-    });
 }
+
+function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 
 function removeLeftItem(id) {
     const item = document.querySelector(`.submit-item[data-id="${id}"]`);
@@ -1036,52 +1033,26 @@ function decreasePendingCount() {
 function updateAccordionCount(type, delta) {
     const span = document.getElementById(`${type}-count`);
     if (!span) return;
-
     const match = span.textContent.match(/\((\d+)\)/);
     if (!match) return;
-
-    let count = parseInt(match[1], 10);
-    count = Math.max(0, count + delta);
-
-    span.textContent = `${type.charAt(0).toUpperCase() + type.slice(1)} (${count})`;
+    let count = parseInt(match[1], 10) + delta;
+    count = Math.max(0, count);
+    span.textContent = `${capitalize(type)} (${count})`;
 }
 
 function moveItemToAccordion(item, targetStatus) {
-    if (!item) return;
-
     const headers = document.querySelectorAll('.accordion-header');
     let targetContent = null;
-
     headers.forEach(header => {
         if (header.textContent.includes(targetStatus)) {
             targetContent = header.nextElementSibling;
         }
     });
-
     if (!targetContent) return;
 
-    // 更新 data-status
-    item.dataset.status = targetStatus;
-
-    // 更新 badge
-    const badge = item.querySelector('.status-badge');
-    if (badge) {
-        badge.textContent = targetStatus;
-
-        if (targetStatus === 'Approved') {
-            badge.className =
-                'status-badge text-xs px-2 py-0.5 bg-success/10 text-success rounded-full';
-        } else {
-            badge.className =
-                'status-badge text-xs px-2 py-0.5 bg-danger/10 text-danger rounded-full';
-        }
-    }
-
-    // 仅移动 DOM，不展开 accordion
+    // 仅移动 DOM
     targetContent.appendChild(item);
-
 }
-
 function renderAccordionPage(status) {
         const items = Array.from(
             document.querySelectorAll(`.submit-item[data-status="${capitalize(status)}"]`)
