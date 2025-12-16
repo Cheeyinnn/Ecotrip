@@ -221,11 +221,12 @@ $topCategories = $conn->query($topCategoriesQuery)->fetch_all(MYSQLI_ASSOC);
 // -----------------------------
 // 7. Team Overview
 // -----------------------------
-// ============================
-// Team Overall Rank - for admin (all teams)
+
+$dateCondition = sql_time_filter('pt.generate_at', $timeInterval, $timeConditionToday);
+
 $team_sql = "
 SELECT t.teamID, t.teamName,
-       COALESCE(SUM(CASE WHEN pt.transactionType='earn' $dateCondition THEN pt.pointsTransaction ELSE 0 END),0) AS teamPoints
+       COALESCE(SUM(CASE WHEN pt.transactionType='earn' " . $dateCondition . " THEN pt.pointsTransaction ELSE 0 END),0) AS teamPoints
 FROM team t
 LEFT JOIN user u ON u.teamID = t.teamID
 LEFT JOIN pointtransaction pt ON pt.userID = u.userID
@@ -239,14 +240,13 @@ if ($team_result) {
     while($row = $team_result->fetch_assoc()){
         $teamRanks[] = [
             'teamName' => $row['teamName'],
-            'teamPoints' => (int)$row['teamPoint']
+            'teamPoints' => (int)$row['teamPoints'] // 注意这里是 teamPoints，不是 teamPoint
         ];
     }
 }
 
+// 输出到 JS
 $teamRanksJson = json_encode($teamRanks);
-
-
 
 // -----------------------------
 // 8. Login Trend
@@ -495,7 +495,7 @@ const dashboardData = {
     topCategories: <?= json_encode($topCategories) ?>,
 
     // user analytics
-    teamScores: <?= json_encode($teamScores ?? []) ?>,
+    teamScores: <?= json_encode($teamRanks ?? []) ?>,
     loginTrend: <?= json_encode($loginTrend) ?>,
     submissionActivity: <?= json_encode($submissionActivity) ?>,
       pointsOverall: <?= json_encode($pointsOverall) ?>,
@@ -1402,12 +1402,53 @@ window.usersCharts.teamScore = new Chart(teamCtx, {
   });
 
   // submission activity
-  const subCtx = document.getElementById('submissionActivityChart').getContext('2d');
-  window.usersCharts.sub = new Chart(subCtx, {
-    type:'bar',
-    data:{ labels:(dashboardData.submissionActivity||[]).map(r=>r.name), datasets:[{ label:'Submissions', data:(dashboardData.submissionActivity||[]).map(r=>r.submissions), backgroundColor:'#22C55E' }]},
-    options:{ responsive:true, maintainAspectRatio:false }
-  });
+const subCtx = document.getElementById('submissionActivityChart').getContext('2d');
+
+window.usersCharts.sub = new Chart(subCtx, {
+    type: 'bar',
+    data: {
+        labels: (dashboardData.submissionActivity || []).map(r => r.name),
+        datasets: [{
+            label: 'Submissions',
+            data: (dashboardData.submissionActivity || []).map(r => r.submissions),
+            backgroundColor: (ctx) => {
+                const colors = ['#22C55E','#10B981','#3B82F6','#F59E0B','#EF4444'];
+                return colors[ctx.dataIndex % colors.length];
+            },
+            borderRadius: 8,       // 柱子圆角
+            borderSkipped: false,  // 圆角完整显示
+            maxBarThickness: 50    // 最大宽度
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: false // 不显示图例
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return context.dataset.label + ': ' + context.parsed.y;
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                grid: { display: false }, // 去掉 X 轴网格线
+                ticks: { color: '#4B5563', font: { size: 12, weight: '500' } }
+            },
+            y: {
+                beginAtZero: true,
+                grid: { color: '#E5E7EB' }, // 轻灰色网格线
+                ticks: { color: '#4B5563', font: { size: 12, weight: '500' }, stepSize: 1 }
+            }
+        }
+    }
+});
+
 
   // points earned vs burned
 const pointsCtx = document
