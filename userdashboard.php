@@ -251,13 +251,13 @@ function statusTag($status) {
                     <circle cx="12" cy="12" r="10" stroke-width="2" />
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v10h10" />
                 </svg>
-                Chart
-            </button>
+                Quick View
+        </button>
 
         </div>
        
         <div class="bg-purple-50 p-4 rounded-xl border border-purple-200">
-            <p class="text-sm text-purple-700 font-bold underline ">Total Points Earned (Approved Only)</p>
+            <p class="text-sm text-purple-700 font-bold underline ">Overall Total Points Earned (Approved Only)</p>
             <h3 class="text-2xl font-bold text-purple-800"><?= $points ?></h3>
         </div>
     </div>

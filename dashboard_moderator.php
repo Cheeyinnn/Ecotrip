@@ -5,27 +5,29 @@ require_once "db_connect.php";
 $timeFilter = $_GET['time'] ?? 'all';
 
 $days = null;
+$todayCondition = '';
+
 if ($timeFilter === '7') {
     $days = 7;
 } elseif ($timeFilter === '30') {
     $days = 30;
+} elseif ($timeFilter === 'today') {
+    $todayCondition = " AND DATE(uploaded_at) = CURDATE()";
 }
 
+// 对 submissions 的时间条件
 $timeCondition = '';
 if ($days !== null) {
     $timeCondition = " AND uploaded_at >= NOW() - INTERVAL $days DAY";
+} elseif ($timeFilter === 'today') {
+    $timeCondition = " AND DATE(uploaded_at) = CURDATE()";
 }
-
-
 
 // ======================
 // 1. Overall Counts
 // ======================
-$totalSubmission = $conn->query("
-    SELECT COUNT(*) AS c
-    FROM sub
-    WHERE 1=1 $timeCondition
-")->fetch_assoc()['c'];
+$totalSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE 1=1 $timeCondition")->fetch_assoc()['c'];
+
 
 $pendingSubmission = $conn->query("
     SELECT COUNT(*) AS c
@@ -51,8 +53,10 @@ $deniedSubmission = $conn->query("
 // ======================
 // 4. Approval Rate Donut
 // ======================
-$approveCount = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='approved'")->fetch_assoc()['c'];
-$rejectCount = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='denied'")->fetch_assoc()['c'];
+$approveCount = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='approved' $timeCondition")->fetch_assoc()['c'];
+$rejectCount  = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='denied' $timeCondition")->fetch_assoc()['c'];
+
+
 
 // 5. Challenge Type Count - FIXED
 
@@ -67,7 +71,10 @@ $challengeTypeSQL = "
 
 if ($days !== null) {
     $challengeTypeSQL .= " AND sub.uploaded_at >= NOW() - INTERVAL $days DAY";
+} elseif ($timeFilter === 'today') {
+    $challengeTypeSQL .= " AND DATE(sub.uploaded_at) = CURDATE()";
 }
+
 
 $challengeTypeSQL .= "
     GROUP BY category.categoryName
@@ -86,18 +93,21 @@ while ($c = $challengeType->fetch_assoc()) {
 }
 
 
-// 6. Approval Trend - FIXED
 
+// 6. Approval Trend
 $trendSQL = "
     SELECT DATE(uploaded_at) AS d,
            SUM(status='approved') AS approved,
-           SUM(status='denied') AS denied
+           SUM(status='denied') AS denied,
+           SUM(status='pending') AS pending
     FROM sub
     WHERE 1=1
 ";
 
 if ($days !== null) {
     $trendSQL .= " AND uploaded_at >= NOW() - INTERVAL $days DAY";
+} elseif ($timeFilter === 'today') {
+    $trendSQL .= " AND DATE(uploaded_at) = CURDATE()";
 }
 
 $trendSQL .= "
@@ -111,23 +121,15 @@ $trendData = $conn->query($trendSQL);
 $trendDates = [];
 $trendApproved = [];
 $trendDenied = [];
+$trendPending = [];
 
 while ($t = $trendData->fetch_assoc()) {
     $trendDates[] = $t['d'];
     $trendApproved[] = (int)$t['approved'];
     $trendDenied[] = (int)$t['denied'];
+    $trendPending[] = (int)$t['pending'];
 }
 
-
-$trendDates = [];
-$trendApproved = [];
-$trendDenied = [];
-mysqli_data_seek($trendData, 0);
-while ($t = $trendData->fetch_assoc()) {
-    $trendDates[] = $t['d'];
-    $trendApproved[] = (int)$t['approved'];
-    $trendDenied[] = (int)$t['denied'];
-}
 
 // 7. Daily Trend - FIXED
 $dailySQL = "
@@ -137,6 +139,7 @@ $dailySQL = "
     GROUP BY DATE(uploaded_at)
     ORDER BY d
 ";
+
 
 $dailyData = $conn->query($dailySQL);
 
@@ -154,18 +157,18 @@ while ($d = $dailyData->fetch_assoc()) {
 // 8. Participant stats
 // ======================
 $totalUsers = $conn->query("SELECT COUNT(*) AS c FROM user")->fetch_assoc()['c'];
-$activeUsersSQL = "
-    SELECT COUNT(*) AS c 
-    FROM user
-    WHERE 1=1
-";
 
-if ($timeFilter !== 'all') {
+$activeUsersSQL = "SELECT COUNT(*) AS c FROM user WHERE 1=1";
+if ($timeFilter === '7' || $timeFilter === '30') {
     $activeUsersSQL .= " AND last_online >= NOW() - INTERVAL $days DAY";
+} elseif ($timeFilter === 'today') {
+    $activeUsersSQL .= " AND DATE(last_online) = CURDATE()";
 }
 
 
 $activeUsers = $conn->query($activeUsersSQL)->fetch_assoc()['c'];
+
+
 
 $topUsersSQL = "
     SELECT user.firstName, user.scorePoint
@@ -175,16 +178,18 @@ $topUsersSQL = "
 ";
 $topUsers = $conn->query($topUsersSQL);
 
-// PHP - 新增 Average Review Time 查询
+
+// PHP -  Average Review Time 
 $avgReviewTimeSQL = "
     SELECT AVG(TIMESTAMPDIFF(MINUTE, uploaded_at, approved_at)) AS avg_minutes
     FROM sub
     WHERE status IN ('approved', 'denied') $timeCondition
     AND approved_at IS NOT NULL
 ";
+
 $avgMinutes = $conn->query($avgReviewTimeSQL)->fetch_assoc()['avg_minutes'];
 
-// 计算平均时长（假设 $avgMinutes 是分钟数）
+
 $avgHours = round($avgMinutes / 60, 1);
 
 
@@ -392,11 +397,15 @@ include "includes/layout_start.php";
             <div class="flex items-center gap-3">
                 <select id="timeFilter" class="border rounded px-2 py-1 shadow-sm focus:ring-primary focus:border-primary" onchange="applyTimeFilter()">
                     <option value="all" <?= $timeFilter === 'all' ? 'selected' : '' ?>>All Time</option>
+                    <option value="today" <?= $timeFilter === 'today' ? 'selected' : '' ?>>Today</option>
                     <option value="7" <?= $timeFilter === '7' ? 'selected' : '' ?>>Last 7 Days</option>
                     <option value="30" <?= $timeFilter === '30' ? 'selected' : '' ?>>Last 30 Days</option>
                 </select>
 
-                <button onclick="window.location.reload()" class="bg-primary hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-md transition-colors">
+                <button 
+                    onclick="window.location = '?time=all'" 
+                    class="bg-primary hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-md transition-colors"
+                >
                     <i class="fas fa-sync-alt"></i> Refresh
                 </button>
             </div>
@@ -513,6 +522,8 @@ const challengeValues = <?= json_encode($challengeValues) ?>;
 const trendDates = <?= json_encode($trendDates) ?>;
 const trendApproved = <?= json_encode($trendApproved) ?>;
 const trendDenied = <?= json_encode($trendDenied) ?>;
+const trendPending = <?= json_encode($trendPending) ?>;
+
 
 const dailyDates = <?= json_encode($dailyDates) ?>;
 const dailyTotals = <?= json_encode($dailyTotals) ?>; 
@@ -665,60 +676,80 @@ document.addEventListener('DOMContentLoaded', function () {
     // ============================
     // 4. Approval Trend (Line Chart)
     // ============================
-    const approvalTrendChart = echarts.init(document.getElementById('approvalTrendChart'));
+        const approvalTrendChart = echarts.init(document.getElementById('approvalTrendChart'));
 
-    approvalTrendChart.setOption({
-        tooltip: { trigger: 'axis' },
-        legend: {
-            data: ['Approved', 'Rejected'],
-            bottom: 0,
-            icon: 'circle' // 使用圆形图标
-        },
-        xAxis: {
-            type: 'category',
-            data: trendDates.length ? trendDates : ['No Data'],
-            axisLine: { lineStyle: { color: '#ccc' } }
-        },
-        yAxis: { 
-            type: 'value',
-            splitLine: { lineStyle: { type: 'dashed' } }
-        },
-        grid: {
-             left: '3%', right: '4%', bottom: '15%', containLabel: true
-        },
-        series: [
-            {
-                name: 'Approved',
-                type: 'line',
-                smooth: true,
-                symbol: 'none', // 不显示数据点
-                itemStyle: { color: '#52C41A' }, // Success Green
-                areaStyle: {
-                    opacity: 0.1,
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        { offset: 0, color: 'rgba(82, 196, 26, 0.4)' },
-                        { offset: 1, color: 'rgba(82, 196, 26, 0)' }
-                    ])
-                },
-                data: trendApproved.length ? trendApproved : [0]
+        approvalTrendChart.setOption({
+            tooltip: { trigger: 'axis' },
+            legend: {
+                data: ['Pending', 'Approved', 'Rejected'], // 改顺序
+                bottom: 0,
+                icon: 'circle'
             },
-            {
-                name: 'Rejected',
-                type: 'line',
-                smooth: true,
-                symbol: 'none',
-                itemStyle: { color: '#FF4D4F' }, // Danger Red
-                areaStyle: {
-                    opacity: 0.1,
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        { offset: 0, color: 'rgba(255, 77, 79, 0.4)' },
-                        { offset: 1, color: 'rgba(255, 77, 79, 0)' }
-                    ])
+            xAxis: {
+                type: 'category',
+                data: trendDates.length ? trendDates : ['No Data'],
+                axisLine: { lineStyle: { color: '#ccc' } }
+            },
+            yAxis: { 
+                type: 'value',
+                splitLine: { lineStyle: { type: 'dashed' } }
+            },
+            grid: {
+                left: '3%', right: '4%', bottom: '15%', containLabel: true
+            },
+            series: [
+                {
+                    name: 'Pending', // 第1条
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'none',
+                    itemStyle: { color: '#FAAD14' }, // Warning Yellow
+                    areaStyle: {
+                        opacity: 0.1,
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(250,173,20,0.4)' },
+                            { offset: 1, color: 'rgba(250,173,20,0)' }
+                        ])
+                    },
+                    data: trendPending.length ? trendPending : [0]
                 },
-                data: trendDenied.length ? trendDenied : [0]
-            }
-        ]
-    });
+                {
+                    name: 'Approved', // 第2条
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'none',
+                    itemStyle: { color: '#52C41A' }, // Success Green
+                    areaStyle: {
+                        opacity: 0.1,
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(82, 196, 26, 0.4)' },
+                            { offset: 1, color: 'rgba(82, 196, 26, 0)' }
+                        ])
+                    },
+                    data: trendApproved.length ? trendApproved : [0]
+                },
+                {
+                    name: 'Rejected', // 第3条
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'none',
+                    itemStyle: { color: '#FF4D4F' }, // Danger Red
+                    areaStyle: {
+                        opacity: 0.1,
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(255, 77, 79, 0.4)' },
+                            { offset: 1, color: 'rgba(255, 77, 79, 0)' }
+                        ])
+                    },
+                    data: trendDenied.length ? trendDenied : [0]
+                }
+            ]
+        });
+
+
+
+
+
 
     // 调整图表大小以适应窗口变化
     window.dashboardCharts = {
@@ -742,7 +773,7 @@ function applyTimeFilter() {
 
 </script>
 
-<?php // include "includes/layout_end.php"; ?>
+<?php include "includes/layout_end.php"; ?>
 
   </body>
 </html>

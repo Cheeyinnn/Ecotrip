@@ -12,26 +12,44 @@ include("db_connect.php");
 // Time filter
 $timeFilter = $_GET['time'] ?? 'all';
 
+// 默认时间条件为空
 $days = null;
+$subTimeCondition = '';
+$redeemTimeCondition = '';
+
+// 根据 filter 设置时间条件
 if ($timeFilter === '7') {
     $days = 7;
+    $subTimeCondition = " AND uploaded_at >= NOW() - INTERVAL 7 DAY";
+    $redeemTimeCondition = " AND requested_at >= NOW() - INTERVAL 7 DAY";
 } elseif ($timeFilter === '30') {
     $days = 30;
+    $subTimeCondition = " AND uploaded_at >= NOW() - INTERVAL 30 DAY";
+    $redeemTimeCondition = " AND requested_at >= NOW() - INTERVAL 30 DAY";
+} elseif ($timeFilter === 'today') {
+    $subTimeCondition = " AND DATE(uploaded_at) = CURDATE()";
+    $redeemTimeCondition = " AND DATE(requested_at) = CURDATE()";
+} else {
+    // all time
+    $subTimeCondition = '';
+    $redeemTimeCondition = '';
 }
 
-// sub 表的时间条件
-$subTimeCondition = '';
-if ($days !== null) {
-    $subTimeCondition = " AND uploaded_at >= NOW() - INTERVAL $days DAY";
-}
+// ============================
 
-// redemptionrequest 表的时间条件
-$redeemTimeCondition = '';
-if ($days !== null) {
-    $redeemTimeCondition = " AND requested_at >= NOW() - INTERVAL $days DAY";
-}
+// User participated challenge count
+$sql_challenge_count = "
+    SELECT COUNT(DISTINCT challengeID) AS challengeCount
+    FROM sub
+    WHERE userID = ? $subTimeCondition
+";
+$stmt = $conn->prepare($sql_challenge_count);
+$stmt->bind_param("i", $userID);
+$stmt->execute();
+$challengeCount = $stmt->get_result()->fetch_assoc()['challengeCount'] ?? 0;
+$stmt->close();
 
-
+// ============================
 // Fetch points (used for myPoints card)
 $sql_points = "SELECT walletPoint AS totalPoints FROM user WHERE userID = ?";
 $stmt_points = $conn->prepare($sql_points);
@@ -42,9 +60,23 @@ $myPoints = ($row = $result->fetch_assoc()) ? (int)$row['totalPoints'] : 0;
 $stmt_points->close();
 
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////
-//submission section
+// ============================
 
+// User Rank
+$rankStmt = $conn->prepare("
+    SELECT COUNT(*) + 1 AS rank 
+    FROM user 
+    WHERE walletPoint > ?
+");
+$rankStmt->bind_param("i", $currentPoints); // 用 currentPoints（已经根据 filter 计算）
+$rankStmt->execute();
+$userRank = $rankStmt->get_result()->fetch_assoc()['rank'];
+$rankStmt->close();
+
+
+
+// ============================
+// Submission counts
 $sql_subs = "SELECT 
         SUM(CASE WHEN status = 'Approved' THEN 1 ELSE 0 END) AS approvedCount,
         SUM(CASE WHEN status = 'Pending' THEN 1 ELSE 0 END) AS pendingCount,
@@ -64,13 +96,9 @@ $deniedCount = $res_subs['deniedCount'] ?? 0;
 $totalSubmission = $res_subs['totalSubmission'] ?? 0;
 $stmt_subs->close();
 
-
+// ============================
+// Submission details
 $submissionDetails = [];
-
-$subTimeCondition = '';
-if ($days !== null) {
-    $subTimeCondition = " AND s.uploaded_at >= NOW() - INTERVAL $days DAY";
-}
 
 $sql_sub_details = "
     SELECT s.status, s.pointEarned, s.reviewNote, s.uploaded_at, c.challengeTitle
@@ -92,10 +120,8 @@ while($row = $res_sub_details->fetch_assoc()){
 
 $stmt_sub_details->close();
 
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////
-// challenge section
-// 按 filter 取出该用户 Approved 的 submission
+// ============================
+// Challenge section
 $sql_challenges = "
     SELECT 
         c.challengeID,
@@ -117,23 +143,19 @@ $stmt->execute();
 $result = $stmt->get_result();
 
 $userChallenges = [];
-
 while ($row = $result->fetch_assoc()) {
     $userChallenges[] = [
         'name'   => $row['challengeTitle'],
-        'points' => (int)$row['totalPoints'],   // 成功获得的总分
-        'times'  => (int)$row['approvedSubmissions'], // 该挑战成功次数
+        'points' => (int)$row['totalPoints'],
+        'times'  => (int)$row['approvedSubmissions'],
         'status' => 'Completed'
     ];
 }
 $stmt->close();
 
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////
-//reward section
-
-// 1. 获取 teamID 和 teamName (修正 JOIN 逻辑)
+// ============================
+// Reward section
+// User team
 $sql_user_team = "
     SELECT u.teamID, t.teamName 
     FROM user u 
@@ -147,31 +169,28 @@ $userTeamInfo = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
 $teamID = $userTeamInfo['teamID'] ?? null;
-$teamName = $userTeamInfo['teamName'] ?? null; // 确保获取正确的 teamName
+$teamName = $userTeamInfo['teamName'] ?? null;
 
-
-// A. User Summary Stats (更新为使用修正后的 $teamName)
-$stmt = $conn->prepare("
+// ============================
+// User summary stats (跟 filter 一起走)
+$sql_current_points = "
     SELECT 
-        u.walletPoint, 
-        (SELECT SUM(pointSpent) FROM redemptionrequest WHERE userID = ?) AS totalSpent,
-        (SELECT COUNT(*) FROM redemptionrequest WHERE userID = ?) AS totalRedeemed
-    FROM user u
-    WHERE u.userID = ?
-");
+        COALESCE((SELECT SUM(pointEarned) FROM sub WHERE userID = ? $subTimeCondition),0) AS earnedPoints,
+        COALESCE((SELECT SUM(pointSpent) FROM redemptionrequest WHERE userID = ? $redeemTimeCondition),0) AS spentPoints,
+        COALESCE((SELECT COUNT(*) FROM redemptionrequest WHERE userID = ? $redeemTimeCondition),0) AS totalRedeemed
+";
+$stmt = $conn->prepare($sql_current_points);
 $stmt->bind_param("iii", $userID, $userID, $userID);
 $stmt->execute();
 $summary = $stmt->get_result()->fetch_assoc();
-
-$currentPoints = $summary['walletPoint'];
-$totalSpent = $summary['totalSpent'] ?? 0;
-$totalRedeemed = $summary['totalRedeemed'] ?? 0;
-// $teamName 变量已在上面正确获取
-
 $stmt->close();
 
+$currentPoints = (int)$summary['earnedPoints'] - (int)$summary['spentPoints'];
+$totalSpent = (int)$summary['spentPoints'];
+$totalRedeemed = (int)$summary['totalRedeemed'];
 
-// B. Chart Data 1: Points Spent Trend (根据 filter)
+// ============================
+// Points Spent Trend
 $trendSql = "SELECT DATE(requested_at) AS date, SUM(pointSpent) AS total 
              FROM redemptionrequest 
              WHERE userID = ? $redeemTimeCondition
@@ -191,46 +210,34 @@ while($row = $trendRes->fetch_assoc()){
 }
 $stmt->close();
 
-
-// C. Chart Data 2: Category Distribution (按 Reward Name 分组，且只计算 Approved 状态的兑换)
+// ============================
+// Category distribution
 $catLabels = [];
 $catData = [];
-
 $catSql = "
     SELECT r.rewardName, r.imageURL, COUNT(*) AS count
     FROM redemptionrequest rr
     JOIN reward r ON rr.rewardID = r.rewardID
     WHERE rr.userID = ? 
-      AND rr.status = 'Approved'  -- ❗️ 关键修正：只计入已批准的兑换
+      AND rr.status = 'Approved'
       $redeemTimeCondition
     GROUP BY r.rewardName, r.imageURL
     ORDER BY count DESC
 ";
-
 $stmt = $conn->prepare($catSql);
 $stmt->bind_param("i", $userID);
 $stmt->execute();
 $catRes = $stmt->get_result();
-
 while($row = $catRes->fetch_assoc()){
-    // 使用 rewardName 作为标签
-    $catLabels[] = $row['rewardName']; 
+    $catLabels[] = $row['rewardName'];
     $catData[] = (int)$row['count'];
 }
-
 $stmt->close();
-// 确保您在 include layout_start.php 之前，将 $catLabels 和 $catData 编码为 JSON:
 
-
-
-// D. Recent Activity List 根据 filter
+// ============================
+// Recent activity
 $recentActivity = [];
-
-$timeCondition = '';
-if ($days !== null) {
-    $timeCondition = " AND rr.requested_at >= NOW() - INTERVAL $days DAY";
-}
-
+$timeCondition = $redeemTimeCondition; 
 $recentSql = "
     SELECT rr.*, r.rewardName, r.imageURL, r.category
     FROM redemptionrequest rr
@@ -239,20 +246,17 @@ $recentSql = "
     ORDER BY rr.requested_at DESC
     LIMIT 5
 ";
-
 $stmt = $conn->prepare($recentSql);
 $stmt->bind_param("i", $userID);
 $stmt->execute();
 $recentRes = $stmt->get_result();
-$recentActivity = [];
 while($row = $recentRes->fetch_assoc()){
     $recentActivity[] = $row;
 }
 $stmt->close();
 
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////
-//team rank section (已修复为显示实时 walletPoint)
+// ============================
+// Personal Team rank section
 $userHasTeam = false;
 $teamRankMessage = '';
 $teamRank = [];
@@ -264,14 +268,13 @@ if ($teamID === null) {
 } else {
     $userHasTeam = true;
 
-    // 查询 team leaderboard (基于实时 walletPoint)
     $sql_leaderboard_wallet = "
         SELECT 
             u.userID,
             u.firstName,
             u.lastName,
-            u.walletPoint AS totalPoints, -- 直接使用实时钱包积分
-            (SELECT SUM(walletPoint) FROM user WHERE teamID = ?) AS teamTotalPoints -- 计算团队实时总积分
+            u.walletPoint AS totalPoints,
+            (SELECT SUM(walletPoint) FROM user WHERE teamID = ?) AS teamTotalPoints
         FROM user u
         WHERE u.teamID = ?
         ORDER BY u.walletPoint DESC
@@ -296,7 +299,6 @@ if ($teamID === null) {
             $personalRank = $rankCounter;
         }
 
-        // 拿到团队总积分，只用一次即可
         if ($rankCounter === 1) {
             $teamTotalPoint = (int)($row['teamTotalPoints'] ?? 0);
         }
@@ -307,6 +309,49 @@ if ($teamID === null) {
     $stmt2->close();
 }
 
+// ============================
+// Team Overall Rank（用户所在团队在所有团队中的排名）
+$myTeamRank = 0; // 初始化，避免 Undefined variable
+$myTeamPoints = 0;
+$myTeamName = $teamName ?? '';
+
+if ($teamID !== null) {
+    // 根据 filter 设置日期条件
+    $dateCondition = '';
+    if ($timeFilter === '7') {
+        $dateCondition = " AND pt.generate_at >= NOW() - INTERVAL 7 DAY";
+    } elseif ($timeFilter === '30') {
+        $dateCondition = " AND pt.generate_at >= NOW() - INTERVAL 30 DAY";
+    } elseif ($timeFilter === 'today') {
+        $dateCondition = " AND DATE(pt.generate_at) = CURDATE()";
+    }
+
+    // 查询所有团队积分
+    $team_sql = "
+        SELECT t.teamID, COALESCE(SUM(pt.pointsTransaction),0) AS teamPoints
+        FROM team t
+        LEFT JOIN user u ON u.teamID = t.teamID
+        LEFT JOIN pointtransaction pt ON pt.userID = u.userID AND pt.transactionType = 'earn' $dateCondition
+        GROUP BY t.teamID
+        ORDER BY teamPoints DESC
+    ";
+
+    $team_result = $conn->query($team_sql);
+    $rankCounter = 1;
+
+    if ($team_result) {
+        while ($row = $team_result->fetch_assoc()) {
+            if ($row['teamID'] == $teamID) {
+                $myTeamRank = $rankCounter; // 找到该用户团队排名
+                $myTeamPoints = $row['teamPoints'];
+                break; // 找到就可以退出循环
+            }
+            $rankCounter++;
+        }
+    }
+}
+
+
 $submissionDetailsJson = json_encode($submissionDetails);
 $trendLabelsJson = json_encode($trendLabels ?? []);
 $trendDataJson = json_encode($trendData ?? []);
@@ -315,9 +360,12 @@ $catDataJson = json_encode($catData ?? []);
 
 include "includes/layout_start.php";
 
-
-
 ?>
+
+
+
+
+
     <script src="https://res.gemcoder.com/js/reload.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
@@ -537,11 +585,15 @@ include "includes/layout_start.php";
                    <div class="flex items-center gap-3">
                         <select id="timeFilter" class="border rounded-lg px-3 py-2 bg-white shadow-sm focus:ring-primary focus:border-primary" onchange="applyTimeFilter()">
                             <option value="all" <?= $timeFilter === 'all' ? 'selected' : '' ?>>All Time</option>
+                            <option value="today" <?= $timeFilter === 'today' ? 'selected' : '' ?>>Today</option>
                             <option value="7" <?= $timeFilter === '7' ? 'selected' : '' ?>>Last 7 Days</option>
                             <option value="30" <?= $timeFilter === '30' ? 'selected' : '' ?>>Last 30 Days</option>
                         </select>
-                        <button onclick="window.location.reload()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded-lg shadow-sm transition">
-                            <i class="fas fa-sync-alt"></i> Refresh 
+                       <button 
+                            onclick="window.location = '?time=all'" 
+                            class="bg-primary hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-md transition-colors"
+                        >
+                            <i class="fas fa-sync-alt"></i> Refresh
                         </button>
                    </div>
             </div>
@@ -549,19 +601,19 @@ include "includes/layout_start.php";
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
 
                 <div class="card-eco border-l-4 border-eco-primary">
-                    <div class="stat-label-small">My Current Points</div>
+                    <div class="stat-label-small">Personal Rank</div>
                     <div class="stat-value-large eco-text-point mt-2 flex items-center gap-2">
-                        <i class="fas fa-coins text-2xl"></i> <?= number_format($myPoints); ?>
+                        <i class="fas fa-trophy text-2xl"></i> <?= number_format($userRank); ?> 
                     </div>
-                    <div class="text-xs text-gray-500 mt-2">Available for redemption</div>
                 </div>
 
-                <div class="card-eco border-l-4 border-green-500">
-                    <div class="stat-label-small">Approved Submissions</div>
-                    <div class="stat-value-large text-green-600 mt-2 flex items-center gap-2">
-                        <i class="fas fa-check-circle text-2xl"></i> <?= number_format($approvedCount); ?>
+
+                <div class="card-eco border-l-4 border-eco-primary">
+                    <div class="stat-label-small"> Challenge Paticipated </div>
+                    <div class="stat-value-large eco-text-point mt-2 flex items-center gap-2">
+                        <i class="fa-solid fa-paper-plane text-2xl"></i> <?= number_format($challengeCount); ?>
                     </div>
-                </div>
+                </div>
 
                 <div class="card-eco border-l-4 border-yellow-500">
                     <div class="stat-label-small">Team Joined</div>
@@ -569,10 +621,10 @@ include "includes/layout_start.php";
                         <div class="text-xl font-bold text-gray-900 mt-2 flex items-center gap-2">
                              <i class="fas fa-users text-yellow-600"></i> <?= htmlspecialchars($teamName) ?>
                         </div>
-                        <div class="text-xs text-gray-500 mt-2">Your Team Rank: <span class="font-semibold text-yellow-600">#<?= $personalRank ?></span></div>
+                        <div class="text-xs text-gray-500 mt-2">Team Rank: <span class="font-semibold text-yellow-600">#<?= $myTeamRank ?> </span></div>
                     <?php else: ?>
                         <div class="text-lg font-bold text-gray-700 mt-2">No Team Joined</div>
-                        <p class="text-xs text-gray-500 mt-2">Join a team to compete!</p>
+                        <p class="text-xs text-gray-500 mt-2">Join a team !</p>
                     <?php endif; ?>
                 </div>
 
@@ -588,6 +640,7 @@ include "includes/layout_start.php";
             
             
             <h3 class="text-2xl font-bold text-gray-800 pt-4 border-t border-gray-200">Contribution Analytics</h3>
+
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 <div class="card-eco">

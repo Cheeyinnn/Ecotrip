@@ -397,12 +397,9 @@ include "includes/layout_start.php";
                         data-thumbnail="<?= $submission['thumbnail']; ?>"
                         data-challenge-id="<?= htmlspecialchars($submission['challengeID']); ?>"
                         data-challenge-title="<?= htmlspecialchars($submission['challengeTitle']); ?>"
-                        data-challenge-desc="<?= htmlspecialchars($submission['challengeDesc']); ?>"
-                        data-challenge-city="<?= htmlspecialchars($submission['challengeCity']); ?>"
-                        data-challenge-points="<?= $submission['points']; ?>"
-                        data-feedback="<?= htmlspecialchars($submission['feedback']); ?>"
-                        data-is-resubmit="<?= $submission['isResubmit'] ? 'true' : 'false'; ?>"
+                        data-challenge-desc="<?= htmlspecialchars($submission['challengeDesc']); ?>"        
                     >
+
 
                         <img alt="thumbnail" class="w-14 h-14 rounded-lg object-cover flex-shrink-0"
                             src="<?= $submission['thumbnail']; ?>" />
@@ -430,6 +427,14 @@ include "includes/layout_start.php";
 
 
                     <?php endforeach; ?>
+
+                    <!-- Pagination container-->
+                      <div class="pagination m-3 flex justify-center gap-2"
+                            data-status="<?= $key ?>">
+                            <div></div>
+                    </div>
+
+
                 </div>
             </div>
             <?php endforeach; ?>
@@ -528,21 +533,23 @@ include "includes/layout_start.php";
 
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
 
-                                <div>
+                                <div class="md:col-span-3">
                                     <p class="text-xs text-neutral-400 mb-0.5">Description</p>
-                                    <p class="text-sm font-medium text-neutral-700" id="challenge-desc">
-                                        <?= $currentSubmission['challengeDesc']; ?>
+                                    <p class="text-sm font-medium text-neutral-700 line-clamp-3"
+                                        id="challenge-desc">
                                     </p>
                                 </div>
 
                                 <div>
                                     <p class="text-xs text-neutral-400 mb-0.5">Reward Points</p>
-                                    <p class="text-sm font-medium text-neutral-700" id="challenge-points">
-                                        <?= $currentSubmission['points']; ?>
+                                    <p class="text-sm font-medium text-neutral-700"
+                                        id="challenge-points">
                                     </p>
+
                                 </div>
 
                             </div>
+
 
                         </div>
 
@@ -671,26 +678,42 @@ include "includes/layout_start.php";
 
 <script id="page-interactions">
 
-document.addEventListener('DOMContentLoaded', function () {
+const PAGE_SIZE = 5;
+
+const paginationState = {
+    pending: 1,
+    approved: 1,
+    denied: 1
+};
+
+function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+
+    document.addEventListener('DOMContentLoaded', function () {
 
         initSubmitItemClick();
         initReviewResultRadio();
         initTimeFilterAutoSubmit();
 
-        // 自动展开 Pending accordion（不点 submission）
-        const pendingAccordion = Array.from(document.querySelectorAll('.accordion-header'))
-            .find(h => h.textContent.includes('Pending'));
-        if (pendingAccordion) {
-            pendingAccordion.click();
-        }
+        ['pending','approved','denied'].forEach(status => {
+            renderAccordionPage(status);
+        });
 
-        // 只有 pending 存在，才自动点第一个
+        const pendingAccordion = Array.from(
+            document.querySelectorAll('.accordion-header')
+        ).find(h => h.textContent.includes('Pending'));
+
+        if (pendingAccordion) pendingAccordion.click();
+
         const firstPending = document.querySelector('.submit-item[data-status="Pending"]');
-        if (firstPending) {
-            firstPending.click();
-        }
+        if (firstPending) firstPending.click();
     });
 
+
+
+ 
 
 
 function initSubmitItemClick() {
@@ -708,6 +731,7 @@ function initSubmitItemClick() {
     const challengeCityEl = document.getElementById('challenge-city');
     const challengePointsEl = document.getElementById('challenge-points');
     const detailImageEl = document.getElementById('detail-image');
+    
 
 
     submitItems.forEach(item => {
@@ -946,6 +970,10 @@ if (reviewForm) {
             moveItemToAccordion(item, 'Denied');
         }
 
+        renderAccordionPage('pending');
+        renderAccordionPage('approved');
+        renderAccordionPage('denied');
+
         autoSelectNextPending();
     });
 
@@ -1051,7 +1079,80 @@ function moveItemToAccordion(item, targetStatus) {
 
     // 仅移动 DOM，不展开 accordion
     targetContent.appendChild(item);
+
 }
+
+function renderAccordionPage(status) {
+        const items = Array.from(
+            document.querySelectorAll(`.submit-item[data-status="${capitalize(status)}"]`)
+        );
+
+        const page = paginationState[status];
+        const start = (page - 1) * PAGE_SIZE;
+        const end = start + PAGE_SIZE;
+
+        items.forEach((item, index) => {
+            item.style.display = (index >= start && index < end) ? 'flex' : 'none';
+        });
+
+        renderPaginationControls(status, items.length);
+
+        const accordion = document
+            .querySelector(`.pagination[data-status="${status}"]`)
+            ?.closest('.accordion-content');
+
+        if (accordion && accordion.style.maxHeight) {
+            accordion.style.maxHeight = accordion.scrollHeight + 'px';
+        }
+
+
+    }
+
+
+    function renderPaginationControls(status, totalItems) {
+        const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+        const container = document.querySelector(`.pagination[data-status="${status}"]`);
+
+        if (!container || totalPages <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+
+        container.innerHTML = `
+            <button class="px-3 py-1 border rounded flex items-center gap-1"
+                ${paginationState[status] === 1 ? 'disabled' : ''}
+                onclick="changePage('${status}', -1)">
+
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 19l-7-7 7-7"/>
+                </svg>
+            </button>
+
+            <span class="px-2 text-sm">
+                Page ${paginationState[status]} / ${totalPages}
+            </span>
+
+            <button class="px-3 py-1 border rounded flex items-center gap-1"
+                ${paginationState[status] === totalPages ? 'disabled' : ''}
+                onclick="changePage('${status}', 1)">
+
+
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 5l7 7-7 7"/>
+                </svg>
+            </button>
+
+        `;
+    }
+
+    function changePage(status, delta) {
+        paginationState[status] += delta;
+        renderAccordionPage(status);
+    }
 
 
 
