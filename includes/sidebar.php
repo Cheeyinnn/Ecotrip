@@ -115,7 +115,7 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
                     <a href="rewardAdmin.php" class="sidebar-link <?= isActive('rewardAdmin.php') ?>">Reward Settings</a>
                     <a href="reviewRR.php" class="sidebar-link <?= isActive('reviewRR.php') ?>">Review Requests</a>
                     <a href="rewards.php" class="sidebar-link <?= isActive('rewards.php') ?>">View Rewards</a>
-                    <a href="adminReward_board.php" class="sidebar-link <?= isActive('adminReward_board.php') ?>">Reward Analysis</a>
+                   
                 </div>
             </div>
         <?php endif; ?>
@@ -167,7 +167,7 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
                 </div>
                 <div id="user-rewards" class="sidebar-dropdown-content">
                     <a href="rewards.php" class="sidebar-link <?= isActive('rewards.php') ?>">Browse Rewards</a>
-                    <a href="userReward_board.php" class="sidebar-link <?= isActive('userReward_board.php') ?>">Reward Analysis</a>
+                    
                 </div>
             </div>
 

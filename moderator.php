@@ -119,6 +119,7 @@ if ($res && $res->num_rows > 0) {
              'id' => $row['submissionID'],
              'user' => $row['firstName'] . ' ' . $row['lastName'],
              'title' => $row['caption'] ?: 'No Caption',
+
              'thumbnail' => $row['filePath'] ?: 'placeholder.jpg',
              'status' => ucfirst(strtolower($row['status'])),
              'status_class' => match(strtolower($row['status'])) {
@@ -390,6 +391,7 @@ include "includes/layout_start.php";
                     <div class="submit-item p-3 rounded-lg hover:bg-neutral-50 mb-2 cursor-pointer flex"
 
                         data-id="<?= $submission['id']; ?>"
+                        data-bigtitle="<?= htmlspecialchars($submission['title']); ?>"
                         data-title="<?= htmlspecialchars($submission['title']); ?>"
                         data-user="<?= htmlspecialchars($submission['user']); ?>"
                         data-status="<?= $submission['status']; ?>"
@@ -489,7 +491,11 @@ include "includes/layout_start.php";
                         
                         <div class="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6 pb-6 border-b border-gray-100">
                             <div class="pl-4 border-l-4 border-blue-600 space-y-2">
-                                <h2 id="detail-title" class="text-2xl font-extrabold text-gray-800 tracking-tight leading-tight">
+                                <p class="text-lg font-semibold text-blue-600 uppercase tracking-wide">
+                                    Caption:
+                                </p>
+                                <h2 id="detail-title" class="text-2xl text-gray-800 tracking-tight leading-tight">
+
                                     <?= $currentSubmission['title']; ?>
                                 </h2>
 

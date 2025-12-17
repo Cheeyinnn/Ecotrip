@@ -1205,43 +1205,70 @@ dashboardData.challenge.cityLabels.forEach((label, index) => {
     });
 
 
-const catCtx = document.getElementById("challengeCatChart").getContext("2d");
+const catCtx = document
+    .getElementById("challengeCatChart")
+    .getContext("2d");
+
 new Chart(catCtx, {
     type: "doughnut",
     data: {
         labels: dashboardData.challenge.catLabels,
         datasets: [{
             data: dashboardData.challenge.catCounts,
-            backgroundColor: ['#6366f1','#ec4899','#06b6d4','#f59e0b','#10b981']
+            backgroundColor: [
+                '#6366f1', // indigo
+                '#10b981', // emerald
+                '#f59e0b', // amber
+                '#ec4899', // pink
+                '#06b6d4'  // cyan
+            ],
+            borderWidth: 0
         }]
     },
     options: {
-        // 1. **减少中心空白区域 (甜甜圈变厚)**
-        cutout: '40%', // 将中心空白区域设置为 40%，圆环会更粗
-        
-        // 2. **图例左置**
-        plugins: {
-            legend: {
-                display: true, 
-                position: 'left',
-                align: 'center' 
+        responsive: true,
+        maintainAspectRatio: false,
+
+        // ⭐ 让圆环更厚，看起来更有力量
+        cutout: '55%',
+
+        layout: {
+            padding: {
+                left: 10,
+                right: 10,
+                top: 10,
+                bottom: 10
             }
         },
-        
-        // 3. **尝试让圆环向左侧移动 (可选，可能需要调试)**
-        // 通过调整布局的内边距，给右侧留出更多空间
-        layout: {
-             // 增加右侧内边距，理论上会将图表内容向左推
-             padding: {
-                 right: -200 // 可以尝试更大的值
-             }
-        },
-        
-        // 其他设置
-        responsive: true,
-        // position: 'right' 属性在 Chart 根配置中无效，已移除
+
+        plugins: {
+            legend: {
+                position: 'left',
+                align: 'center',
+                labels: {
+                    boxWidth: 14,
+                    boxHeight: 14,
+                    padding: 14,
+                    font: {
+                        size: 12,
+                        weight: '500'
+                    },
+                    color: '#374151'
+                }
+            },
+            tooltip: {
+                callbacks: {
+                    label: function (ctx) {
+                        const label = ctx.label || '';
+                        const value = ctx.parsed;
+                        return `${label}: ${value}`;
+                    }
+                }
+            }
+        }
     }
 });
+
 
 
     const pointsCtx = document.getElementById("challengePointsChart").getContext("2d");
