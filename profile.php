@@ -166,7 +166,7 @@ if (isset($_POST['upload_avatar']) && isset($_FILES['avatar'])) {
 
             } else {
 
-                $serverDir = __DIR__ . "/uploads";
+                $serverDir = __DIR__ . "/uploads/avatar/";
                 if (!is_dir($serverDir)) {
                     mkdir($serverDir, 0775, true);
                 }
@@ -176,7 +176,7 @@ if (isset($_POST['upload_avatar']) && isset($_FILES['avatar'])) {
 
                 if (move_uploaded_file($file['tmp_name'], $target)) {
 
-                    $avatarPath = "uploads/" . $fileName;
+                    $avatarPath = "uploads/avatar/" . $fileName;
 
                     $stmtAv = $conn->prepare("UPDATE user SET avatarURL=? WHERE userID=?");
                     $stmtAv->bind_param("si", $avatarPath, $id);
@@ -216,7 +216,8 @@ if (isset($_POST['upload_avatar']) && isset($_FILES['avatar'])) {
 // -------------------------------------
 $avatarPathPage = (!empty($user['avatarURL']) && file_exists(__DIR__ . '/' . $user['avatarURL']))
     ? $user['avatarURL']
-    : 'uploads/default.png';
+    : 'uploads/avatar/default.png';
+
 
 // -------------------------------------
 // PAGE TITLE (TOPBAR)
