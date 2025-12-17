@@ -124,7 +124,7 @@ $stmt->execute();
 $rewards = $stmt->get_result();
 
 function uploadImage($file) {
-    $targetDir = "uploads/";
+    $targetDir = "uploads/rewards/";
     if (!file_exists($targetDir)) mkdir($targetDir, 0777, true);
     $fileName = uniqid() . "_" . basename($file["name"]); 
     $targetFile = $targetDir . $fileName;
