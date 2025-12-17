@@ -66,6 +66,53 @@ function getHeroImageURL($title, $id) {
                     38 => 'https://malaysia.images.search.yahoo.com/images/view;_ylt=Awr93aMJ7kJphwoUjRTlPwx.;_ylu=c2VjA3NyBHNsawNpbWcEb2lkA2IwYmE4NjI0YjEwZmViNDQ4NTNkNGNmMTBhMjk2MzE3BGdwb3MDMjkEaXQDYmluZw--?back=https%3A%2F%2Fmalaysia.images.search.yahoo.com%2Fsearch%2Fimages%3Fp%3Dcycling%26ei%3DUTF-8%26fr%3Dmcafee-malaysia%26fr2%3Dp%253As%252Cv%253Ai%252Cm%253Asb-top%26tab%3Dorganic%26ri%3D29&w=1600&h=1068&imgurl=cdn.britannica.com%2F63%2F82563-050-3FCFC72A%2FFamily-country-road.jpg&rurl=https%3A%2F%2Fwww.britannica.com%2Ftechnology%2Fbicycle&size=369KB&p=cycling&oid=b0ba8624b10feb44853d4cf10a296317&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top&fr=mcafee-malaysia&tt=Bicycle+%7C+Definition%2C+History%2C+Types%2C+%26+Facts+%7C+Britannica&b=0&ni=80&no=29&ts=&tab=organic&sigr=Y60yMSYhGhES&sigb=6vPuZX4fpzzA&sigi=dsTxW41uJdyV&sigt=DXBNZJlqRAZ8&.crumb=Sj0dlJWGzYr&fr=mcafee-malaysia&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top',
                 ];
 
+    function getExactHeroImage($title) {
+    // 1. Clean the title
+    $t = strtolower(trim($title));
+
+    switch ($t) {
+        // --- 🔴 EXACT MATCHES (Same as View Page) ---
+       // --- CATEGORY: TRANSPORT ---
+        case 'bike to work':            return 'bicycle';
+        case 'walk the last mile':      return 'sneakers';
+        case 'carpool crew':            return 'automobile'; // 'carpool' is often misunderstood by AI
+        case 'public bus adventure':    return 'bus vehicle';
+
+        // --- CATEGORY: WASTE ---
+        case 'say no to straws':        return 'iced drinks '; // Shows drink without straw usually
+        case 'bring your bottle':       return 'reusable water bottle';
+        case 'tote bag shopper':        return 'reuseable bag';
+        case 'compost your scraps':     return 'compost bin';
+
+        // --- CATEGORY: FOOD ---
+        case 'meatless monday':         return 'vegetables';
+        case 'support local farmers':   return 'farmers market';
+        case 'vegan meal challenge':    return 'vegetables';
+        case 'love your leftovers':     return 'food container';
+
+        // --- CATEGORY: ENERGY & WATER ---
+        case 'unplug the vampires':     return 'electrical socket';
+        case 'cold wash cycle':         return 'washing machine';
+        case 'air dry laundry':         return 'clothesline';
+        case '5-minute shower':         return 'shower head';
+
+        // --- CATEGORY: NATURE ---
+        case 'plant a tree':            return 'planting tree';
+        case 'litter pickup':           return 'garbage';
+        case 'clean ocean promise':     return 'clean beach';
+        case 'wild bird watch':         return 'bird';
+
+        // --- FALLBACKS ---
+        default:
+            if (strpos($t, 'transport') !== false) return 'traffic';
+            if (strpos($t, 'food') !== false)      return 'fruit';
+            if (strpos($t, 'water') !== false)     return 'water drop';
+            if (strpos($t, 'energy') !== false)    return 'electricity';
+            return 'nature'; 
+    }
+}
+
+
     // 1. Check Custom List
     if (array_key_exists($id, $custom_urls)) {
         return $custom_urls[$id];
