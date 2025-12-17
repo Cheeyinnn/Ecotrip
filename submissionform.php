@@ -81,10 +81,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
 
     $allowedTypes = ['jpeg', 'png', 'jpg'];
-    $maxSize = 10 * 1024 * 1024; //10MB
+    $maxSize = 5 * 1024 * 1024; //10MB
 
     if ($fileError === 4) {
-        $uploadResults[] = "Error: Please Upload a File.";
+        $uploadResults[] = "Error: Please Upload a Picture.";
     } else {
 
         if (!in_array($fileExt, $allowedTypes)) {
@@ -272,7 +272,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 </li>
                                 <li class="flex items-start">
                                     <i class="fa fa-circle-check text-green-500 mt-1 mr-2"></i>
-                                    Max size: 10MB per picture.
+                                    Max size: 5MB per picture.
                                 </li>
                                 <li class="flex items-start">
                                     <i class="fa fa-circle-check text-green-500 mt-1 mr-2"></i>
@@ -364,9 +364,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         <div id="upload-placeholder" class="<?= !empty($existingSubmission['filePath']) ? 'hidden' : '' ?>">
                             <i class="fa fa-cloud-upload text-5xl text-green-500 opacity-80"></i>
-                            <p class="text-gray-700 font-medium mt-4">Drop Photo Here</p>
-                            <p class="text-gray-500 text-sm">or click to choose a file</p>
-                            <p class="text-xs text-gray-400 mt-4">Support JPG/PNG format, each picture not exceed 10MB</p>
+                            <p class="text-gray-700 font-medium mt-4">Click to choose a file</p>
+                            <p class="text-xs text-gray-400 mt-4">Support JPG/PNG format, each picture not exceed 5MB</p>
                         </div>
 
                         <input id="file-input" type="file" name="photo" class="hidden">
@@ -378,7 +377,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                       <!-- Caption -->
                     <div class="mb-4">
-                        <label class="block font-semibold mb-1">Caption</label>
+                        <label class="block font-semibold mb-1">Caption*</label>
                         <input type="text" name="caption" required
                             value="<?= htmlspecialchars($existingSubmission['caption'] ?? '') ?>"
                             class="w-full p-3 border border-gray-300 rounded-lg">
@@ -416,17 +415,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </html>
 
 <script>
+const hasExisting = <?= !empty($existingSubmission['filePath']) ? 'true' : 'false' ?>;
+const existingFilePath = "<?= htmlspecialchars($existingSubmission['filePath'] ?? '') ?>";
 
-   const hasExisting = <?= !empty($existingSubmission['filePath']) ? 'true' : 'false' ?>;
-    const existingFilePath = "<?= htmlspecialchars($existingSubmission['filePath'] ?? '') ?>";
+const fileInput = document.getElementById('file-input');
+const fileNameDisplay = document.getElementById('file-name');
+const cancelBtn = document.getElementById('cancel-btn');
+const previewContainer = document.getElementById("preview-container");
+const previewImage = document.getElementById("preview-image");
+const uploadPlaceholder = document.getElementById("upload-placeholder");
 
-    const fileInput = document.getElementById('file-input');
-    const fileNameDisplay = document.getElementById('file-name');
-    const cancelBtn = document.getElementById('cancel-btn');
-    const previewContainer = document.getElementById("preview-container");
-    const previewImage = document.getElementById("preview-image");
-    const uploadPlaceholder = document.getElementById("upload-placeholder");
-
+// 初始化显示
+function resetPreview() {
     if (hasExisting) {
         previewImage.src = existingFilePath;
         previewContainer.classList.remove("hidden");
@@ -435,48 +435,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         previewContainer.classList.add("hidden");
         uploadPlaceholder.classList.remove("hidden");
     }
+    fileNameDisplay.textContent = "";
+}
 
-    fileInput.addEventListener('change', function() {
-        const file = fileInput.files[0];
-        if (file && file.type.startsWith("image/")) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                previewImage.src = e.target.result;
-                previewContainer.classList.remove("hidden");
-                uploadPlaceholder.classList.add("hidden");
-            };
-            reader.readAsDataURL(file);
-            fileNameDisplay.textContent = "Selected file: " + file.name;
-        } else {
-            if (hasExisting) {
-                previewImage.src = existingFilePath;
-                previewContainer.classList.remove("hidden");
-                uploadPlaceholder.classList.add("hidden");
-            } else {
-                previewContainer.classList.add("hidden");
-                uploadPlaceholder.classList.remove("hidden");
-            }
-            fileNameDisplay.textContent = "";
-        }
-    });
+resetPreview();
 
-    cancelBtn.addEventListener('click', function () {
+// 文件选择事件
+fileInput.addEventListener('change', function() {
+    const file = fileInput.files[0];
+
+    if (!file) {
+        resetPreview();
+        return;
+    }
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
+    const maxSize = 5 * 1024 * 1024; // 5MB
+
+    // 显示文件名
+    fileNameDisplay.textContent = "Selected file: " + file.name;
+
+    // 类型检查
+    if (!allowedTypes.includes(file.type)) {
+        alert("Error: Unsupported file type! Please upload JPG/PNG only.");
         fileInput.value = "";
-        fileNameDisplay.textContent = "";
-        if (hasExisting) {
-            previewImage.src = existingFilePath;
-            previewContainer.classList.remove("hidden");
-            uploadPlaceholder.classList.add("hidden");
-        } else {
-            previewContainer.classList.add("hidden");
-            uploadPlaceholder.classList.remove("hidden");
-        }
-    });
+        resetPreview();
+        return;
+    }
 
+    // 大小检查
+    if (file.size > maxSize) {
+        alert("Error: File exceeds 5MB limit!");
+        fileInput.value = "";
+        resetPreview();
+        return;
+    }
 
+    // 显示预览
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        previewImage.src = e.target.result;
+        previewContainer.classList.remove("hidden");
+        uploadPlaceholder.classList.add("hidden");
+    };
+    reader.readAsDataURL(file);
+});
 
-
+// 取消按钮
+cancelBtn.addEventListener('click', function () {
+    fileInput.value = "";
+    resetPreview();
+});
 </script>
+
 
 <?php include "includes/layout_end.php"; ?>
 

@@ -251,13 +251,13 @@ function statusTag($status) {
                     <circle cx="12" cy="12" r="10" stroke-width="2" />
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v10h10" />
                 </svg>
-                Chart
-            </button>
+                Quick View
+        </button>
 
         </div>
        
         <div class="bg-purple-50 p-4 rounded-xl border border-purple-200">
-            <p class="text-sm text-purple-700 font-bold underline ">Total Points Earned (Approved Only)</p>
+            <p class="text-sm text-purple-700 font-bold underline ">Overall Total Points Earned (Approved Only)</p>
             <h3 class="text-2xl font-bold text-purple-800"><?= $points ?></h3>
         </div>
     </div>
@@ -334,124 +334,130 @@ function statusTag($status) {
         </div>
 
         <!-- Filter -->
-        <div class="flex justify-end mb-4 gap-4">
-
-            <label for="challenge_filter" class="mr-2 font-medium text-gray-700 self-center">Filter <small>by</small> Challenge:</label>
-            <select id="challenge_filter"
-                    class="px-3 py-2 border rounded-md shadow-sm"
+        <div class="flex flex-col sm:flex-row justify-end items-center gap-3 mb-6 w-full">
+            
+            <div class="relative group w-full sm:w-auto">
+                <select id="challenge_filter"
+                    class="w-full sm:w-64 pl-4 pr-10 py-2.5 bg-white/80 backdrop-blur-sm border border-gray-200 text-gray-700 text-sm rounded-xl shadow-sm hover:border-green-500 focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all appearance-none cursor-pointer font-medium"
                     onchange="window.location='userDashboard.php?status_filter=<?= htmlspecialchars($statusFilter) ?>&challenge_filter='+this.value;">
-                <option value="all" <?= $challengeFilter=='all'?'selected':'' ?>>All Challenges</option>
-               
-                <?php
-                // Iterate through the $challenges array fetched in step 1
-                foreach ($challenges as $challenge) {
-                    $selected = ($challengeFilter == $challenge['id']) ? 'selected' : '';
-                    echo "<option value='{$challenge['id']}' {$selected}>" . htmlspecialchars($challenge['name']) . "</option>";
-                }
-                ?>
-            </select>
-           
-            <label for="status_filter" class="mr-2 font-medium text-gray-700 self-center">Filter <small>by</small> Status:</label>
-            <select id="status_filter"
-                    class="px-3 py-2 border rounded-md shadow-sm"
+                    <option value="all" <?= $challengeFilter=='all'?'selected':'' ?>>All Challenges</option>
+                    <?php foreach ($challenges as $challenge): ?>
+                        <option value="<?= $challenge['id'] ?>" <?= ($challengeFilter == $challenge['id']) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($challenge['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                </div>
+            </div>
+
+            <div class="relative group w-full sm:w-auto">
+                <select id="status_filter"
+                    class="w-full sm:w-44 pl-4 pr-10 py-2.5 bg-white/80 backdrop-blur-sm border border-gray-200 text-gray-700 text-sm rounded-xl shadow-sm hover:border-green-500 focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all appearance-none cursor-pointer font-medium"
                     onchange="window.location='userDashboard.php?challenge_filter=<?= htmlspecialchars($challengeFilter) ?>&status_filter='+this.value;">
-                <option value="all" <?= $statusFilter=='all'?'selected':'' ?>>All</option>
-                <option value="pending" <?= $statusFilter=='pending'?'selected':'' ?>>Pending</option>
-                <option value="approved" <?= $statusFilter=='approved'?'selected':'' ?>>Approved</option>
-                <option value="denied" <?= $statusFilter=='denied'?'selected':'' ?>>Denied</option>
-            </select>
+                    <option value="all" <?= $statusFilter=='all'?'selected':'' ?>>Any Status</option>
+                    <option value="pending" <?= $statusFilter=='pending'?'selected':'' ?>>Pending</option>
+                    <option value="approved" <?= $statusFilter=='approved'?'selected':'' ?>>Approved</option>
+                    <option value="denied" <?= $statusFilter=='denied'?'selected':'' ?>>Denied</option>
+                </select>
+                <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                </div>
+            </div>
+
         </div>
 
         <!-- Table -->
         <div class="overflow-x-auto bg-white rounded-lg shadow">
-<div class="overflow-x-auto bg-white rounded-lg shadow">
-    <table class="w-full text-sm" id="datatablesSimple">
-        <thead class="bg-gray-50 text-gray-500">
-            <tr>
-                <th class="py-3 px-4">ID</th>
-                <th class="py-3 px-4">Photo</th>
-                <th class="py-3 px-4">Challenge</th>
-                <th class="py-3 px-4">Status</th>
-                <th class="py-3 px-4">Points</th>
-                <th class="py-3 px-4">Feedback</th>
-                <th class="py-3 px-4 ">Action</th>
-            </tr>
-        </thead>
+                <div class="overflow-x-auto bg-white rounded-lg shadow">
+                    <table class="w-full text-sm" id="datatablesSimple">
+                        <thead class="bg-gray-50 text-gray-500">
+                            <tr>
+                                <th class="py-3 px-4">ID</th>
+                                <th class="py-3 px-4">Photo</th>
+                                <th class="py-3 px-4">Challenge</th>
+                                <th class="py-3 px-4">Status</th>
+                                <th class="py-3 px-4">Points</th>
+                                <th class="py-3 px-4">Feedback</th>
+                                <th class="py-3 px-4 ">Action</th>
+                            </tr>
+                        </thead>
 
-        <tbody>
-            <?php if (empty($submissions)): ?>
-                <tr>
-                    <td colspan="7" class="text-center py-4 text-gray-500">No Submissions Found</td>
-                </tr>
-            <?php endif; ?>
+                        <tbody>
+                            <?php if (empty($submissions)): ?>
+                                <tr>
+                                    <td colspan="7" class="text-center py-4 text-gray-500">No Submissions Found</td>
+                                </tr>
+                            <?php endif; ?>
 
-            <?php foreach ($submissions as $item): ?>
-                <tr class="border-b hover:bg-gray-50">
-                    <td class="py-3 px-4 text-center align-middle"><?= $item["id"] ?></td>
+                            <?php foreach ($submissions as $item): ?>
+                                <tr class="border-b hover:bg-gray-50">
+                                    <td class="py-3 px-4 text-center align-middle"><?= $item["id"] ?></td>
 
-                    <td class="py-3 px-4 text-center align-middle">
-                        <img src="<?= $item["photo"] ?>"
-                            class="w-32 h-24 object-cover rounded border cursor-pointer"
-                            onclick="openModal('<?= $item["photo"] ?>')" />
-                    </td>
+                                    <td class="py-3 px-4 text-center align-middle">
+                                        <img src="<?= $item["photo"] ?>"
+                                            class="w-32 h-24 object-cover rounded border cursor-pointer"
+                                            onclick="openModal('<?= $item["photo"] ?>')" />
+                                    </td>
 
-                    <td class="py-3 px-4 align-middle"><?= htmlspecialchars($item["challenge"]) ?></td>
-                    <td class="py-3 px-4 text-center align-middle"><?= statusTag($item["status"]) ?></td>
+                                    <td class="py-3 px-4 align-middle"><?= htmlspecialchars($item["challenge"]) ?></td>
+                                    <td class="py-3 px-4 text-center align-middle"><?= statusTag($item["status"]) ?></td>
 
-                    <td class="py-3 px-4 text-center align-middle">
-                        <?php if ($item["status"] == "approved"): ?>
-                            <?= $item["points"] ?>
-                        <?php elseif ($item["status"] == "pending"): ?>
-                            <span class="text-yellow-600">Pending</span>
-                        <?php else: ?>
-                            <span class="text-red-500">0</span>
-                        <?php endif; ?>
-                    </td>
+                                    <td class="py-3 px-4 text-center align-middle">
+                                        <?php if ($item["status"] == "approved"): ?>
+                                            <?= $item["points"] ?>
+                                        <?php elseif ($item["status"] == "pending"): ?>
+                                            <span class="text-yellow-600">Pending</span>
+                                        <?php else: ?>
+                                            <span class="text-red-500">0</span>
+                                        <?php endif; ?>
+                                    </td>
 
-                    <td class="py-3 px-4 align-middle"><?= htmlspecialchars($item["feedback"]) ?></td>
+                                    <td class="py-3 px-4 align-middle"><?= htmlspecialchars($item["feedback"]) ?></td>
 
-                <td class="py-3 px-4 ">
-                    <?php
-                        $status = strtolower($item["status"]);
-                        $submissionId = $item["db_id"]; // Use actual submission ID from DB
+                                <td class="py-3 px-4 ">
+                                    <?php
+                                        $status = strtolower($item["status"]);
+                                        $submissionId = $item["db_id"]; // Use actual submission ID from DB
 
-                        if ($status === "pending") {
-                            echo '<span class="text-gray-400">—</span>';
-                        }
-                        elseif ($status === "denied") {
-                            if (($item["resubmitCount"] ?? 0) < 1) {
-                                // 允许 resubmit
-                                echo '<a href="submissionform.php?id=' . $submissionId . '"
-                                        class="inline-block px-4 py-2 text-sm font-medium border border-yellow-500
-                                            text-yellow-600 rounded-lg hover:bg-yellow-500 hover:text-white
-                                            transition-all duration-200">
-                                        Resubmit
-                                    </a>';
-                            } else {
- 
-                                echo '<span class="text-red-400">Challenge fail</span>';
-                            }
-                        }
-                        elseif ($status === "approved") {
-                            echo '<a a href="rewards.php"
-                                    class="inline-block px-4 py-2 text-sm font-medium border border-green-600
-                                        text-green-600 rounded-lg hover:bg-green-600 hover:text-white
-                                        transition-all duration-200">
-                                        Reward
-                                </a>';
-                        }
+                                        if ($status === "pending") {
+                                            echo '<span class="text-gray-400">—</span>';
+                                        }
+                                        elseif ($status === "denied") {
+                                            if (($item["resubmitCount"] ?? 0) < 1) {
+                                                // 允许 resubmit
+                                                echo '<a href="submissionform.php?id=' . $submissionId . '"
+                                                        class="inline-block px-4 py-2 text-sm font-medium border border-yellow-500
+                                                            text-yellow-600 rounded-lg hover:bg-yellow-500 hover:text-white
+                                                            transition-all duration-200">
+                                                        Resubmit
+                                                    </a>';
+                                            } else {
+                
+                                                echo '<span class="text-red-400">Challenge fail</span>';
+                                            }
+                                        }
+                                        elseif ($status === "approved") {
+                                            echo '<a a href="rewards.php"
+                                                    class="inline-block px-4 py-2 text-sm font-medium border border-green-600
+                                                        text-green-600 rounded-lg hover:bg-green-600 hover:text-white
+                                                        transition-all duration-200">
+                                                        Reward
+                                                </a>';
+                                        }
 
-                        ?>
+                                        ?>
 
-                </td>
+                                </td>
 
 
-                </tr>
-            <?php endforeach; ?>
-        </tbody>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
 
-    </table>
-</div>
+                    </table>
+                </div>
 
 <!-- Modal -->
 <div id="imageModal"

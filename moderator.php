@@ -2,10 +2,13 @@
 session_start();
 date_default_timezone_set('Asia/Kuala_Lumpur'); // for timing
 require 'db_connect.php';
-require_once "includes/auth.php";  // <--- REQUIRED FIRST
+require_once "includes/auth.php";  
 
-// moderator_id
-$moderatorId = $_SESSION['userID'] ?? 6;
+
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'moderator') {
+    header("Location: index.php");
+    exit;
+}
 
 
 $pageTitle = "Moderator Review";
@@ -397,12 +400,9 @@ include "includes/layout_start.php";
                         data-thumbnail="<?= $submission['thumbnail']; ?>"
                         data-challenge-id="<?= htmlspecialchars($submission['challengeID']); ?>"
                         data-challenge-title="<?= htmlspecialchars($submission['challengeTitle']); ?>"
-                        data-challenge-desc="<?= htmlspecialchars($submission['challengeDesc']); ?>"
-                        data-challenge-city="<?= htmlspecialchars($submission['challengeCity']); ?>"
-                        data-challenge-points="<?= $submission['points']; ?>"
-                        data-feedback="<?= htmlspecialchars($submission['feedback']); ?>"
-                        data-is-resubmit="<?= $submission['isResubmit'] ? 'true' : 'false'; ?>"
+                        data-challenge-desc="<?= htmlspecialchars($submission['challengeDesc']); ?>"        
                     >
+
 
                         <img alt="thumbnail" class="w-14 h-14 rounded-lg object-cover flex-shrink-0"
                             src="<?= $submission['thumbnail']; ?>" />
@@ -430,6 +430,14 @@ include "includes/layout_start.php";
 
 
                     <?php endforeach; ?>
+
+                    <!-- Pagination container-->
+                      <div class="pagination m-3 flex justify-center gap-2"
+                            data-status="<?= $key ?>">
+                            <div></div>
+                    </div>
+
+
                 </div>
             </div>
             <?php endforeach; ?>
@@ -438,7 +446,7 @@ include "includes/layout_start.php";
     </div>
 </div>
 
-            <div class="lg:col-span-2">
+            <div class="lg:col-span-2" id="submission-list">
                 <div class="bg-white rounded-xl shadow-card h-full flex flex-col">
                     <div class="p-4 border-b border-neutral-100 flex justify-between items-center">
                         <h3 class="font-medium text-neutral-700">Submission Details</h3>
@@ -451,7 +459,7 @@ include "includes/layout_start.php";
                             </button>
                         </div>
                     </div>
-                    <div class="flex-1 overflow-y-auto scrollbar-hide p-4">
+                    <div class="flex-1 overflow-y-auto scrollbar-hide p-2 space-y-3">
 
                     <!-- Placeholder：永远存在 -->
                         <div
@@ -528,21 +536,23 @@ include "includes/layout_start.php";
 
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
 
-                                <div>
+                                <div class="md:col-span-3">
                                     <p class="text-xs text-neutral-400 mb-0.5">Description</p>
-                                    <p class="text-sm font-medium text-neutral-700" id="challenge-desc">
-                                        <?= $currentSubmission['challengeDesc']; ?>
+                                    <p class="text-sm font-medium text-neutral-700 line-clamp-3"
+                                        id="challenge-desc">
                                     </p>
                                 </div>
 
                                 <div>
                                     <p class="text-xs text-neutral-400 mb-0.5">Reward Points</p>
-                                    <p class="text-sm font-medium text-neutral-700" id="challenge-points">
-                                        <?= $currentSubmission['points']; ?>
+                                    <p class="text-sm font-medium text-neutral-700"
+                                        id="challenge-points">
                                     </p>
+
                                 </div>
 
                             </div>
+
 
                         </div>
 
@@ -602,7 +612,7 @@ include "includes/layout_start.php";
 
                     <div class="mb-4">
                         <label class="block text-sm text-neutral-700 mb-2">Feedback</label>
-                        <textarea id="detail-feedback" name="feedback" class="w-full p-3 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all min-h-[100px]" placeholder="Please Enter Your Feedback..."><?= htmlspecialchars($currentSubmission['feedback'] ?? ''); ?></textarea>
+                        <textarea required id="detail-feedback" name="feedback" class="w-full p-3 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all min-h-[100px]" placeholder="Please Enter Your Feedback..."><?= htmlspecialchars($currentSubmission['feedback'] ?? ''); ?></textarea>
                     </div>
 
                     <button type="submit"
@@ -671,26 +681,37 @@ include "includes/layout_start.php";
 
 <script id="page-interactions">
 
-document.addEventListener('DOMContentLoaded', function () {
+const PAGE_SIZE = 5;
+
+const paginationState = {
+    pending: 1,
+    approved: 1,
+    denied: 1
+};
+
+    document.addEventListener('DOMContentLoaded', function () {
 
         initSubmitItemClick();
         initReviewResultRadio();
         initTimeFilterAutoSubmit();
 
-        // 自动展开 Pending accordion（不点 submission）
-        const pendingAccordion = Array.from(document.querySelectorAll('.accordion-header'))
-            .find(h => h.textContent.includes('Pending'));
-        if (pendingAccordion) {
-            pendingAccordion.click();
-        }
+        ['pending','approved','denied'].forEach(status => {
+            renderAccordionPage(status);
+        });
 
-        // 只有 pending 存在，才自动点第一个
+        const pendingAccordion = Array.from(
+            document.querySelectorAll('.accordion-header')
+        ).find(h => h.textContent.includes('Pending'));
+
+        if (pendingAccordion) pendingAccordion.click();
+
         const firstPending = document.querySelector('.submit-item[data-status="Pending"]');
-        if (firstPending) {
-            firstPending.click();
-        }
+        if (firstPending) firstPending.click();
     });
 
+
+
+ 
 
 
 function initSubmitItemClick() {
@@ -708,6 +729,7 @@ function initSubmitItemClick() {
     const challengeCityEl = document.getElementById('challenge-city');
     const challengePointsEl = document.getElementById('challenge-points');
     const detailImageEl = document.getElementById('detail-image');
+    
 
 
     submitItems.forEach(item => {
@@ -762,8 +784,6 @@ function initSubmitItemClick() {
 
                 submissionIdInput.value = id;
                 detailFeedbackTextarea.value = feedback;
-
-                const isResubmit = item.dataset.isResubmit === 'true'; 
 
                 if (status === 'pending') {
                     reviewFormBlock.style.display = 'block';
@@ -844,6 +864,16 @@ function initSubmitItemClick() {
         });
     });
 
+function scrollToSubmissionList() {
+    const list = document.getElementById('submission-list');
+    if (!list) return;
+
+    list.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+    });
+}
+
 
 
    
@@ -909,48 +939,92 @@ if (searchInput) {
 /* =========================
    AJAX Review Submit
 ========================= */
-const reviewForm = document.getElementById('review-form');
-if (reviewForm) {
-    reviewForm.addEventListener('submit', function (e) {
-        e.preventDefault();  // prevent page reload 
 
+    const reviewForm = document.getElementById('review-form');
 
-        const formData = new FormData(reviewForm);
+        if (reviewForm) {
+        reviewForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(reviewForm);
 
-        fetch('review_submission.php', {
-            method: 'POST',
-            body: formData
+            fetch('review_submission.php', { method:'POST', body: formData })
+            .then(res => res.json())
+            .then(data => {
+            if (!data.success) {
+                alert(data.message || 'Review failed');
+                return;
+            }
+
+            const item = document.querySelector(`.submit-item[data-id="${data.submission_id}"]`);
+            if (!item) return;
+
+            /* =========================
+            1️⃣ 更新 item 的 status（关键）
+            ========================= */
+            const newStatus = data.status.toLowerCase(); // approved / denied
+            const statusText = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+
+            item.dataset.status = statusText;
+
+            /* =========================
+            2️⃣ 更新 badge 文本 & 颜色
+            ========================= */
+            const badge = item.querySelector('.status-badge');
+            if (badge) {
+                badge.textContent = statusText;
+
+                badge.className =
+                    'status-badge text-xs px-2 py-0.5 rounded-full ' +
+                    (newStatus === 'approved'
+                        ? 'bg-success/10 text-success'
+                        : 'bg-danger/10 text-danger');
+            }
+
+            /* =========================
+            3️⃣ 更新右侧面板（静态模式）
+            ========================= */
+            updateRightPanelAfterReview(data);
+
+            /* =========================
+            4️⃣ 更新 Accordion 数量
+            ========================= */
+            updateAccordionCount('pending', -1);
+            updateAccordionCount(newStatus, +1);
+
+            /* =========================
+            5️⃣ 移动 item 到正确 accordion
+            ========================= */
+            moveItemToAccordion(item, statusText);
+
+            /* =========================
+            6️⃣ 重新分页 & 高度修正
+            ========================= */
+            ['pending', 'approved', 'denied'].forEach(s => renderAccordionPage(s));
+
+            /* =========================
+            7️⃣ 自动选择下一个 pending
+            （若没有 → 显示 All Reviewed）
+            ========================= */
+            autoSelectNextPending();
+
+            /* =========================
+            8️⃣ 回到 submission list
+            ========================= */
+            scrollToSubmissionList();
+
         })
-        .then(res => res.json())
-    .then(data => {
-        if (!data.success) {
-            alert(data.message || 'Review failed');
-            return;
-        }
-
-        const item = document.querySelector(
-            `.submit-item[data-id="${data.submission_id}"]`
-        );
-
-        updateRightPanelAfterReview(data);
-
-        // Pending -1
-        updateAccordionCount('pending', -1);
-
-        // Approved / Denied +1
-        if (data.status === 'approved') {
-            updateAccordionCount('approved', +1);
-            moveItemToAccordion(item, 'Approved');
-        } else {
-            updateAccordionCount('denied', +1);
-            moveItemToAccordion(item, 'Denied');
-        }
-
-        autoSelectNextPending();
+        .catch(err => {
+            console.error(err);
+            alert('AJAX request failed. See console.');
+        });
     });
 
-    });
 }
+
+function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 
 function removeLeftItem(id) {
     const item = document.querySelector(`.submit-item[data-id="${id}"]`);
@@ -958,15 +1032,18 @@ function removeLeftItem(id) {
 }
 
 function autoSelectNextPending() {
-    const nextPending = document.querySelector('.submit-item[data-status="Pending"]');
+    const pendingItems = Array.from(
+        document.querySelectorAll('.submit-item')
+    ).filter(item => item.dataset.status === 'Pending');
 
-    if (nextPending) {
-        nextPending.click();
+    if (pendingItems.length > 0) {
+        pendingItems[0].click();
     } else {
         document.getElementById('submission-details').style.display = 'none';
         document.getElementById('no-submission-placeholder').style.display = 'block';
     }
 }
+
 
 
 function updateRightPanelAfterReview(data) {
@@ -1008,50 +1085,97 @@ function decreasePendingCount() {
 function updateAccordionCount(type, delta) {
     const span = document.getElementById(`${type}-count`);
     if (!span) return;
-
     const match = span.textContent.match(/\((\d+)\)/);
     if (!match) return;
-
-    let count = parseInt(match[1], 10);
-    count = Math.max(0, count + delta);
-
-    span.textContent = `${type.charAt(0).toUpperCase() + type.slice(1)} (${count})`;
+    let count = parseInt(match[1], 10) + delta;
+    count = Math.max(0, count);
+    span.textContent = `${capitalize(type)} (${count})`;
 }
 
 function moveItemToAccordion(item, targetStatus) {
-    if (!item) return;
-
     const headers = document.querySelectorAll('.accordion-header');
     let targetContent = null;
-
     headers.forEach(header => {
         if (header.textContent.includes(targetStatus)) {
             targetContent = header.nextElementSibling;
         }
     });
-
     if (!targetContent) return;
 
-    // 更新 data-status
-    item.dataset.status = targetStatus;
-
-    // 更新 badge
-    const badge = item.querySelector('.status-badge');
-    if (badge) {
-        badge.textContent = targetStatus;
-
-        if (targetStatus === 'Approved') {
-            badge.className =
-                'status-badge text-xs px-2 py-0.5 bg-success/10 text-success rounded-full';
-        } else {
-            badge.className =
-                'status-badge text-xs px-2 py-0.5 bg-danger/10 text-danger rounded-full';
-        }
-    }
-
-    // 仅移动 DOM，不展开 accordion
+    // 仅移动 DOM
     targetContent.appendChild(item);
 }
+function renderAccordionPage(status) {
+        const items = Array.from(
+            document.querySelectorAll(`.submit-item[data-status="${capitalize(status)}"]`)
+        );
+
+        const page = paginationState[status];
+        const start = (page - 1) * PAGE_SIZE;
+        const end = start + PAGE_SIZE;
+
+        items.forEach((item, index) => {
+            item.style.display = (index >= start && index < end) ? 'flex' : 'none';
+        });
+
+        renderPaginationControls(status, items.length);
+
+        const accordion = document
+            .querySelector(`.pagination[data-status="${status}"]`)
+            ?.closest('.accordion-content');
+
+        if (accordion && accordion.style.maxHeight) {
+            accordion.style.maxHeight = accordion.scrollHeight + 'px';
+        }
+
+
+    }
+
+
+    function renderPaginationControls(status, totalItems) {
+        const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+        const container = document.querySelector(`.pagination[data-status="${status}"]`);
+
+        if (!container || totalPages <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+
+        container.innerHTML = `
+            <button class="px-3 py-1 border rounded flex items-center gap-1"
+                ${paginationState[status] === 1 ? 'disabled' : ''}
+                onclick="changePage('${status}', -1)">
+
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 19l-7-7 7-7"/>
+                </svg>
+            </button>
+
+            <span class="px-2 text-sm">
+                Page ${paginationState[status]} / ${totalPages}
+            </span>
+
+            <button class="px-3 py-1 border rounded flex items-center gap-1"
+                ${paginationState[status] === totalPages ? 'disabled' : ''}
+                onclick="changePage('${status}', 1)">
+
+
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 5l7 7-7 7"/>
+                </svg>
+            </button>
+
+        `;
+    }
+
+    function changePage(status, delta) {
+        paginationState[status] += delta;
+        renderAccordionPage(status);
+    }
 
 
 

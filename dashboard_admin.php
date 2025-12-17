@@ -2,185 +2,184 @@
 session_start();
 require_once "db_connect.php";
 
+
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
+    header("Location: index.php");
+    exit;
+}
+
+
 // -----------------------------
-// Time filter: 'all' | '7' | '30'
+// Time filter: 'all' | '7' | '30' | 'today'
 // -----------------------------
 $timeFilter = $_GET['time'] ?? 'all';
 $timeInterval = null;
-if ($timeFilter === '7') $timeInterval = 7;
-elseif ($timeFilter === '30') $timeInterval = 30;
+$timeConditionToday = false;
 
-// helper to return SQL condition (string or empty)
-function time_sql_condition($col, $interval) {
-    if (!$interval) return "";
-    return " AND {$col} >= DATE_SUB(CURDATE(), INTERVAL {$interval} DAY) ";
+switch($timeFilter) {
+    case '7':
+        $timeInterval = 7;
+        break;
+    case '30':
+        $timeInterval = 30;
+        break;
+    case 'today':
+        $timeConditionToday = true;
+        break;
+    default:
+        // 'all' -> keep both null/false
+        break;
 }
 
 // -----------------------------
-// 1. Total Users (respect time filter: count created within range when filtered)
+// Helper: SQL WHERE 条件，根据时间筛选
 // -----------------------------
-if ($timeInterval) {
-    $totalUsers = (int)($conn->query("SELECT COUNT(*) AS cnt FROM user WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)")->fetch_assoc()['cnt'] ?? 0);
-} else {
-    $totalUsers = (int)($conn->query("SELECT COUNT(*) AS cnt FROM user")->fetch_assoc()['cnt'] ?? 0);
+function sql_time_filter($col, $interval = null, $today = false) {
+    if ($today) return " AND DATE({$col}) = CURDATE() ";
+    if ($interval) return " AND {$col} >= DATE_SUB(CURDATE(), INTERVAL {$interval} DAY) ";
+    return ""; // all 时不加限制
 }
 
-// ----------------------------------
-// 2. New Users (Last 7 days OR last interval)
-// ----------------------------------
-// For display we always return last 7 days series for charting; but counts reflect chosen time scope when applicable.
-// We'll return DB rows within last (30 days) if timeInterval==30, else last 7 days if 7, else last 7 days by default.
-$trendDaysBack = $timeInterval ?? 7;
-$newUsers = $conn->query("
+// -----------------------------
+// Total Users by role
+// -----------------------------
+function getTotalByRole($conn, $role, $timeInterval, $timeConditionToday) {
+    $sql = "SELECT COUNT(*) AS cnt FROM user WHERE role = ?" . sql_time_filter('created_at', $timeInterval, $timeConditionToday);
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("s", $role);
+    $stmt->execute();
+    $res = $stmt->get_result()->fetch_assoc();
+    return (int)($res['cnt'] ?? 0);
+}
+
+$totalUsers = getTotalByRole($conn, 'user', $timeInterval, $timeConditionToday);
+$totalAdmin = getTotalByRole($conn, 'admin', $timeInterval, $timeConditionToday);
+$totalModerator = getTotalByRole($conn, 'moderator', $timeInterval, $timeConditionToday);
+
+
+
+
+// -----------------------------
+// 3. New Users Trend (role = 'user')
+// -----------------------------
+$newUsersQuery = "
     SELECT COUNT(*) AS cnt, DATE(created_at) AS day
     FROM user
-    WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL {$trendDaysBack} DAY)
+    WHERE role = 'user' " . sql_time_filter('created_at', $timeInterval, $timeConditionToday) . "
     GROUP BY DATE(created_at)
     ORDER BY day ASC
-")->fetch_all(MYSQLI_ASSOC);
+";
+$newUsers = $conn->query($newUsersQuery)->fetch_all(MYSQLI_ASSOC);
 
-// ----------------------------------
-// 3. Active Teams
-//   We'll count teams that have had user activity in the timeframe if filtered, else total teams
-// ----------------------------------
-if ($timeInterval) {
-    // count distinct teams of users created in timeframe
-    $activeTeams = (int)($conn->query("
-        SELECT COUNT(DISTINCT t.teamID) AS cnt
-        FROM team t
-        JOIN user u ON u.teamID = t.teamID
-        WHERE u.created_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)
-    ")->fetch_assoc()['cnt'] ?? 0);
-} else {
-    $activeTeams = (int)($conn->query("SELECT COUNT(*) AS cnt FROM team")->fetch_assoc()['cnt'] ?? 0);
-}
+// -----------------------------
+// New Admins Trend
+// -----------------------------
+$newAdminsQuery = "
+    SELECT COUNT(*) AS cnt, DATE(created_at) AS day
+    FROM user
+    WHERE role = 'admin' " . sql_time_filter('created_at', $timeInterval, $timeConditionToday) . "
+    GROUP BY DATE(created_at)
+    ORDER BY day ASC
+";
+$newAdmins = $conn->query($newAdminsQuery)->fetch_all(MYSQLI_ASSOC);
 
-// ----------------------------------
-// Challenge Analytics (统一时间 filter)
-// ----------------------------------
+// -----------------------------
+// New Moderator Trend
+// -----------------------------
+$newModeratorsQuery = "
+    SELECT COUNT(*) AS cnt, DATE(created_at) AS day
+    FROM user
+    WHERE role = 'moderator' " . sql_time_filter('created_at', $timeInterval, $timeConditionToday) . "
+    GROUP BY DATE(created_at)
+    ORDER BY day ASC
+";
+$newModerators = $conn->query($newModeratorsQuery)->fetch_all(MYSQLI_ASSOC);
 
-// 1. Active / Inactive / Total Challenges
+
+// -----------------------------
+// 3. Total Teams
+// -----------------------------
+$activeTeamsQuery = "
+    SELECT COUNT(DISTINCT t.teamID) AS cnt
+    FROM team t
+    JOIN user u ON u.teamID = t.teamID
+    WHERE 1 " . sql_time_filter('u.created_at', $timeInterval,$timeConditionToday);
+$activeTeams = (int)($conn->query($activeTeamsQuery)->fetch_assoc()['cnt'] ?? 0);
+
+// -----------------------------
+// 4. Challenge Analytics
+// -----------------------------
 $challengeStatusQuery = "
     SELECT 
         SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS activeCount,
         SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS inactiveCount
     FROM challenge
-    WHERE 1
-";
-
-if ($timeInterval) {
-    $challengeStatusQuery .= " AND created_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
+    WHERE 1 " . sql_time_filter('start_date', $timeInterval);
 $challengeStatus = $conn->query($challengeStatusQuery)->fetch_assoc();
 $activeCount = (int)$challengeStatus['activeCount'];
 $inactiveCount = (int)$challengeStatus['inactiveCount'];
 
-// 2. City Distribution
 $cityDataQuery = "
     SELECT city, COUNT(*) AS cnt
     FROM challenge
-    WHERE is_active = 1
+    WHERE is_active = 1 " . sql_time_filter('start_date', $timeInterval) . "
+    GROUP BY city
 ";
-
-if ($timeInterval) {
-    $cityDataQuery .= " AND created_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$cityDataQuery .= " GROUP BY city";
 $cityData = $conn->query($cityDataQuery)->fetch_all(MYSQLI_ASSOC);
 $cityLabels = array_column($cityData, 'city');
 $cityCounts = array_column($cityData, 'cnt');
 
-// 3. Category Split
 $catDataQuery = "
     SELECT c.categoryName AS category, COUNT(*) AS cnt
     FROM challenge ch
     JOIN category c ON ch.categoryID = c.categoryID
-    WHERE 1
+    WHERE 1 " . sql_time_filter('ch.start_date', $timeInterval) . "
+    GROUP BY c.categoryName
 ";
-
-if ($timeInterval) {
-    $catDataQuery .= " AND ch.created_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$catDataQuery .= " GROUP BY c.categoryName";
 $catData = $conn->query($catDataQuery)->fetch_all(MYSQLI_ASSOC);
 $catLabels = array_column($catData, 'category');
 $catCounts = array_column($catData, 'cnt');
 
-// 4. Top Points
 $pointsDataQuery = "
     SELECT challengeTitle, pointAward
     FROM challenge
-    WHERE is_active = 1
+    WHERE is_active = 1 " . sql_time_filter('start_date', $timeInterval) . "
+    ORDER BY pointAward DESC LIMIT 5
 ";
-
-if ($timeInterval) {
-    $pointsDataQuery .= " AND created_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$pointsDataQuery .= " ORDER BY pointAward DESC LIMIT 5";
 $pointsData = $conn->query($pointsDataQuery)->fetch_all(MYSQLI_ASSOC);
 $topPointsLabels = array_column($pointsData, 'challengeTitle');
 $topPointsValues = array_column($pointsData, 'pointAward');
 
-// 5. Expiring Soon
 $expiringChallengesQuery = "
     SELECT challengeTitle, city, end_date
     FROM challenge
-    WHERE is_active = 1
-      AND end_date >= CURDATE()
+    WHERE is_active = 1 AND end_date >= CURDATE() " . sql_time_filter('start_date', $timeInterval) . "
+    ORDER BY end_date ASC LIMIT 5
 ";
-
-if ($timeInterval) {
-    $expiringChallengesQuery .= " AND created_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$expiringChallengesQuery .= " ORDER BY end_date ASC LIMIT 5";
 $expiringChallenges = $conn->query($expiringChallengesQuery)->fetch_all(MYSQLI_ASSOC);
 
+// -----------------------------
+// 5. Total Submissions
+// -----------------------------
+$totalSubmissionsQuery = "SELECT COUNT(*) AS cnt FROM sub WHERE 1 " . sql_time_filter('uploaded_at', $timeInterval);
+$totalSubmissions = (int)($conn->query($totalSubmissionsQuery)->fetch_assoc()['cnt'] ?? 0);
 
-// ===== Global time condition helper =====
-$timeWhere = '';
-if ($timeInterval !== null) {
-    $timeWhere = " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-
-// ----------------------------------
-// 4. Total Submissions (respect time filter)
-// ----------------------------------
-if ($timeInterval) {
-    $totalSubmissions = (int)($conn->query("SELECT COUNT(*) AS cnt FROM sub WHERE uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)")->fetch_assoc()['cnt'] ?? 0);
-} else {
-    $totalSubmissions = (int)($conn->query("SELECT COUNT(*) AS cnt FROM sub")->fetch_assoc()['cnt'] ?? 0);
-}
-
-// ----------------------------------
-// 5. Submission counts by status (respect time filter)
-// ----------------------------------
-$submissionStatusQuery = $conn->query("
+// Submission counts by status
+$submissionStatusQuery = "
     SELECT status, COUNT(*) AS cnt
     FROM sub
-    WHERE 1 " . ($timeInterval ? " AND uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY) " : "") . "
+    WHERE 1 " . sql_time_filter('uploaded_at', $timeInterval) . "
     GROUP BY status
-")->fetch_all(MYSQLI_ASSOC);
-
+";
 $submissionCounts = ['pending'=>0,'approved'=>0,'denied'=>0];
-
-foreach ($submissionStatusQuery as $row) {
+foreach ($conn->query($submissionStatusQuery)->fetch_all(MYSQLI_ASSOC) as $row) {
     $key = strtolower(trim($row['status']));
-    if (isset($submissionCounts[$key])) {
-        $submissionCounts[$key] = (int)$row['cnt'];
-    }
+    if (isset($submissionCounts[$key])) $submissionCounts[$key] = (int)$row['cnt'];
 }
 
-// ----------------------------------
-// 6. Recent Submissions (most recent 10 within timeframe if filtered else overall)
-// ----------------------------------
+// Recent submissions
 $recentLimitWhere = $timeInterval ? " WHERE s.uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY) " : "";
-$recentSubmissions = $conn->query("
+$recentSubmissionsQuery = "
     SELECT s.*, u.firstName AS username, t.teamName, c.challengeTitle 
     FROM sub s
     LEFT JOIN user u ON s.userID = u.userID
@@ -189,137 +188,114 @@ $recentSubmissions = $conn->query("
     {$recentLimitWhere}
     ORDER BY s.uploaded_at DESC
     LIMIT 10
-")->fetch_all(MYSQLI_ASSOC);
+";
+$recentSubmissions = $conn->query($recentSubmissionsQuery)->fetch_all(MYSQLI_ASSOC);
 
-// ----------------------------------
-// 7. Submission Trend (Last 30 days, but we apply time filter interval if set)
-// ----------------------------------
+// Submission trend
 $submissionTrendQuery = "
     SELECT DATE(uploaded_at) AS day,
         SUM(CASE WHEN status='Pending' THEN 1 ELSE 0 END) AS pending,
         SUM(CASE WHEN status='Approved' THEN 1 ELSE 0 END) AS approved,
         SUM(CASE WHEN status='Denied' THEN 1 ELSE 0 END) AS denied
     FROM sub
-    WHERE 1
-";
-
-if ($timeInterval) {
-    $submissionTrendQuery .= " AND uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY) ";
-}
-
-$submissionTrendQuery .= "
+    WHERE 1 " . sql_time_filter('uploaded_at', $timeInterval) . "
     GROUP BY DATE(uploaded_at)
     ORDER BY day ASC
 ";
-
 $submissionTrend = $conn->query($submissionTrendQuery)->fetch_all(MYSQLI_ASSOC);
 
-// ----------------------------------
-// 8. Top Categories (challenge) within timeframe
-// ----------------------------------
-
-$topCategoriesQuery = "
-    SELECT COALESCE(c.challengeTitle, 'Unknown') AS category, COUNT(*) AS cnt
+// -----------------------------
+// Most Participated Challenges (by submission count)
+// -----------------------------
+$categoryQuery = "
+    SELECT c.challengeTitle AS challenge, COUNT(s.submissionID) AS total
     FROM sub s
-    LEFT JOIN challenge c ON s.challengeID = c.challengeID
-    WHERE 1
+    JOIN challenge c ON s.challengeID = c.challengeID
+    WHERE 1 " . sql_time_filter('s.uploaded_at', $timeInterval) . "
+    GROUP BY s.challengeID, c.challengeTitle
+    ORDER BY total DESC
 ";
 
-// 只有在不是 "all" 時才加時間篩選
-if ($timeInterval) {
-    $topCategoriesQuery .= " AND s.uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
+$submissionCategories = $conn->query($categoryQuery)->fetch_all(MYSQLI_ASSOC);
+
+
+// -----------------------------
+// 7. Team Overview
+// -----------------------------
+
+$dateCondition = sql_time_filter('pt.generate_at', $timeInterval, $timeConditionToday);
+
+$team_sql = "
+SELECT t.teamID, t.teamName,
+       COALESCE(SUM(CASE WHEN pt.transactionType='earn' " . $dateCondition . " THEN pt.pointsTransaction ELSE 0 END),0) AS teamPoints
+FROM team t
+LEFT JOIN user u ON u.teamID = t.teamID
+LEFT JOIN pointtransaction pt ON pt.userID = u.userID
+GROUP BY t.teamID
+ORDER BY teamPoints DESC
+";
+
+$teamRanks = [];
+$team_result = $conn->query($team_sql);
+if ($team_result) {
+    while($row = $team_result->fetch_assoc()){
+        $teamRanks[] = [
+            'teamName' => $row['teamName'],
+            'teamPoints' => (int)$row['teamPoints'] // 注意这里是 teamPoints，不是 teamPoint
+        ];
+    }
 }
 
-$topCategoriesQuery .= "
-    GROUP BY s.challengeID
-    ORDER BY cnt DESC
-    LIMIT 5
-";
+// 输出到 JS
+$teamRanksJson = json_encode($teamRanks);
 
-$topCategories = $conn->query($topCategoriesQuery)->fetch_all(MYSQLI_ASSOC);
-
-
-// ----------------------------------
-// 9. Users by Role distribution (not strictly time bound — show current distribution)
-//    If you prefer to make this time-bound, change accordingly.
-// ----------------------------------
-$roleDistribution = [];
-$roleData = $conn->query("SELECT role, COUNT(*) AS cnt FROM user GROUP BY role")->fetch_all(MYSQLI_ASSOC);
-foreach ($roleData as $row) $roleDistribution[$row['role']] = (int)$row['cnt'];
-
-// ----------------------------------
-// 10. Login trend (last 7 or last interval)
-// ----------------------------------
-$loginWindow = $timeInterval ?? 7;
-$loginTrend = $conn->query("
+// -----------------------------
+// 8. Login Trend (FIXED)
+// -----------------------------
+$loginTrendQuery = "
     SELECT DATE(last_online) AS date, COUNT(*) AS count
     FROM user
-    WHERE last_online >= DATE_SUB(CURDATE(), INTERVAL {$loginWindow} DAY)
+    WHERE last_online IS NOT NULL
+    " . sql_time_filter('last_online', $timeInterval, $timeConditionToday) . "
     GROUP BY DATE(last_online)
-")->fetch_all(MYSQLI_ASSOC);
+    ORDER BY date ASC
+";
 
-// ----------------------------------
-// 11. Submission Activity Top Users (count submissions within timeframe)
-// ----------------------------------
+$loginTrend = $conn->query($loginTrendQuery)->fetch_all(MYSQLI_ASSOC);
+
+
 // -----------------------------
-// Top 5 Active Users
+// 9. Submission Activity Top Users
 // -----------------------------
 $submissionActivityQuery = "
     SELECT u.firstName AS name, COUNT(s.submissionID) AS submissions
     FROM user u
     LEFT JOIN sub s ON u.userID = s.userID
-    WHERE 1
-";
-
-// 只有在不是 "all" 時才加時間篩選
-if ($timeInterval) {
-    $submissionActivityQuery .= " AND s.uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$submissionActivityQuery .= "
+    WHERE 1 " . sql_time_filter('s.uploaded_at', $timeInterval) . "
     GROUP BY u.userID
     ORDER BY submissions DESC
     LIMIT 5
 ";
-
 $submissionActivity = $conn->query($submissionActivityQuery)->fetch_all(MYSQLI_ASSOC);
 
-
-// ----------------------------------
-// 12. Points Earned vs Burned (transactions within timeframe)
-//    assumes pointtransaction.created_at exists
-// ----------------------------------
-
-$pointsActivityQuery = "
-    SELECT u.firstName AS name,
-        COALESCE(SUM(CASE WHEN p.transactionType='earned' THEN p.pointsTransaction ELSE 0 END),0) AS earned,
-        COALESCE(SUM(CASE WHEN p.transactionType='burned' THEN p.pointsTransaction ELSE 0 END),0) AS burned
-    FROM user u
-    LEFT JOIN pointtransaction p ON p.userID = u.userID
-    WHERE 1
-";
-
-// 只有在不是 "all" 時才加時間篩選
-if ($timeInterval) {
-    $pointsActivityQuery .= " AND p.generate_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$pointsActivityQuery .= "
-    GROUP BY u.userID
-    ORDER BY earned DESC
-    LIMIT 5
-";
-
-$pointsActivity = $conn->query($pointsActivityQuery)->fetch_all(MYSQLI_ASSOC);
-
-
-
-
-// ----------------------------------
-// 13. User Details (not needed if you removed tables; return minimal if wanted)
-// ----------------------------------
 // -----------------------------
-// User Details with Activity Stats
+// 10. Points Earned vs Burned
+// -----------------------------
+$pointsOverallSql = "
+SELECT 
+  SUM(CASE WHEN p.transactionType = 'earn' THEN p.pointsTransaction ELSE 0 END) AS earned,
+  SUM(CASE WHEN p.transactionType = 'burn' THEN p.pointsTransaction ELSE 0 END) AS burned
+FROM pointtransaction p
+WHERE 1=1
+" . sql_time_filter('p.generate_at', $timeInterval, $timeConditionToday);
+
+$result = $conn->query($pointsOverallSql);
+$pointsOverall = $result->fetch_assoc() ?? ['earned'=>0,'burned'=>0];
+
+
+
+// -----------------------------
+// 11. User Details
 // -----------------------------
 $userDetailsQuery = "
     SELECT u.userID as id, u.firstName AS name, u.email, u.role,
@@ -327,161 +303,122 @@ $userDetailsQuery = "
            (
                SELECT COUNT(*) 
                FROM sub s 
-               WHERE s.userID=u.userID
-           ";
-
-// 只有在不是 "all" 時加時間篩選
-if ($timeInterval) {
-    $userDetailsQuery .= " AND s.uploaded_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$userDetailsQuery .= "
+               WHERE s.userID=u.userID " . sql_time_filter('s.uploaded_at', $timeInterval) . "
            ) AS submissions,
            (
                SELECT COALESCE(SUM(pointsTransaction),0) 
                FROM pointtransaction p 
-               WHERE p.userID=u.userID AND p.transactionType='earned'
-           ";
-
-if ($timeInterval) {
-    $userDetailsQuery .= " AND p.generate_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$userDetailsQuery .= "
+               WHERE p.userID=u.userID AND p.transactionType='earned' " . sql_time_filter('p.generate_at', $timeInterval) . "
            ) AS earned,
            (
                SELECT COALESCE(SUM(pointsTransaction),0) 
                FROM pointtransaction p 
-               WHERE p.userID=u.userID AND p.transactionType='burned'
-           ";
-
-if ($timeInterval) {
-    $userDetailsQuery .= " AND p.generate_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$userDetailsQuery .= "
+               WHERE p.userID=u.userID AND p.transactionType='burned' " . sql_time_filter('p.generate_at', $timeInterval) . "
            ) AS burned,
            u.last_online AS lastLogin
     FROM user u
     LEFT JOIN team t ON u.teamID = t.teamID
 ";
-
 $userDetails = $conn->query($userDetailsQuery)->fetch_all(MYSQLI_ASSOC);
 
-// ----------------------------------
-// 14. Rewards: use redemptionrequest as data source (Option A)
-//    count redemptions per reward within timeframe
-// ----------------------------------
-
-$whereReward = "WHERE status NOT IN ('cancelled', 'denied')";
-
-// only apply time filter if not "all"
-if ($timeInterval) {
-    $whereReward .= " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
-
-$sql = "SELECT SUM(pointSpent) as total FROM redemptionrequest $whereReward";
-$burnedPoints = $conn->query($sql)->fetch_assoc()['total'] ?? 0;
-
 // -----------------------------
-// 2. Pending Requests
+// 12. Rewards / Redemption
 // -----------------------------
-$whereReward = "WHERE status = 'pending'";
-if ($timeInterval) {
-    $whereReward .= " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
+$whereReward = "WHERE status NOT IN ('cancelled', 'denied')" . sql_time_filter('requested_at', $timeInterval);
+$burnedPoints = $conn->query("SELECT SUM(pointSpent) as total FROM redemptionrequest $whereReward")->fetch_assoc()['total'] ?? 0;
 
-$sql = "SELECT COUNT(*) as total FROM redemptionrequest $whereReward";
-$pendingCount = $conn->query($sql)->fetch_assoc()['total'] ?? 0;
+$whereReward = "WHERE status = 'pending'" . sql_time_filter('requested_at', $timeInterval);
+$pendingCount = $conn->query("SELECT COUNT(*) as total FROM redemptionrequest $whereReward")->fetch_assoc()['total'] ?? 0;
 
-// -----------------------------
-// 3. Successful Redemptions
-// -----------------------------
-$whereReward = "WHERE status IN ('approved','outOfDiliver','Delivered')";
-if ($timeInterval) {
-    $whereReward .= " AND requested_at >= DATE_SUB(CURDATE(), INTERVAL {$timeInterval} DAY)";
-}
+$whereReward = "WHERE status IN ('approved','outOfDiliver','Delivered')" . sql_time_filter('requested_at', $timeInterval);
+$successCount = $conn->query("SELECT COUNT(*) as total FROM redemptionrequest $whereReward")->fetch_assoc()['total'] ?? 0;
 
-$sql = "SELECT COUNT(*) as total FROM redemptionrequest $whereReward";
-$successCount = $conn->query($sql)->fetch_assoc()['total'] ?? 0;
-
-
-
-// ----------------------------------
-// B. CHART 1: REDEMPTION TREND (by day, follow time filter)
-// ----------------------------------
-
-$sql = "
-    SELECT DATE(requested_at) AS day,
-           COUNT(*) AS cnt
+$rewardTrendQuery = "
+    SELECT DATE(requested_at) AS day, COUNT(*) AS cnt
     FROM redemptionrequest
-    WHERE status != 'cancelled'
-    $timeWhere
+    WHERE status != 'cancelled' " . sql_time_filter('requested_at', $timeInterval) . "
     GROUP BY DATE(requested_at)
     ORDER BY day ASC
 ";
-
-$rewardTrend = $conn->query($sql)->fetch_all(MYSQLI_ASSOC);
-
-$months    = array_column($rewardTrend, 'day');
+$rewardTrend = $conn->query($rewardTrendQuery)->fetch_all(MYSQLI_ASSOC);
+$months = array_column($rewardTrend, 'day');
 $trendData = array_column($rewardTrend, 'cnt');
 
-// C. CHART 2: TOP 5 POPULAR REWARDS
 $popLabels = [];
 $popData = [];
-$popColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']; // Blue, Green, Orange, Purple, Pink
+$popColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+$rewardWindow = $timeInterval ?? 30;
 
-$rewardWindow = $timeInterval ?? 30; // 7 / 30 / default 30
-
-$sql = "
+$popQuery = "
     SELECT r.rewardName, COUNT(rr.redemptionID) AS count 
     FROM redemptionrequest rr
     JOIN reward r ON rr.rewardID = r.rewardID
-    WHERE rr.status != 'cancelled'
+    WHERE rr.status != 'cancelled' " . sql_time_filter('rr.requested_at', $rewardWindow) . "
+    GROUP BY rr.rewardID 
+    ORDER BY count DESC 
+    LIMIT 5
 ";
-
-if ($timeInterval) {
-    $sql .= " AND rr.requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)";
-}
-
-$sql .= " GROUP BY rr.rewardID 
-          ORDER BY count DESC 
-          LIMIT 5";
-
-$res = $conn->query($sql);
+$res = $conn->query($popQuery);
 while($row = $res->fetch_assoc()){
     $popLabels[] = $row['rewardName'];
     $popData[] = $row['count'];
 }
 
-// D. RECENT PENDING REQUESTS (Actionable List)
-$pendingSql = "SELECT rr.redemptionID, u.firstName, u.lastName, r.rewardName, rr.requested_at, r.imageURL 
-               FROM redemptionrequest rr 
-               JOIN user u ON rr.userID = u.userID
-               JOIN reward r ON rr.rewardID = r.rewardID
-               WHERE rr.status = 'pending'
-               " . ($timeInterval ? " AND rr.requested_at >= DATE_SUB(CURDATE(), INTERVAL {$rewardWindow} DAY)" : "") . "
-               ORDER BY rr.requested_at ASC LIMIT 5";
-
+// -----------------------------
+// 13. Recent Pending Requests
+// -----------------------------
+$pendingSql = "
+    SELECT rr.redemptionID, u.firstName, u.lastName, r.rewardName, rr.requested_at, r.imageURL 
+    FROM redemptionrequest rr 
+    JOIN user u ON rr.userID = u.userID
+    JOIN reward r ON rr.rewardID = r.rewardID
+    WHERE rr.status = 'pending' " . sql_time_filter('rr.requested_at', $rewardWindow) . "
+    ORDER BY rr.requested_at ASC 
+    LIMIT 5
+";
 $pendingRes = $conn->query($pendingSql);
 
-// E. INVENTORY ALERTS (Low Stock or Expiring Soon)
-// Leveraging the new expiry_date column from rewardAdmin.php
-$alertSql = "SELECT rewardName, stockQuantity, expiry_date, imageURL 
-             FROM reward 
-             WHERE (stockQuantity < 5 OR (expiry_date IS NOT NULL AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY))) 
-             AND is_active = 1 
-             LIMIT 5";
+// -----------------------------
+// 14. Inventory Alerts
+// -----------------------------
+$alertSql = "
+    SELECT rewardName, stockQuantity, expiry_date, imageURL 
+    FROM reward 
+    WHERE (stockQuantity < 5 OR (expiry_date IS NOT NULL AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY))) 
+    AND is_active = 1 
+    LIMIT 5
+";
 $alertRes = $conn->query($alertSql);
 
-
 $lowStockCount = $conn->query("SELECT COUNT(*) as cnt FROM reward WHERE stockQuantity < 5 AND is_active = 1")->fetch_assoc()['cnt'] ?? 0;
+
+// -----------------------------
+// Reward Redemption Trend (by status)
+// -----------------------------
+$rewardTrendByStatusQuery = "
+    SELECT DATE(requested_at) AS day,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN status IN ('approved','outOfDiliver','Delivered') THEN 1 ELSE 0 END) AS approved,
+        SUM(CASE WHEN status = 'denied' THEN 1 ELSE 0 END) AS denied
+    FROM redemptionrequest
+    WHERE status != 'cancelled'
+    " . sql_time_filter('requested_at', $timeInterval) . "
+    GROUP BY DATE(requested_at)
+    ORDER BY day ASC
+";
+
+$rewardTrendByStatus = $conn->query($rewardTrendByStatusQuery)->fetch_all(MYSQLI_ASSOC);
+
 
 
 
 include "includes/layout_start.php";
 
+
 ?>
+
+
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -568,20 +505,25 @@ const dashboardData = {
 
     // numbers
     totalUsers: <?= json_encode($totalUsers) ?>,
+    totalAdmin: <?= json_encode($totalAdmin) ?>,
+    totalModerator : <?= json_encode($totalModerator ) ?>,
     activeTeams: <?= json_encode($activeTeams) ?>,
+    newAdmins: <?= json_encode($newAdmins) ?>,
+    newModerators: <?= json_encode($newModerators) ?>,
     totalSubmissions: <?= json_encode($totalSubmissions) ?>,
     submissionCounts: <?= json_encode($submissionCounts) ?>,
 
     // trends
     newUsers: <?= json_encode($newUsers) ?>,
     submissionTrend: <?= json_encode($submissionTrend) ?>,
-    topCategories: <?= json_encode($topCategories) ?>,
+    submissionCategories: <?= json_encode($submissionCategories) ?>,
+
 
     // user analytics
-    roleDistribution: <?= json_encode($roleDistribution) ?>,
+    teamScores: <?= json_encode($teamRanks ?? []) ?>,
     loginTrend: <?= json_encode($loginTrend) ?>,
     submissionActivity: <?= json_encode($submissionActivity) ?>,
-    pointsActivity: <?= json_encode($pointsActivity) ?>,
+      pointsOverall: <?= json_encode($pointsOverall) ?>,
 
     // challenge analytics
     challenge: {
@@ -607,11 +549,15 @@ const dashboardData = {
         successCount: <?= json_encode($successCount) ?>,
         pendingCount: <?= json_encode($pendingCount) ?>,
         lowStockCount: <?= json_encode($lowStockCount) ?>,
+
+        rewardTrendStatus: <?= json_encode($rewardTrendByStatus) ?>,
+
         trendLabels: <?= json_encode($months) ?>,
         trendData: <?= json_encode($trendData) ?>,
         topLabels: <?= json_encode($popLabels) ?>,
         topData: <?= json_encode($popData) ?>
-      
+        
+
     }
 
 
@@ -630,6 +576,7 @@ function formatDate(dateStr) {
 </script>
 
 <div class="max-w-7xl mx-auto p-6">
+
   <div class="flex items-center justify-between mb-6">
     <div>
       <h1 class="text-2xl font-bold">Admin Dashboard</h1>
@@ -637,78 +584,87 @@ function formatDate(dateStr) {
     </div>
 
     <div class="flex items-center gap-3">
-      <label class="text-sm text-gray-700">Time Filter:</label>
       <select id="timeFilter" class="border rounded px-2 py-1" onchange="applyTimeFilter()">
         <option value="all" <?= $timeFilter === 'all' ? 'selected' : '' ?>>All</option>
+        <option value="today" <?= $timeFilter === 'today' ? 'selected' : '' ?>>Today</option>
         <option value="7" <?= $timeFilter === '7' ? 'selected' : '' ?>>Last 7 Days</option>
         <option value="30" <?= $timeFilter === '30' ? 'selected' : '' ?>>Last 30 Days</option>
       </select>
 
-      <button onclick="window.location.reload()" class="bg-blue-600 text-white px-3 py-1 rounded shadow">
-        <i class="fas fa-refresh"></i> Refresh
-      </button>
+        <button 
+            onclick="window.location = '?time=all'" 
+            class="bg-primary hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-md transition-colors"
+        >
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+
     </div>
   </div>
 
-    <!-- summary cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+<!-- summary cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 mb-2">
 
-        <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
+    <!-- Total Users -->
+    <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
         <div class="p-2 bg-blue-100 text-blue-600 rounded-xl">
             <!-- Users Icon -->
             <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M17 20h5v-2a4 4 0 00-4-4h-1M9 20H4v-2a4 4 0 014-4h1m4-4a4 4 0 100-8 4 4 0 000 8zm6 4a4 4 0 10-8 0" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M17 20h5v-2a4 4 0 00-4-4h-1M9 20H4v-2a4 4 0 014-4h1m4-4a4 4 0 100-8 4 4 0 000 8zm6 4a4 4 0 10-8 0" />
             </svg>
         </div>
         <div>
             <p class="stat-card-label">Total Users</p>
             <div class="stat-card-value" id="cardTotalUsers">—</div>
         </div>
-        </div>
+    </div>
 
-        <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
+    <!-- Total Admin -->
+    <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
         <div class="p-2 bg-green-100 text-green-600 rounded-xl">
-            <!-- User Plus -->
+            <!-- User Plus Icon -->
             <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M18 9a4 4 0 11-8 0 4 4 0 018 0zM12 14a6 6 0 00-6 6v1m13-7v4m0 0h4m-4 0h-4" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M18 9a4 4 0 11-8 0 4 4 0 018 0zM12 14a6 6 0 00-6 6v1m13-7v4m0 0h4m-4 0h-4" />
             </svg>
         </div>
         <div>
-            <p class="stat-card-label">New User (period)</p>
-            <div class="stat-card-value" id="cardNewUsers">—</div>
-        </div>
-        </div>
-
-        <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
-        <div class="p-2 bg-purple-100 text-purple-600 rounded-xl">
-            <!-- Team -->
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M17 20h5v-2a4 4 0 00-4-4h-1M7 20H2v-2a4 4 0 014-4h1m5-4a4 4 0 100-8 4 4 0 000 8z" />
-            </svg>
-        </div>
-        <div>
-            <p class="stat-card-label">Active Teams (period)</p>
-            <div class="stat-card-value" id="cardActiveTeams">—</div>
-        </div>
-        </div>
-
-        <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
-        <div class="p-2 bg-orange-100 text-orange-600 rounded-xl">
-            <!-- Document -->
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z" />
-            </svg>
-        </div>
-        <div>
-            <p class="stat-card-label">Total Submission (period)</p>
-            <div class="stat-card-value" id="cardTotalSubmissions">—</div>
-        </div>
+            <p class="stat-card-label">Total Admin</p>
+            <div class="stat-card-value" id="cardTotalAdmin">—</div>
         </div>
     </div>
+
+    <!-- Total Teams -->
+    <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
+        <div class="p-2 bg-purple-100 text-purple-600 rounded-xl">
+            <!-- Team Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M17 20h5v-2a4 4 0 00-4-4h-1M7 20H2v-2a4 4 0 014-4h1m5-4a4 4 0 100-8 4 4 0 000 8z" />
+            </svg>
+        </div>
+        <div>
+            <p class="stat-card-label">Total Teams</p>
+            <div class="stat-card-value" id="cardActiveTeams">—</div>
+        </div>
+    </div>
+
+    <!-- Total Submission -->
+    <div class="bg-white p-3 rounded-2xl shadow-card flex items-center gap-3">
+        <div class="p-2 bg-orange-100 text-orange-600 rounded-xl">
+            <!-- Document Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z" />
+            </svg>
+        </div>
+        <div>
+            <p class="stat-card-label">Total Moderator</p>
+            <div class="stat-card-value" id="cardTotalSubmissions">—</div>
+        </div>
+    </div>
+
+</div>
 
   <!-- tabs -->
     <div class="bg-white rounded-2xl shadow-lg p-6">
@@ -789,7 +745,7 @@ function formatDate(dateStr) {
 
         <!-- Categories -->
         <div class="bg-white p-6 rounded-2xl shadow-card h-[380px] flex flex-col">
-            <h3 class="font-semibold text-lg mb-4">Top Submission Categories</h3>
+            <h3 class="font-semibold text-lg mb-4">Top Submission Challenge</h3>
             <canvas id="topCategoriesChart" class="flex-1"></canvas>
         </div>
 
@@ -797,93 +753,102 @@ function formatDate(dateStr) {
 
 </div>
 
+        <div id="user" class="tab-content hidden">
 
-    <div id="user" class="tab-content hidden">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="bg-white p-5 rounded-xl shadow-card h-56">
-          <h3 class="font-semibold mb-4">Users by Role</h3>
-          <canvas id="roleDistributionChart" class="w-full h-full"></canvas>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+                <div class="bg-gray-50 p-6 rounded-xl shadow-md border border-gray-200 h-64"> 
+                    <h3 class="font-bold text-lg mb-4 text-gray-800">Team Overview</h3>
+                    <div class="h-4/5"> <canvas id="teamScoreChart" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-6 rounded-xl shadow-md border border-gray-200 h-64">
+                    <h3 class="font-bold text-lg mb-4 text-gray-800">Login Trend</h3>
+                    <div class="h-4/5">
+                        <canvas id="loginTrendChart" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-6 rounded-xl shadow-md border border-gray-200 h-64">
+                    <h3 class="font-bold text-lg mb-4 text-gray-800">Submission Activity (Top Users)</h3>
+                    <div class="h-4/5">
+                        <canvas id="submissionActivityChart" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-6 rounded-xl shadow-md border border-gray-200 h-64">
+                    <h3 class="font-bold text-lg mb-4 text-gray-800">Overall Points Earned vs Burned</h3>
+                    <div class="h-4/5">
+                        <canvas id="pointsActivityChart" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+
+            </div>
+
         </div>
-        <div class="bg-white p-5 rounded-xl shadow-card h-56">
-          <h3 class="font-semibold mb-4">Login Trend</h3>
-          <canvas id="loginTrendChart" class="w-full h-full"></canvas>
-        </div>
-        <div class="bg-white p-5 rounded-xl shadow-card h-56">
-          <h3 class="font-semibold mb-4">Submission Activity (Top Users)</h3>
-          <canvas id="submissionActivityChart" class="w-full h-full"></canvas>
-        </div>
-        <div class="bg-white p-5 rounded-xl shadow-card h-56">
-          <h3 class="font-semibold mb-4">Points Earned vs Burned</h3>
-          <canvas id="pointsActivityChart" class="w-full h-full"></canvas>
-        </div>
-      </div>
-    </div>
   
 
 
-  <div id="Challenge" class="tab-content hidden">
-
-    <div class="p-4">
-  
-        <!-- Stats -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-
-            <div class="bg-white p-6 rounded-2xl shadow-card flex justify-between items-center">
+ <div id="Challenge" class="tab-content hidden bg-white-100"> <div class="p-4">
+ 
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6"> <div class="bg-white p-4 rounded-xl shadow-lg flex justify-between items-center transform transition duration-300 hover:scale-[1.02]">
                 <div>
                     <p class="text-sm text-gray-500">Active Challenges</p>
-                    <h2 id="challengeActive" class="text-3xl font-bold">0</h2>
+                    <h2 id="challengeActive" class="text-3xl font-extrabold text-indigo-700">0</h2>
                 </div>
                 <div class="text-indigo-600 text-4xl"><i class="bi bi-lightning-charge-fill"></i></div>
             </div>
 
-            <div class="bg-white p-6 rounded-2xl shadow-card flex justify-between items-center">
+            <div class="bg-white p-4 rounded-xl shadow-lg flex justify-between items-center transform transition duration-300 hover:scale-[1.02]">
                 <div>
                     <p class="text-sm text-gray-500">Inactive</p>
-                    <h2 id="challengeInactive" class="text-3xl font-bold">0</h2>
+                    <h2 id="challengeInactive" class="text-3xl font-extrabold text-pink-700">0</h2>
                 </div>
                 <div class="text-pink-600 text-4xl"><i class="bi bi-archive-fill"></i></div>
             </div>
 
-            <div class="bg-white p-6 rounded-2xl shadow-card flex justify-between items-center">
+            <div class="bg-white p-4 rounded-xl shadow-lg flex justify-between items-center transform transition duration-300 hover:scale-[1.02]">
                 <div>
                     <p class="text-sm text-gray-500">Total</p>
-                    <h2 id="challengeTotal" class="text-3xl font-bold">0</h2>
+                    <h2 id="challengeTotal" class="text-3xl font-extrabold text-teal-700">0</h2>
                 </div>
                 <div class="text-teal-600 text-4xl"><i class="bi bi-layers-fill"></i></div>
             </div>
 
         </div>
 
-        <!-- Row -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-            <!-- City Chart -->
-            <div class="col-span-2 bg-white p-6 rounded-2xl shadow-card h-[350px]">
-                <h3 class="font-semibold mb-4">Geographic Distribution</h3>
-                <canvas id="challengeCityChart"></canvas>
+            <div class="col-span-1 lg:col-span-2 bg-white p-6 rounded-2xl shadow-xl h-[450px]">
+                <h2 class="font-bold text-lg mb-4 text-gray-800">Geographic Distribution</h2>
+                <div class="h-[calc(100%-40px)]"> 
+                    <canvas id="challengeCityChart" class="w-full h-full"></canvas>
+                </div>
             </div>
 
-            <!-- Expiring Soon -->
-            <div class="bg-white p-6 rounded-2xl shadow-card h-[350px] overflow-auto">
-                <h3 class="font-semibold mb-4 text-red-500">Ending Soon</h3>
-                <div id="expiringList"></div>
+            <div class="bg-white p-6 rounded-2xl shadow-xl h-[450px] overflow-auto">
+                <h2 class="font-bold text-lg mb-4 text-red-600">Ending Soon</h2>
+                <div id="expiringList">
+                    </div>
             </div>
 
         </div>
 
-        <!-- Row 2 -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
 
-            <!-- Category Split -->
-            <div class="bg-white p-6 rounded-2xl shadow-card h-[330px]">
-                <h3 class="font-semibold mb-4">Category Split</h3>
-                <canvas id="challengeCatChart"></canvas>
+            <div class="bg-white p-6 rounded-2xl shadow-xl h-[350px]">
+                <h2 class="font-bold text-lg mb-4 text-gray-800">Category Split</h2>
+                 <div class="h-[calc(100%-40px)]"> 
+                    <canvas id="challengeCatChart" class="w-full h-full"></canvas>
+                 </div>
             </div>
 
-            <!-- Top Points -->
-            <div class="bg-white p-6 rounded-2xl shadow-card h-[330px]">
-                <h3 class="font-semibold mb-4">Top Rewards</h3>
-                <canvas id="challengePointsChart"></canvas>
+            <div class="bg-white p-6 rounded-2xl shadow-xl h-[350px]">
+                <h2 class="font-bold text-lg mb-4 text-gray-800">Top Rewards</h2>
+                <div class="h-[calc(100%-40px)]">
+                    <canvas id="challengePointsChart" class="w-full h-full"></canvas>
+                </div>
             </div>
 
         </div>
@@ -891,8 +856,6 @@ function formatDate(dateStr) {
     </div>
 
 </div>
-
-
 
 
 
@@ -977,12 +940,13 @@ function applyTimeFilter(){
 dashboardData.trendWindow = <?= $timeInterval ?? 30 ?>; // 7 / 30 / all default 30
 
 // fill summary cards
+
 function loadSummaryCards(){
-  document.getElementById('cardTotalUsers').innerText = dashboardData.totalUsers ?? 0;
-  const newUsersCount = (dashboardData.newUsers || []).reduce((s, d) => s + (parseInt(d.cnt)||0), 0);
-  document.getElementById('cardNewUsers').innerText = newUsersCount;
-  document.getElementById('cardActiveTeams').innerText = dashboardData.activeTeams ?? 0;
-  document.getElementById('cardTotalSubmissions').innerText = dashboardData.totalSubmissions ?? 0;
+    // dashboardData 从后端 PHP JSON 输出
+    document.getElementById('cardTotalUsers').innerText = dashboardData.totalUsers ?? 0;
+    document.getElementById('cardTotalAdmin').innerText = dashboardData.totalAdmin ?? 0;
+    document.getElementById('cardActiveTeams').innerText = dashboardData.activeTeams ?? 0;
+    document.getElementById('cardTotalSubmissions').innerText = dashboardData.totalModerator ?? 0;
 }
 loadSummaryCards();
 
@@ -1051,102 +1015,123 @@ window.onload = () => showTab("charts");
 /* Growth (ECharts) */
 function initGrowthChart(dashboardData) {
     const el = document.getElementById('growthChart');
+    if (!el) return;
 
-    // 清理旧 chart
-    if (window.dashboardCharts && window.dashboardCharts.growth) {
-        try { window.dashboardCharts.growth.dispose(); } catch(e){/* ignore */ }
-        window.dashboardCharts = {};
+    // 防止在 hidden 状态初始化
+    if (el.offsetHeight === 0) {
+        setTimeout(() => initGrowthChart(dashboardData), 100);
+        return;
     }
 
-    try {
-        const prev = echarts.getInstanceByDom(el);
-        if (prev) echarts.dispose(prev);
-    } catch(e){ /* ignore */ }
+    window.dashboardCharts = window.dashboardCharts || {};
+
+    // dispose 旧实例
+    if (window.dashboardCharts.growth) {
+        try { window.dashboardCharts.growth.dispose(); } catch(e){}
+    }
 
     const chart = echarts.init(el);
 
-    const trendWindow = dashboardData.trendWindow || 30; // PHP -> JS
-    const trend = dashboardData.submissionTrend || [];
+    // -----------------------------
+    // 1️⃣ 整理日期轴（以 submissionTrend 为主）
+    // -----------------------------
+    
+    const newUsers = dashboardData.newUsers || [];
+    const newAdmins = dashboardData.newAdmins || [];
+    const newModerators = dashboardData.newModerators || [];
 
-    // 生成连续日期数组
-    const labels = [];
-    const today = new Date();
-    for (let i = trendWindow - 1; i >= 0; i--) {
-        const dt = new Date(today);
-        dt.setDate(today.getDate() - i);
-        const yyyy = dt.getFullYear();
-        const mm = ('0' + (dt.getMonth() + 1)).slice(-2);
-        const dd = ('0' + dt.getDate()).slice(-2);
-        labels.push(`${yyyy}-${mm}-${dd}`);
-    }
+    const dateSet = new Set();
 
-    // 新用户 series
+    
+    newUsers.forEach(r => r.day && dateSet.add(r.day));
+
+    const labels = Array.from(dateSet).sort();
+
+    // -----------------------------
+    // 2️⃣ 映射数据
+    // -----------------------------
     const newUsersMap = {};
-    (dashboardData.newUsers || []).forEach(r => {
-        if (r.day) newUsersMap[r.day] = parseInt(r.cnt || 0, 10);
-    });
-    const newUsersSeries = labels.map(day => newUsersMap[day] || 0);
+    newUsers.forEach(r => newUsersMap[r.day] = Number(r.cnt || 0));
+    
+    const newAdminsMap = {};
+    newAdmins.forEach(r => newAdminsMap[r.day] = Number(r.cnt || 0));
 
-    // 提交数 series
-    const subsMap = {};
-    (trend || []).forEach(r => {
-        const key = r.day;
-        subsMap[key] = (parseInt(r.pending || 0, 10) || 0) +
-                       (parseInt(r.approved || 0, 10) || 0) +
-                       (parseInt(r.denied || 0, 10) || 0);
-    });
-    const submissionsSeries = labels.map(day => subsMap[day] || 0);
 
+    const newModeratorsMap = {};
+    newModerators.forEach(r => newModeratorsMap[r.day] = Number(r.cnt || 0));
+
+ 
+
+    const newModeratorsSeries = labels.map(d => newModeratorsMap[d] || 0);
+    const newUsersSeries = labels.map(d => newUsersMap[d] || 0);
+    const newAdminsSeries = labels.map(d => newAdminsMap[d] || 0);
+
+    // -----------------------------
+    // 3️⃣ ECharts 配置
+    // -----------------------------
     chart.setOption({
-        tooltip: { trigger: 'axis' },
-        legend: {
-            data: ['New Users', 'Submissions'],
-            top: 10,
-            textStyle: { fontSize: 12 }
-        },
+    tooltip: { trigger: 'axis' },
+    legend: {
+        data: ['New Users', 'New Admins', 'New Moderators'],
+        top: 10,
+        textStyle: { fontSize: 12 }
+    },
         grid: {
             top: 60,
-            left: '8%',
-            right: '6%',
-            bottom: '15%'
+            left: '6%',
+            right: '4%',
+            bottom: '12%',
+            containLabel: true
         },
         xAxis: {
             type: 'category',
-            data: labels
+            data: labels,
+            axisLabel: { rotate: 30 }
         },
         yAxis: {
-            type: 'value'
+            type: 'value',
+            minInterval: 1
         },
-        series: [
+       series: [
             {
                 name: 'New Users',
                 type: 'line',
                 smooth: true,
-                data: newUsersSeries
+                data: newUsersSeries,
+                symbolSize: 6,
+                lineStyle: { width: 3 }
             },
             {
-                name: 'Submissions',
+                name: 'New Admins',
                 type: 'line',
                 smooth: true,
-                data: submissionsSeries
+                data: newAdminsSeries,
+                symbolSize: 6,
+                lineStyle: { width: 3, color:'red' } 
+            },
+            {
+                name: 'New Moderators',
+                type: 'line',
+                smooth: true,
+                data: newModeratorsSeries,
+                symbolSize: 6,
+                lineStyle: { width: 3, color:'purple' } 
             }
         ]
     });
 
-    // 保存 chart 实例
-    window.dashboardCharts = window.dashboardCharts || {};
+    // 保存实例
     window.dashboardCharts.growth = chart;
 
-
-
-
-    window.dashboardCharts = window.dashboardCharts || {};
-    window.dashboardCharts.growth = chart;
-
-    window.addEventListener('resize', () => {
-        try { chart.resize(); } catch(e) {}
-    });
+    // resize（只绑一次）
+    if (!window._growthResizeBound) {
+        window.addEventListener('resize', () => {
+            try { window.dashboardCharts.growth.resize(); } catch(e){}
+        });
+        window._growthResizeBound = true;
+    }
 }
+
 
 
 function initChallengeTab() {
@@ -1220,17 +1205,44 @@ dashboardData.challenge.cityLabels.forEach((label, index) => {
     });
 
 
-    const catCtx = document.getElementById("challengeCatChart").getContext("2d");
-    new Chart(catCtx, {
-        type: "doughnut",
-        data: {
-            labels: dashboardData.challenge.catLabels,
-            datasets: [{
-                data: dashboardData.challenge.catCounts,
-                backgroundColor: ['#6366f1','#ec4899','#06b6d4','#f59e0b','#10b981']
-            }]
-        }
-    });
+const catCtx = document.getElementById("challengeCatChart").getContext("2d");
+new Chart(catCtx, {
+    type: "doughnut",
+    data: {
+        labels: dashboardData.challenge.catLabels,
+        datasets: [{
+            data: dashboardData.challenge.catCounts,
+            backgroundColor: ['#6366f1','#ec4899','#06b6d4','#f59e0b','#10b981']
+        }]
+    },
+    options: {
+        // 1. **减少中心空白区域 (甜甜圈变厚)**
+        cutout: '40%', // 将中心空白区域设置为 40%，圆环会更粗
+        
+        // 2. **图例左置**
+        plugins: {
+            legend: {
+                display: true, 
+                position: 'left',
+                align: 'center' 
+            }
+        },
+        
+        // 3. **尝试让圆环向左侧移动 (可选，可能需要调试)**
+        // 通过调整布局的内边距，给右侧留出更多空间
+        layout: {
+             // 增加右侧内边距，理论上会将图表内容向左推
+             padding: {
+                 right: -200 // 可以尝试更大的值
+             }
+        },
+        
+        // 其他设置
+        responsive: true,
+        // position: 'right' 属性在 Chart 根配置中无效，已移除
+    }
+});
+
 
     const pointsCtx = document.getElementById("challengePointsChart").getContext("2d");
     new Chart(pointsCtx, {
@@ -1319,8 +1331,9 @@ document.getElementById('kpiDenied').innerText = dashboardData.submissionCounts.
 // ---- Top Categories Doughnut Chart ----
 const ctxCat = document.getElementById("topCategoriesChart").getContext("2d");
 
-const catLabels = (dashboardData.topCategories || []).map(r => r.category);
-const catCounts = (dashboardData.topCategories || []).map(r => r.cnt);
+const catLabels = dashboardData.submissionCategories.map(r => r.challenge);
+const catCounts = dashboardData.submissionCategories.map(r => r.total);
+
 
 window.submissionCharts.cat = new Chart(ctxCat, {
     type: "bar",
@@ -1331,8 +1344,8 @@ window.submissionCharts.cat = new Chart(ctxCat, {
             data: catCounts,
             backgroundColor: "#6366F1",
             borderRadius: 6,
-            barThickness: 12,      
-            maxBarThickness: 14     
+            barThickness: 12,
+            maxBarThickness: 14
         }]
     },
     options: {
@@ -1340,11 +1353,11 @@ window.submissionCharts.cat = new Chart(ctxCat, {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-            x: { 
-                beginAtZero: false, 
+            x: {
+                beginAtZero: true,
                 grid: { display: false }
             },
-            y: { 
+            y: {
                 grid: { display: false },
                 ticks: { padding: 6 }
             }
@@ -1359,22 +1372,57 @@ window.submissionCharts.cat = new Chart(ctxCat, {
 
 
 
+
 }
 
 /* Users charts */
 function initUsersTab(){
   window.usersCharts = {};
 
-  // role doughnut
-  const roleCtx = document.getElementById('roleDistributionChart').getContext('2d');
-  window.usersCharts.role = new Chart(roleCtx, {
-    type:'doughnut',
-    data:{
-      labels: Object.keys(dashboardData.roleDistribution || {}),
-      datasets:[{ data: Object.values(dashboardData.roleDistribution || {}), backgroundColor:['#4F46E5','#22C55E','#F59E0B','#EF4444'] }]
+  // team doughnut
+
+const teamCtx = document.getElementById('teamScoreChart').getContext('2d');
+
+window.usersCharts.teamScore = new Chart(teamCtx, {
+    type: 'bar', // 横向条形图
+    data: {
+        labels: (dashboardData.teamScores || []).map(t => t.teamName),
+        datasets: [{
+            label: 'Team Score',
+            data: (dashboardData.teamScores || []).map(t => t.teamPoints),
+            backgroundColor: '#4F46E5',
+            borderRadius: 16, // 和 KPI 卡圆角一致
+            barThickness: 18
+        }]
     },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
-  });
+    options: {
+        indexAxis: 'y', // 横向 bar
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: ctx => `Score: ${ctx.parsed.x}`
+                }
+            }
+        },
+        scales: {
+            x: {
+                beginAtZero: true,
+                grid: { color: '#E5E7EB' },
+                ticks: { color: '#374151' } // 字体颜色统一
+            },
+            y: {
+                grid: { display: false },
+                ticks: { color: '#374151' }
+            }
+        }
+    }
+});
+
+
+
 
   // login trend
   const loginCtx = document.getElementById('loginTrendChart').getContext('2d');
@@ -1385,82 +1433,173 @@ function initUsersTab(){
   });
 
   // submission activity
-  const subCtx = document.getElementById('submissionActivityChart').getContext('2d');
-  window.usersCharts.sub = new Chart(subCtx, {
-    type:'bar',
-    data:{ labels:(dashboardData.submissionActivity||[]).map(r=>r.name), datasets:[{ label:'Submissions', data:(dashboardData.submissionActivity||[]).map(r=>r.submissions), backgroundColor:'#22C55E' }]},
-    options:{ responsive:true, maintainAspectRatio:false }
-  });
+const subCtx = document.getElementById('submissionActivityChart').getContext('2d');
 
-  // points earned vs burned
-  const pointsCtx = document.getElementById('pointsActivityChart').getContext('2d');
-  window.usersCharts.points = new Chart(pointsCtx, {
-    type:'bar',
-    data:{
-      labels:(dashboardData.pointsActivity||[]).map(r=>r.name),
-      datasets:[
-        { label:'Earned', data:(dashboardData.pointsActivity||[]).map(r=>r.earned), backgroundColor:'#4F46E5' },
-        { label:'Burned', data:(dashboardData.pointsActivity||[]).map(r=>r.burned), backgroundColor:'#F59E0B' }
-      ]
-    },
-    options:{ responsive:true, maintainAspectRatio:false }
-  });
-}
-
-/* Reward tab */
-function initRewardTab() {
-    // Redemption Trend
-    const trendCtx = document.getElementById('trendChart').getContext('2d');
-    new Chart(trendCtx, {
-        type: 'line',
-        data: {
-            labels: dashboardData.rewards.trendLabels,
-            datasets: [{
-                label: 'Redemptions',
-                data: dashboardData.rewards.trendData,
-                borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59, 130, 246,0.2)',
-                fill: true,
-                tension: 0.3
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: true } },
-            scales: {
-                y: { beginAtZero: true }
-            }
-        }
-    });
-
-
-    // Top 5 Rewards
-const popColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
-
-const ctxPop = document.getElementById('popChart').getContext('2d');
-new Chart(ctxPop, {
-    type: 'doughnut',
+window.usersCharts.sub = new Chart(subCtx, {
+    type: 'bar',
     data: {
-        labels: <?php echo json_encode($popLabels); ?>,
+        labels: (dashboardData.submissionActivity || []).map(r => r.name),
         datasets: [{
-            data: <?php echo json_encode($popData); ?>,
-            backgroundColor: popColors,
-            borderWidth: 0,
-            hoverOffset: 10
+            label: 'Submissions',
+            data: (dashboardData.submissionActivity || []).map(r => r.submissions),
+            backgroundColor: (ctx) => {
+                const colors = ['#22C55E','#10B981','#3B82F6','#F59E0B','#EF4444'];
+                return colors[ctx.dataIndex % colors.length];
+            },
+            borderRadius: 8,       // 柱子圆角
+            borderSkipped: false,  // 圆角完整显示
+            maxBarThickness: 50    // 最大宽度
         }]
     },
     options: {
         responsive: true,
         maintainAspectRatio: false,
-        cutout: '70%',
         plugins: {
-            legend: { 
-                position: 'right', 
-                labels: { boxWidth: 12, font: { size: 11 } } 
+            legend: {
+                display: false // 不显示图例
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return context.dataset.label + ': ' + context.parsed.y;
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                grid: { display: false }, // 去掉 X 轴网格线
+                ticks: { color: '#4B5563', font: { size: 12, weight: '500' } }
+            },
+            y: {
+                beginAtZero: true,
+                grid: { color: '#E5E7EB' }, // 轻灰色网格线
+                ticks: { color: '#4B5563', font: { size: 12, weight: '500' }, stepSize: 1 }
             }
         }
     }
 });
+
+
+  // points earned vs burned
+const pointsCtx = document
+  .getElementById('pointsActivityChart')
+  .getContext('2d');
+
+window.usersCharts.points = new Chart(pointsCtx, {
+  type: 'doughnut',
+  data: {
+    labels: ['Earned', 'Burned'],
+    datasets: [{
+      data: [
+        dashboardData.pointsOverall.earned,
+        dashboardData.pointsOverall.burned
+      ],
+      backgroundColor: ['#4F46E5', '#F59E0B']
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom' },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => `${ctx.label}: ${ctx.parsed}`
+        }
+      }
+    }
+  }
+});
+
+
+
+}
+
+/* Reward tab */
+function initRewardTab() {
+
+    // Redemption Trend
+ const trendCtx = document.getElementById('trendChart').getContext('2d');
+
+    const labels = (dashboardData.rewards.rewardTrendStatus || []).map(d => d.day);
+    const pending = (dashboardData.rewards.rewardTrendStatus || []).map(d => d.pending || 0);
+    const approved = (dashboardData.rewards.rewardTrendStatus || []).map(d => d.approved || 0);
+    const denied = (dashboardData.rewards.rewardTrendStatus || []).map(d => d.denied || 0);
+
+    new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Pending',
+                    data: pending,
+                    borderColor: '#FBBF24',
+                    backgroundColor: 'rgba(251,191,36,0.15)',
+                    fill: true,
+                    tension: 0.3
+                },
+                {
+                    label: 'Approved',
+                    data: approved,
+                    borderColor: '#22C55E',
+                    backgroundColor: 'rgba(34,197,94,0.15)',
+                    fill: true,
+                    tension: 0.3
+                },
+                {
+                    label: 'Denied',
+                    data: denied,
+                    borderColor: '#EF4444',
+                    backgroundColor: 'rgba(239,68,68,0.15)',
+                    fill: true,
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grace: 1
+                }
+            }
+        }
+    });
+
+    // Top 5 Rewards
+        const popColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+
+            const ctxPop = document.getElementById('popChart').getContext('2d');
+            new Chart(ctxPop, {
+                type: 'doughnut',
+                data: {
+                    labels: <?php echo json_encode($popLabels); ?>,
+                    datasets: [{
+                        data: <?php echo json_encode($popData); ?>,
+                        backgroundColor: popColors,
+                        borderWidth: 0,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: {
+                        legend: { 
+                            position: 'right', 
+                            labels: { boxWidth: 12, font: { size: 11 } } 
+                        }
+                    }
+                }
+            });
 }
 
 </script>
