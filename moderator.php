@@ -6,7 +6,7 @@ require_once "includes/auth.php";
 
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'moderator') {
-    header("Location: index.php");
+    header("Location: login.php");
     exit;
 }
 
@@ -449,14 +449,9 @@ include "includes/layout_start.php";
             <div class="lg:col-span-2">
                 <div class="bg-white rounded-xl shadow-card h-full flex flex-col">
                     <div class="p-4 border-b border-neutral-100 flex justify-between items-center">
+                        <div id="submission-details-top">
                         <h3 class="font-medium text-neutral-700">Submission Details</h3>
-                        <div class="flex items-center space-x-2">
-                            <button class="p-2 rounded-full hover:bg-neutral-100 transition-colors text-neutral-500">
-                                <i class="fas fa-ellipsis-v"></i>
-                            </button>
-                            <button class="p-2 rounded-full hover:bg-neutral-100 transition-colors text-neutral-500">
-                                <i class="fas fa-print"></i>
-                            </button>
+        
                         </div>
                     </div>
                     <div class="flex-1 overflow-y-auto scrollbar-hide p-4">
@@ -478,14 +473,14 @@ include "includes/layout_start.php";
                             <?php endif; ?>
                         </div>
 
-                        <!-- Submission details：永远存在 -->
-                        <div
-                            id="submission-details"
-                            style="<?= $currentSubmission ? '' : 'display:none;' ?>"
-                        >
-                          
+      
+                            <div
+                                id="submission-details"
+                                style="<?= $currentSubmission ? '' : 'display:none;' ?>"
+                            >
+                            
 
-                            <!-- submission details START -->
+                                <!-- submission details START -->
 
                                     
                 <div class="mb-6">
@@ -611,13 +606,14 @@ include "includes/layout_start.php";
                     </div>
 
                     <div class="mb-4">
-                        <label class="block text-sm text-neutral-700 mb-2">Feedback</label>
+                        <label class="block text-sm text-neutral-700 mb-2">Feedback *</label>
                         <textarea required id="detail-feedback" name="feedback" class="w-full p-3 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all min-h-[100px]" placeholder="Please Enter Your Feedback..."><?= htmlspecialchars($currentSubmission['feedback'] ?? ''); ?></textarea>
                     </div>
 
                     <button type="submit"
+                        onclick="scrollAndSubmit(event)"
                         class="px-4 py-2 bg-green-600 text-white rounded-lg
-                            hover:bg-green-700 transition-all shadow-sm hover:shadow-md">
+                            hover:bg-green-700 transition-all shadow-sm">
                         Submit
                     </button>
 
@@ -658,8 +654,7 @@ include "includes/layout_start.php";
 
         </div>
    </div>
-
-                
+        
 
                 </div>
 
@@ -709,9 +704,6 @@ const paginationState = {
         if (firstPending) firstPending.click();
     });
 
-
-
- 
 
 
 function initSubmitItemClick() {
@@ -929,71 +921,64 @@ if (searchInput) {
 
 
 /* =========================
-   AJAX Review Submit
+   AJAX Review Submit + Smooth Scroll
 ========================= */
 const reviewForm = document.getElementById('review-form');
 
 if (reviewForm) {
-   reviewForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-    const formData = new FormData(reviewForm);
+    reviewForm.addEventListener('submit', function(e) {
+        e.preventDefault(); // 阻止默认提交
 
-    fetch('review_submission.php', { method:'POST', body: formData })
-    .then(res => res.json())
-    .then(data => {
-        if (!data.success) {
-            alert(data.message || 'Review failed');
-            return;
+        // 平滑滚动到 Submission Details 顶部
+        const details = document.getElementById('submission-details-top');
+        if (details) {
+            details.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
-        const item = document.querySelector(`.submit-item[data-id="${data.submission_id}"]`);
-        updateRightPanelAfterReview(data);
-        updateAccordionCount('pending', -1);
+        const formData = new FormData(reviewForm);
 
-        if (data.status === 'approved') {
-            updateAccordionCount('approved', +1);
-            moveItemToAccordion(item, 'Approved');
-        } else {
-            updateAccordionCount('denied', +1);
-            moveItemToAccordion(item, 'Denied');
-        }
+        fetch('review_submission.php', { method:'POST', body: formData })
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) {
+                alert(data.message || 'Review failed');
+                return;
+            }
 
-        renderAccordionPage('pending');
-        renderAccordionPage('approved');
-        renderAccordionPage('denied');
+            const item = document.querySelector(`.submit-item[data-id="${data.submission_id}"]`);
+            if (!item) return;
 
-        autoSelectNextPending();
-    })
-    .catch(err => {
-        console.error(err);
-        alert('AJAX request failed. See console.');
+            // 更新右侧详情面板
+            updateRightPanelAfterReview(data);
+
+            // 更新 Accordion 计数
+            updateAccordionCount('pending', -1);
+            if (data.status === 'approved') {
+                updateAccordionCount('approved', +1);
+                moveItemToAccordion(item, 'Approved');
+            } else {
+                updateAccordionCount('denied', +1);
+                moveItemToAccordion(item, 'Denied');
+            }
+
+            // 关键：更新 data-status 并隐藏旧 Pending 元素
+            item.dataset.status = capitalize(data.status); // 改为 Approved/Denied
+            item.style.display = 'none'; // 避免 autoSelectNextPending 找到
+
+            // 重新渲染分页
+            ['pending','approved','denied'].forEach(renderAccordionPage);
+
+            // 自动选择下一个 pending
+            autoSelectNextPending();
+        })
+        .catch(err => {
+            console.error(err);
+            alert('AJAX request failed. See console.');
+        });
     });
-});
-
 }
 
-function capitalize(str) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-
-function removeLeftItem(id) {
-    const item = document.querySelector(`.submit-item[data-id="${id}"]`);
-    if (item) item.remove();
-}
-
-function autoSelectNextPending() {
-    const nextPending = document.querySelector('.submit-item[data-status="Pending"]');
-
-    if (nextPending) {
-        nextPending.click();
-    } else {
-        document.getElementById('submission-details').style.display = 'none';
-        document.getElementById('no-submission-placeholder').style.display = 'block';
-    }
-}
-
-
+// 更新右侧详情面板
 function updateRightPanelAfterReview(data) {
     const reviewFormBlock = document.getElementById('review-form-block');
     const reviewStaticBlock = document.getElementById('review-static-block');
@@ -1013,9 +998,37 @@ function updateRightPanelAfterReview(data) {
         feedbackText.textContent = `Moderator feedback: ${data.feedback}`;
         feedbackText.style.display = 'block';
     } else {
+        feedbackText.textContent = '';
         feedbackText.style.display = 'none';
     }
 }
+
+// 自动选择下一个 pending submission
+function autoSelectNextPending() {
+    const nextPending = document.querySelector('.submit-item[data-status="Pending"]');
+    const details = document.getElementById('submission-details');
+    const placeholder = document.getElementById('no-submission-placeholder');
+
+    if (nextPending) {
+        placeholder.style.display = 'none';
+        details.style.display = 'block';
+        nextPending.click();
+    } else {
+        details.style.display = 'none';
+        if (placeholder) placeholder.style.display = 'block';
+    }
+}
+
+function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+
+function removeLeftItem(id) {
+    const item = document.querySelector(`.submit-item[data-id="${id}"]`);
+    if (item) item.remove();
+}
+
 
 function decreasePendingCount() {
     const pendingSpan = document.getElementById('pending-count');
