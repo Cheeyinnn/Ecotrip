@@ -36,68 +36,79 @@ $stmt->close();
 $_SESSION['challengeID'] = $challenge['challengeID'];
 
 // --------------------------------------------------
-// 2. IMAGE MAPPING (Local Files)
+// 2. IMAGE LOGIC (Custom URL + Fallback)
 // --------------------------------------------------
-function getLocalImageFilename($title) {
-    $t = strtolower($title); // convert to lowercase
+function getHeroImageURL($title, $id) {
+    
+    // -------------------------------------------------------------
+    // 🟢 CUSTOM IMAGE LIST (EDIT HERE)
+    // Format: Challenge_ID => 'URL',
+    // -------------------------------------------------------------
+    $custom_urls = [
+        30 => 'https://cj.my/wp-content/uploads/2023/03/the-iconic-penang-ferry-service-7-1300x500.jpg', 
+        45 => 'https://wallpapers.com/images/hd/food-4k-spdnpz7bhmx4kv2r.jpg',
+        41 => 'https://bangkokattractions.com/wp-content/uploads/2023/04/ipoh.jpg',
+        29 => 'https://ik.imagekit.io/tvlk/blog/2022/10/03-KL-Monorail-1024x683.jpg?tr=dpr-2,w-675',
+        44 => 'https://tse1.mm.bing.net/th/id/OIP.gfHJEWugJxMht6qauXJaRgHaEo?pid=Api&P=0&h=180',
+        42 => 'https://tse4.mm.bing.net/th/id/OIP.Onirx1aPQ5JvZ2QEhlv2hwHaEL?pid=Api&P=0&h=180',
+        37 => 'https://media.tacdn.com/media/attractions-content--1x-1/0b/39/b0/98.jpg',
+        35 => 'https://tse3.mm.bing.net/th/id/OIP.gRliVC74pBhaqeP7DTxj1wHaHa?pid=Api&P=0&h=180',
+        31 => 'https://tse4.mm.bing.net/th/id/OIP.Cts7VCGtR3PqXCt9lUaGCgHaCe?pid=Api&P=0&h=180',
+    ];
 
-    // Fuzzy matching for images
-    if (strpos($t, 'monorail') !== false)   return 'kl_monorail.jpg';
-    if (strpos($t, 'ferry') !== false)      return 'penang_ferry.jpg';
-    if (strpos($t, 'global bus') !== false) return 'global_bus.jpg';
-    if (strpos($t, 'jb work') !== false)    return 'jb_work_bus.jpg';
-    
-    if (strpos($t, 'plastic free') !== false) return 'kuching_plastic_free.jpg';
-    if (strpos($t, 'beach clean') !== false)  return 'kk_beach_clean.jpg';
-    if (strpos($t, 'sorting') !== false)      return 'global_sorting.jpg';
-    if (strpos($t, 'recycling') !== false)    return 'shah_alam_recycling.jpg';
-    
-    if (strpos($t, 'river walk') !== false)   return 'melaka_river_walk.jpg';
-    if (strpos($t, 'bike') !== false)         return 'putrajaya_bike.jpg';
-    if (strpos($t, '10k steps') !== false)    return 'global_10k_steps.jpg';
-    if (strpos($t, 'car free') !== false)     return 'kl_car_free.jpg';
-    
-    if (strpos($t, 'cave') !== false)       return 'ipoh_cave.jpg';
-    if (strpos($t, 'taiping') !== false)    return 'taiping_lake.jpg';
-    if (strpos($t, 'plant life') !== false) return 'global_plant.jpg';
-    if (strpos($t, 'geo tour') !== false)   return 'langkawi_geo.jpg';
-    
-    if (strpos($t, 'local food') !== false) return 'seremban_food.jpg';
-    if (strpos($t, 'veggie') !== false)     return 'global_veggie.jpg';
-    if (strpos($t, 'zero waste') !== false) return 'pj_zerowaste.jpg';
-    if (strpos($t, 'carpool') !== false)    return 'cyberjaya_carpool.jpg';
+    // 1. Check Custom List
+    if (array_key_exists($id, $custom_urls)) {
+        return $custom_urls[$id];
+    }
 
-    return 'default_challenge.jpg';
+    // 2. Fallback: Auto-Generate Keyword if ID is not in the list
+    $t = strtolower(trim($title));
+    $keyword = 'nature'; 
+
+    if (strpos($t, 'bike') !== false)         $keyword = 'bicycle';
+    elseif (strpos($t, 'walk') !== false)     $keyword = 'sneakers';
+    elseif (strpos($t, 'bus') !== false)      $keyword = 'bus';
+    elseif (strpos($t, 'carpool') !== false)  $keyword = 'traffic';
+    elseif (strpos($t, 'straw') !== false)    $keyword = 'drink';
+    elseif (strpos($t, 'bottle') !== false)   $keyword = 'water bottle';
+    elseif (strpos($t, 'bag') !== false)      $keyword = 'shopping bag';
+    elseif (strpos($t, 'food') !== false)     $keyword = 'vegetables';
+    elseif (strpos($t, 'plant') !== false)    $keyword = 'planting';
+    elseif (strpos($t, 'beach') !== false)    $keyword = 'beach';
+    elseif (strpos($t, 'river') !== false)    $keyword = 'river';
+    
+    // Return LoremFlickr URL
+    return "https://loremflickr.com/1200/600/" . urlencode($keyword) . "?lock=" . $id;
 }
 
 // --------------------------------------------------
-// 3. HARDCODED RULES & BENEFITS (KEYWORD MATCHING)
+// 3. HARDCODED RULES & BENEFITS
 // --------------------------------------------------
 function getHardcodedDetails($title) {
-    $t = strtolower($title); // Convert title to lowercase for easy matching
+    $t = strtolower($title); 
 
     // --- CATEGORY 1: ECO-COMMUTER ---
     if (strpos($t, 'monorail') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a selfie inside the Monorail carriage. The timestamp on the photo must show todays date and time to verify your ride.',
+            'r' => 'Take a selfie inside the Monorail carriage. The photo must show todays date and time to verify your ride.',
             'b' => 'You save money on parking, arrive faster during rush hour, and help reduce carbon emissions in the city centers.'
         ];
     }
     if (strpos($t, 'ferry') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a photo of the ocean view from the ferry deck. Ensure the location stamp shows you are crossing the strait.', 
+            'r' => 'Take a photo of the ocean view from the ferry deck. Ensure the stamp shows you are crossing the strait.', 
             'b' => 'Enjoy a scenic, stress-free journey with the sea breeze while reducing vehicle exhaust fumes.'
         ];
     }
     if (strpos($t, 'global bus') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to snap a clear photo of your bus ticket or the view inside the bus. The date must match the challenge period.', 
+            'r' => 'Snap a clear photo of your bus ticket or the view inside the bus. The date must match the challenge period.', 
             'b' => 'Lower your personal carbon footprint significantly and support public transit systems.'
         ];
     }
     if (strpos($t, 'jb work') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a photo of yourself at the bus stop or inside the bus. The time must show typical commuting hours (morning or evening).', 
+            'r' => 'Take a photo of yourself at the bus stop or inside the bus. The time must show typical commuting hours (morning or evening).', 
             'b' => 'Reduce severe traffic congestion at the Causeway and city center while saving on petrol.'
         ];
     }
@@ -105,25 +116,25 @@ function getHardcodedDetails($title) {
     // --- CATEGORY 2: WASTE WARRIOR ---
     if (strpos($t, 'plastic free') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a photo of your food inside your own reusable container (Tupperware/Tiffin). The photo must verify the date.', 
+            'r' => 'Take a photo of your food inside your own reusable container (Tupperware/Tiffin). The photo must verify the date.', 
             'b' => 'Directly prevents plastic waste from clogging drains and harming local wildlife.'
         ];
     }
     if (strpos($t, 'beach clean') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a photo of the trash you collected in a bag. The location stamp must confirm you are at the beach.', 
+            'r' => 'Take a photo of the trash you collected in a bag. The location stamp must confirm you are at the beach.', 
             'b' => 'Protects marine life like turtles and fish from eating plastic, and keeps our beaches beautiful for everyone.'
         ];
     }
     if (strpos($t, 'sorting') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to photograph your separated waste bins at home. The photo must clearly show at least two different categories of waste.', 
+            'r' => 'Photograph your separated waste bins at home. The photo must clearly show at least two different categories of waste.', 
             'b' => 'Ensures materials can be actually recycled instead of being sent to the landfill.'
         ];
     }
     if (strpos($t, 'recycling') !== false && strpos($t, 'shah alam') !== false) { // Specific check
         return [
-            'r' => 'Use a Timestamp Camera App to take a selfie at the recycling center or machine. The timestamp must prove you visited today.', 
+            'r' => 'Take a selfie at the recycling center or machine. Must show you visited today.', 
             'b' => 'Promotes the circular economy where old plastic is turned into new products rather than trash.'
         ];
     }
@@ -131,25 +142,25 @@ function getHardcodedDetails($title) {
     // --- CATEGORY 3: ACTIVE MOVER ---
     if (strpos($t, 'river walk') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a photo of the river scenery or a selfie while walking. The time and location must be visible.', 
+            'r' => 'Take a photo of the river scenery or a selfie while walking. The time and location must be visible.', 
             'b' => 'Improves cardiovascular health, burns calories, and lets you appreciate the city history without a car.',
         ];
     }
     if (strpos($t, 'bike') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a photo of your bicycle with a landmark (like the mosque or bridge) in the background.', 
+            'r' => 'Take a photo of your bicycle with a landmark (like the mosque or bridge) in the background.', 
             'b' => 'Cycling strengthens your leg muscles and produces absolutely no air pollution.'
         ];
     }
     if (strpos($t, '10k steps') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a photo of your smartwatch or phone screen showing the step count and today date.', 
+            'r' => 'Take a photo of your smartwatch or phone screen showing the step count and today date.', 
             'b' => 'Walking 10k steps daily significantly reduces the risk of heart disease and keeps you active.'
         ];
     }
     if (strpos($t, 'car free') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a selfie with the crowd on the main road. The time stamp must be between 7 AM and 9 AM.', 
+            'r' => 'Take a selfie with the crowd on the main road. The time  must be between 7 AM and 9 AM.', 
             'b' => 'Experience a noise-free, pollution-free city environment and support the green city initiative.'
         ];
     }
@@ -157,25 +168,25 @@ function getHardcodedDetails($title) {
     // --- CATEGORY 4: NATURE GUARDIAN ---
     if (strpos($t, 'cave') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a photo at the cave entrance. Ensure you do not leave any litter behind.', 
+            'r' => 'Take a photo at the cave entrance. Ensure you do not leave any litter behind.', 
             'b' => 'Promotes eco-tourism which helps fund the preservation of these natural limestone wonders.'
         ];
     }
     if (strpos($t, 'taiping') !== false || strpos($t, 'lake zen') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a photo of a Rain Tree (Deduap Tree). Location stamp must match Taiping.', 
+            'r' => 'Take a photo of a Rain Tree (Deduap Tree). Location stamp must match Taiping.', 
             'b' => 'Studies show that time spent in green spaces lowers stress levels and improves mental health.'
         ];
     }
     if (strpos($t, 'plant life') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a photo of you planting the seed or sapling into the soil.', 
+            'r' => 'Take a photo of you planting the seed or sapling into the soil.', 
             'b' => 'Plants absorb Carbon Dioxide (CO2) and release Oxygen, helping to clean the air we breathe.'
         ];
     }
     if (strpos($t, 'geo tour') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a photo of an educational signboard you find there.', 
+            'r' => 'Take a photo of an educational signboard you find there.', 
             'b' => 'Increases awareness about fragile ecosystems and the importance of mangroves in preventing coastal erosion.'
         ];
     }
@@ -183,25 +194,25 @@ function getHardcodedDetails($title) {
     // --- CATEGORY 5: GREEN LIVING ---
     if (strpos($t, 'local food') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a photo of your meal with the shop signboard visible in the background.', 
+            'r' => 'Take a photo of your meal with the shop signboard visible in the background.', 
             'b' => 'Local food usually travels fewer miles (lower carbon footprint) and keeps money in the local community.'
         ];
     }
     if (strpos($t, 'veggie') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a photo of your plate showing only vegetables, grains, or fruits (no meat).', 
+            'r' => 'Take a photo of your plate showing only vegetables, grains, or fruits (no meat).', 
             'b' => 'Cutting meat consumption even once a week saves huge amounts of water and land resources.'
         ];
     }
     if (strpos($t, 'zero waste') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a photo of you filling your own jar at the dispenser.', 
+            'r' => 'Take a photo of you filling your own jar at the dispenser.', 
             'b' => 'This completely eliminates the need for single-use plastic packaging that ends up in oceans.'
         ];
     }
     if (strpos($t, 'carpool') !== false) {
         return [
-            'r' => 'Use a Timestamp Camera App to take a selfie with your carpool buddy inside the car.', 
+            'r' => 'Take a selfie with your carpool buddy inside the car.', 
             'b' => 'Carpooling reduces fuel consumption per person, eases parking shortages, and makes the commute less lonely.'
         ];
     }
@@ -217,14 +228,8 @@ function getHardcodedDetails($title) {
 // 4. PREPARE VIEW VARIABLES
 // --------------------------------------------------
 
-// Image Logic
-$imageFilename = getLocalImageFilename($challenge['challengeTitle']);
-$heroImage = "uploads/challenges/" . $imageFilename; // Path to your local image
-
-if (!file_exists($heroImage)) {
-    // Fallback if file is missing (Use placeholder so site doesn't break)
-    $heroImage = "https://placehold.co/1200x500?text=Image+Not+Found"; 
-}
+// 🟢 CALL THE NEW FUNCTION TO GET THE URL
+$heroImage = getHeroImageURL($challenge['challengeTitle'], $challenge['challengeID']);
 
 // Data Logic
 $pageTitle = $challenge['challengeTitle'];
@@ -248,6 +253,7 @@ include "includes/layout_start.php";
         margin-bottom: 5rem;
     }
     .hero-bg {
+        /* USE THE NEW $heroImage VARIABLE */
         background: url('<?= $heroImage ?>') no-repeat center center;
         background-size: cover;
         height: 100%;
