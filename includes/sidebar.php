@@ -79,6 +79,11 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
                 Admin Dashboard
             </a>
 
+            <a href="leaderboard.php" class="sidebar-link <?= isActive('leaderboard.php') ?>">
+                <iconify-icon icon="solar:cup-star-line-duotone"></iconify-icon>
+                Leaderboard
+            </a>
+
             <div class="sidebar-dropdown">
                 <div class="sidebar-link sidebar-dropdown-btn" onclick="toggleSidebarGroup('admin-challenge')">
                     <span><iconify-icon icon="solar:list-check-line-duotone"></iconify-icon> Challenges</span>
@@ -98,7 +103,6 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
                 <div id="admin-users" class="sidebar-dropdown-content">
                     <a href="manage_user.php" class="sidebar-link <?= isActive('manage_user.php') ?>">Manage Users</a>
                     <a href="manage_team.php" class="sidebar-link <?= isActive('manage_team.php') ?>">Manage Teams</a>
-                    <a href="leaderboard.php" class="sidebar-link <?= isActive('leaderboard.php') ?>">Leaderboard</a>
                 </div>
             </div>
 
@@ -140,6 +144,11 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
                 User Dashboard
             </a>
 
+            <a href="leaderboard.php" class="sidebar-link <?= isActive('leaderboard.php') ?>">
+                <iconify-icon icon="solar:cup-star-line-duotone"></iconify-icon>
+                Leaderboard
+            </a>
+
             <div class="sidebar-dropdown">
                 <div class="sidebar-link sidebar-dropdown-btn" onclick="toggleSidebarGroup('user-activity')">
                     <span><iconify-icon icon="solar:chart-square-line-duotone"></iconify-icon> My Activity</span>
@@ -148,7 +157,6 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
                 <div id="user-activity" class="sidebar-dropdown-content">
                     <a href="userdashboard.php" class="sidebar-link <?= isActive('userdashboard.php') ?>">Submissions</a>
                     <a href="view.php" class="sidebar-link <?= isActive('view.php') ?>">View Challenges</a>
-                    <a href="leaderboard.php" class="sidebar-link <?= isActive('leaderboard.php') ?>">Leaderboard</a>
                 </div>
             </div>
 
