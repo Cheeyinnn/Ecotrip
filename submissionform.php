@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
 
     $allowedTypes = ['jpeg', 'png', 'jpg'];
-    $maxSize = 10 * 1024 * 1024; //10MB
+    $maxSize = 5 * 1024 * 1024; //10MB
 
     if ($fileError === 4) {
         $uploadResults[] = "Error: Please Upload a File.";

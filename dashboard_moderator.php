@@ -23,24 +23,15 @@ elseif ($timeFilter === 'today') $timeCondition = " AND DATE(uploaded_at) = CURD
 
 // ======================
 // KPI 卡片
-// ======================
-// Total & Pending (全站)
 $totalSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE 1=1 $timeCondition")->fetch_assoc()['c'];
-$pendingSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='pending' $timeCondition")->fetch_assoc()['c'];
-
-// Approved & Denied (当前 moderator)
+$pendingSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status = 'pending' $timeCondition")->fetch_assoc()['c'];
 $approvedSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='approved' $timeCondition $moderatorCondition")->fetch_assoc()['c'];
 $deniedSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='denied' $timeCondition $moderatorCondition")->fetch_assoc()['c'];
-
-// ======================
-// Approval Rate Donut (当前 moderator)
-// ======================
-$approveCount = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='approved' $timeCondition $moderatorCondition")->fetch_assoc()['c'];
-$rejectCount  = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='denied' $timeCondition $moderatorCondition")->fetch_assoc()['c'];
+$approveCount = $approvedSubmission;
+$rejectCount  = $deniedSubmission;
 
 // ======================
 // Challenge Type (全站)
-// ======================
 $challengeTypeSQL = "
     SELECT category.categoryName, COUNT(*) AS total
     FROM sub
@@ -62,14 +53,16 @@ while ($c = $challengeType->fetch_assoc()) {
 
 // ======================
 // Approval Trend (当前 moderator)
-// ======================
+
+// SQL 抓取每天的统计
+// 获取当前 moderator 所审核的所有日期，保证即便没有审批也显示 0
 $trendSQL = "
     SELECT DATE(uploaded_at) AS d,
-           SUM(status='approved') AS approved,
-           SUM(status='denied') AS denied,
-           SUM(status='pending') AS pending
+           SUM(status='approved' AND moderatorID = $userID) AS approved,
+           SUM(status='denied' AND moderatorID = $userID) AS denied,
+           SUM(status='pending' AND moderatorID = $userID) AS pending
     FROM sub
-    WHERE 1=1 $moderatorCondition
+    WHERE 1=1
 ";
 if ($days !== null) $trendSQL .= " AND uploaded_at >= NOW() - INTERVAL $days DAY";
 elseif ($timeFilter === 'today') $trendSQL .= " AND DATE(uploaded_at) = CURDATE()";
@@ -84,9 +77,9 @@ while ($t = $trendData->fetch_assoc()) {
     $trendPending[] = (int)$t['pending'];
 }
 
+
 // ======================
 // Daily Submission Trend (全站)
-// ======================
 $dailySQL = "
     SELECT DATE(uploaded_at) AS d, COUNT(*) AS total
     FROM sub
@@ -103,7 +96,6 @@ while ($d = $dailyData->fetch_assoc()) {
 
 // ======================
 // Average Review Time (当前 moderator)
-// ======================
 $avgReviewTimeSQL = "
     SELECT AVG(TIMESTAMPDIFF(MINUTE, uploaded_at, approved_at)) AS avg_minutes
     FROM sub
@@ -114,7 +106,9 @@ $avgMinutes = $conn->query($avgReviewTimeSQL)->fetch_assoc()['avg_minutes'];
 $avgHours = round($avgMinutes / 60, 1);
 
 include "includes/layout_start.php";
+
 ?>
+
 
 
 
@@ -301,133 +295,160 @@ include "includes/layout_start.php";
 }
     </style>
   </head>
-  <body class="font-inter bg-gray-50 text-dark min-h-screen flex flex-col">
-    
-    <div class="flex flex-1 overflow-hidden">
-      <main class="flex-1 overflow-y-auto bg-gray-50 p-6 lg:p-10">
-        <div id="dashboard-page" class="max-w-7xl mx-auto space-y-10">
 
-          <div class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-            <div>
-              <h2 class="text-[clamp(1.5rem,3vw,2rem)] font-bold text-dark">
-                <i class="fas fa-tachometer-alt text-primary mr-2"></i> Moderator Dashboard
-              </h2>
-              <p class="text-dark-2 mt-1">Viewing submission statistics for the selected time range.</p>
-            </div>
-            <div class="flex items-center gap-3">
-                <select id="timeFilter" class="border rounded px-2 py-1 shadow-sm focus:ring-primary focus:border-primary" onchange="applyTimeFilter()">
-                    <option value="all" <?= $timeFilter === 'all' ? 'selected' : '' ?>>All Time</option>
-                    <option value="today" <?= $timeFilter === 'today' ? 'selected' : '' ?>>Today</option>
-                    <option value="7" <?= $timeFilter === '7' ? 'selected' : '' ?>>Last 7 Days</option>
-                    <option value="30" <?= $timeFilter === '30' ? 'selected' : '' ?>>Last 30 Days</option>
-                </select>
 
-                <button 
-                    onclick="window.location = '?time=all'" 
-                    class="bg-primary hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-md transition-colors"
-                >
-                    <i class="fas fa-sync-alt"></i> Refresh
-                </button>
-            </div>
-          </div>
-          
-<div class="bg-white rounded-2xl shadow-card p-6 hover:shadow-card-hover transition-all">
-  <div class="flex justify-between items-start">
+<div class="mb-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6 bg-white p-6 rounded-3xl shadow-sm border border-gray-100 transition-all duration-300">
     <div>
-      <p class="stat-card-label text-info">Average Review Time</p>
-      <h3 class="stat-card-value mt-1 text-info"><?= $avgHours ?> hrs</h3>
+        <h2 class="text-2xl font-extrabold text-gray-800 flex items-center gap-3">
+            <span class="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl shadow-inner">
+                <i class="fas fa-chart-line"></i>
+            </span>
+            Moderator Dashboard
+        </h2>
+        <p class="text-gray-500 mt-1 text-sm font-medium">Real-time insights and moderation performance tracking.</p>
     </div>
-    <div class="w-12 h-12 rounded-lg bg-info/10 flex items-center justify-center text-info">
-      <i class="fas fa-clock text-xl"> </i>
+
+    <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 bg-gray-50 p-1.5 rounded-2xl border border-gray-100 shadow-inner">
+            <div class="relative group">
+                <select id="timeFilter" 
+                        onchange="applyTimeFilter()" 
+                        class="appearance-none bg-white border border-gray-200 text-gray-700 text-sm font-semibold py-2 pl-4 pr-10 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all cursor-pointer hover:border-indigo-300">
+                    <option value="all" <?= $timeFilter==='all'?'selected':'' ?>>All Time</option>
+                    <option value="today" <?= $timeFilter==='today'?'selected':'' ?>>Today</option>
+                    <option value="7" <?= $timeFilter==='7'?'selected':'' ?>>Last 7 Days</option>
+                    <option value="30" <?= $timeFilter==='30'?'selected':'' ?>>Last 30 Days</option>
+                </select>
+                <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex flex-col gap-0.5 text-[8px] text-gray-400 group-hover:text-indigo-500 transition-colors">
+                    <i class="fas fa-chevron-up"></i>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </div>
+        </div>
+
+        <button onclick="location.reload()" 
+                class="flex items-center gap-2 bg-gray-900 hover:bg-indigo-600 text-white px-5 py-3 rounded-2xl shadow-lg shadow-gray-200 transition-all active:scale-95 group">
+            <i class="fas fa-sync-alt text-sm group-hover:rotate-180 transition-transform duration-500"></i>
+            <span class="font-bold text-sm tracking-wide">Refresh Data</span>
+        </button>
     </div>
-  </div>
 </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-
-            <div class="bg-white rounded-2xl shadow-card p-6 hover:shadow-card-hover transition-all">
-              <div class="flex justify-between items-start">
+<section class="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 mb-10">
+    <h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+        <span class="w-1.5 h-6 bg-blue-500 rounded-full"></span> 📊 System Overview
+    </h3>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        <div class="group bg-gray-50 rounded-2xl p-6 hover:bg-white hover:shadow-md border border-transparent hover:border-gray-100 transition-all duration-300">
+            <div class="flex justify-between items-start">
                 <div>
-                  <p class="stat-card-label"> Total Submission </p>
-                  <h3 class="stat-card-value mt-1"><?= $totalSubmission ?></h3>
+                    <p class="text-sm font-medium text-gray-500 uppercase tracking-wider">Total Submissions</p>
+                    <h3 class="text-3xl font-bold text-gray-800 mt-2"><?= $totalSubmission ?></h3>
                 </div>
-                <div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                  <i class="fas fa-layer-group text-xl"> </i>
+                <div class="p-3 bg-blue-100 text-blue-600 rounded-xl transition-colors">
+                    <i class="fas fa-file-import fa-lg"></i>
                 </div>
-              </div>
             </div>
-
-            <div class="bg-white rounded-2xl shadow-card p-6 hover:shadow-card-hover transition-all">
-              <div class="flex justify-between items-start">
-                <div>
-                  <p class="stat-card-label">Pending Submission</p>
-                  <h3 class="stat-card-value mt-1"><?= $pendingSubmission ?></h3>
-                </div>
-                <div class="w-12 h-12 rounded-lg bg-warning/10 flex items-center justify-center text-warning">
-                  <i class="fas fa-hourglass-half text-xl"> </i>
-                </div>
-              </div>
-            </div>
-
-           <div class="bg-white rounded-2xl shadow-card p-6 hover:shadow-card-hover transition-all">
-              <div class="flex justify-between items-start">
-                <div>
-                  <p class="stat-card-label"> Approved Submission </p>
-                  <h3 class="stat-card-value mt-1"><?= $approvedSubmission ?></h3>
-                </div>
-                <div class="w-12 h-12 rounded-lg bg-success/10 flex items-center justify-center text-success">
-                  <i class="fas fa-check-circle text-xl"> </i>
-                </div>
-              </div>
-            </div>
-
-            <div class="bg-white rounded-2xl shadow-card p-6 hover:shadow-card-hover transition-all">
-              <div class="flex justify-between items-start">
-                <div>
-                  <p class="stat-card-label">Denied Submission</p>
-                  <h3 class="stat-card-value mt-1"><?= $deniedSubmission ?></h3>
-                </div>
-                <div class="w-12 h-12 rounded-lg bg-danger/10 flex items-center justify-center text-danger">
-                  <i class="fas fa-times-circle text-xl" > </i>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
-              <div class="bg-white rounded-2xl shadow-card p-6 flex-1 flex flex-col items-center">
-                  <h4 class="text-lg font-semibold text-dark mb-4 border-b pb-2 w-full text-center">🏆 Reviewed Rate (Approved vs Rejected)</h4>
-                  <div id="approvalRateChart" class="w-full h-80"></div>
-              </div>
-
-              <div class="bg-white rounded-2xl shadow-card p-6 flex-1 flex flex-col">
-                  <h4 class="text-lg font-semibold text-center text-dark mb-4 border-b pb-2 w-full">📈 Most Particaipate Challenge</h4>
-                  <div id="challengeTypeChart" class="w-full h-80"></div>
-              </div>
-
-          </div>
-
-
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
-              <div class="bg-white rounded-2xl shadow-card p-6 flex-1">
-                  <h4 class="text-lg font-semibold text-dark mb-4 border-b pb-2">📊 Approval Trend</h4>
-                  <div id="approvalTrendChart" class="w-full h-80"></div>
-              </div>
-
-              <div class="bg-white rounded-2xl shadow-card p-6 flex-1">
-                  <h4 class="text-lg font-semibold text-dark mb-4 border-b pb-2">📅 Daily Submission Trend</h4>
-                  <div id="dailyReviewChart" class="w-full h-80"></div>
-              </div>
-              
-          </div>
-
-          
         </div>
-      </main>
+
+        <div class="group bg-gray-50 rounded-2xl p-6 hover:bg-white hover:shadow-md border border-transparent hover:border-gray-100 transition-all duration-300">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-sm font-medium text-gray-500 uppercase tracking-wider">Pending Review</p>
+                    <h3 class="text-3xl font-bold text-gray-800 mt-2"><?= $pendingSubmission ?></h3>
+                </div>
+                <div class="p-3 bg-amber-100 text-amber-600 rounded-xl transition-colors">
+                    <i class="fas fa-clock fa-lg"></i>
+                </div>
+            </div>
+        </div>
     </div>
 
+    <h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+        <span class="w-1.5 h-6 bg-indigo-500 rounded-full"></span> 📈 Analytics Insights
+    </h3>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div class="flex flex-col">
+            <div class="flex items-center justify-between mb-4 px-2">
+                <h4 class="font-semibold text-gray-700 flex items-center gap-2">
+                    <i class="fas fa-calendar-check text-blue-500 text-sm"></i> Daily Submission Trend
+                </h4>
+                <span class="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 font-bold rounded-lg uppercase">Activity</span>
+            </div>
+            <div id="dailyReviewChart" class="w-full h-80 bg-gray-50 rounded-2xl border border-gray-100"></div>
+        </div>
+        
+        <div class="flex flex-col">
+            <div class="flex items-center justify-between mb-4 px-2">
+                <h4 class="font-semibold text-gray-700 flex items-center gap-2">
+                    <i class="fas fa-fire text-orange-500 text-sm"></i> Most Participate Challenge
+                </h4>
+                <span class="text-[10px] px-2 py-1 bg-gray-100 text-gray-400 font-bold rounded-lg uppercase">Bar Chart</span>
+            </div>
+            <div id="challengeTypeChart" class="w-full h-80 bg-gray-50 rounded-2xl border border-gray-100"></div>
+        </div>
+    </div>
+</section>
+
+<section class="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 mb-10">
+    <h3 class="text-lg font-bold text-gray-700 mb-6 flex items-center gap-2">
+        <span class="w-1.5 h-5 bg-indigo-500 rounded-full"></span> 👤 My Review Performance
+    </h3>
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <div class="bg-white rounded-2xl p-6 border-b-4 border-green-500 shadow-sm border-x border-t border-gray-100">
+            <p class="text-sm font-semibold text-gray-400">Approved by Me</p>
+            <div class="flex items-baseline gap-2">
+                <h3 class="text-3xl font-bold text-gray-800 mt-1"><?= $approvedSubmission ?></h3>
+                <span class="text-green-500 text-xs font-bold"><i class="fas fa-check"></i> approved</span>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-2xl p-6 border-b-4 border-red-500 shadow-sm border-x border-t border-gray-100">
+            <p class="text-sm font-semibold text-gray-400">Rejected by Me</p>
+            <div class="flex items-baseline gap-2">
+                <h3 class="text-3xl font-bold text-gray-800 mt-1"><?= $deniedSubmission ?></h3>
+                <span class="text-red-500 text-xs font-bold"><i class="fas fa-times"></i> denied</span>
+            </div>
+        </div>
+        
+        <div class="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 shadow-lg shadow-indigo-100">
+            <p class="text-sm font-semibold text-indigo-100">Avg Review Time</p>
+            <h3 class="text-3xl font-bold text-white mt-1"><?= $avgHours ?> <span class="text-lg font-normal opacity-80">hrs</span></h3>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+        <div class="flex flex-col">
+            <div class="flex items-center justify-between mb-4 px-2">
+                <h4 class="font-semibold text-gray-700 flex items-center gap-2">
+                    <i class="fas fa-pie-chart text-indigo-500 text-sm"></i> Reviewed Rate
+                </h4>
+                <span class="text-[10px] px-2 py-1 bg-gray-100 text-gray-400 font-bold rounded-lg uppercase">Donut Chart</span>
+            </div>
+            <div id="approvalRateChart" class="w-full h-80 bg-gray-50 rounded-2xl border border-gray-100"></div>
+        </div>
+
+        <div class="flex flex-col">
+            <div class="flex items-center justify-between mb-4 px-2">
+                <h4 class="font-semibold text-gray-700 flex items-center gap-2">
+                    <i class="fas fa-chart-area text-green-500 text-sm"></i> Approval Trend
+                </h4>
+                <span class="text-[10px] px-2 py-1 bg-green-50 text-green-600 font-bold rounded-full border border-green-100 uppercase">Line Chart</span>
+            </div>
+            <div id="approvalTrendChart" class="w-full h-80 bg-gray-50 rounded-2xl border border-gray-100"></div>
+        </div>
+    </div>
+</section>
+
+
+
+    
+</div>
+
+</div>
 
 <script>
 const approveCount = <?= $approveCount ?>;
@@ -440,14 +461,46 @@ const trendDenied = <?= json_encode($trendDenied) ?>;
 const trendPending = <?= json_encode($trendPending) ?>;
 const dailyDates = <?= json_encode($dailyDates) ?>;
 const dailyTotals = <?= json_encode($dailyTotals) ?>;
-
+const hasReview = approveCount > 0 || rejectCount > 0;
 
 document.addEventListener('DOMContentLoaded', function () {
 
     // ============================
     // 1. Approval Rate Donut Chart
     // ============================
-    const approvalRateChart = echarts.init(document.getElementById('approvalRateChart'));
+
+const approvalRateChart = echarts.init(
+    document.getElementById('approvalRateChart')
+);
+
+if (!hasReview) {
+
+    // 🟡 EMPTY STATE
+    approvalRateChart.setOption({
+        series: [{
+            type: 'pie',
+            radius: ['50%', '75%'],
+            silent: true,                 // 不可 hover
+            label: {
+                show: true,
+                position: 'center',
+                formatter: 'No reviews\nyet',
+                color: '#86909C',
+                fontSize: 14,
+                lineHeight: 20,
+                fontWeight: 500
+            },
+            data: [{
+                value: 1,
+                name: 'Empty',
+                itemStyle: { color: '#F2F3F5' }
+            }]
+        }]
+    });
+
+} else {
+
+    // 🟢 NORMAL STATE
     approvalRateChart.setOption({
         tooltip: {
             trigger: 'item',
@@ -461,83 +514,82 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         legend: {
             show: true,
-            orient: 'horizontal', 
-            top: 'bottom', // 移到底部以节省空间
-            left: 'center', 
+            orient: 'horizontal',
+            top: 'bottom',
+            left: 'center',
             textStyle: { color: '#1D2129', fontSize: 14 },
         },
         series: [{
             name: 'Rate',
             type: 'pie',
-            radius: ['50%', '75%'], // 调整甜甜圈大小
+            radius: ['50%', '75%'],
             avoidLabelOverlap: true,
-            itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
-            label: { show: false, position: 'center' }, // 默认不显示 label
+            itemStyle: {
+                borderRadius: 8,
+                borderColor: '#fff',
+                borderWidth: 2
+            },
+            label: { show: false },
             emphasis: {
                 scale: true,
                 scaleSize: 8,
-                label: { show: true, formatter: '{d}%', fontSize: 18, fontWeight: 'bold', color: '#1D2129' } // 悬停时显示百分比
+                label: {
+                    show: true,
+                    formatter: '{d}%',
+                    fontSize: 18,
+                    fontWeight: 'bold',
+                    color: '#1D2129'
+                }
             },
             labelLine: { show: false },
-           data: [
+            data: [
                 { value: approveCount, name: 'Approved', itemStyle: { color: '#52C41A' } },
                 { value: rejectCount, name: 'Rejected', itemStyle: { color: '#FF4D4F' } }
             ]
         }]
     });
 
-    // ============================
-    // 2. Challenge Type Bar Chart
-    // ============================
+}
+
     const challengeTypeChart = echarts.init(document.getElementById('challengeTypeChart'));
 
-    challengeTypeChart.setOption({
-        tooltip: { 
-            trigger: 'axis',
-            axisPointer: { type: 'shadow' }
-        },
-        grid: {
-            left: '3%',
-            right: '4%',
-            bottom: '3%',
-            top: '10%',
-            containLabel: true
-        },
-        xAxis: {
-            type: 'category',
-            data: challengeLabels.length ? challengeLabels : ['No Data'],
-            axisLine: { show: false }, 
-            axisTick: { show: false } 
-        },
-        yAxis: { 
-            type: 'value',
-            axisLine: { show: false },
-            axisTick: { show: false },
-            splitLine: { lineStyle: { type: 'dashed', color: '#ccc' } }
-        },
-        series: [{
-            type: 'bar',
-            data: challengeValues.length ? challengeValues : [0],
-            barWidth: '50%', 
-            label: {
-                show: true,
-                position: 'top',
-                formatter: '{c}',
-                color: '#111',
-                fontWeight: 'bold'
+        challengeTypeChart.setOption({
+            tooltip: {
+                trigger: 'item',
+                formatter: '{b}: <b>{c}</b> ({d}%)'
             },
-            itemStyle: {
-                borderRadius: [6, 6, 0, 0], 
-                color: new echarts.graphic.LinearGradient(
-                    0, 0, 0, 1, 
-                    [
-                        { offset: 0, color: '#165DFF' }, // Primary Blue
-                        { offset: 1, color: '#36CBCB' } 
-                    ]
-                )
-            }
-        }]
-    });
+            legend: {
+                bottom: '0%',
+                left: 'center',
+                itemWidth: 10,
+                itemHeight: 10,
+                textStyle: { color: '#64748b', fontSize: 11 }
+            },
+            series: [
+                {
+                    name: 'Challenge Type',
+                    type: 'pie',
+                    radius: ['20%', '70%'], // Inner and outer radius
+                    center: ['50%', '45%'],
+                    roseType: 'area', // This makes it a Nightingale Chart
+                    itemStyle: {
+                        borderRadius: 8
+                    },
+                    data: challengeLabels.map((label, index) => ({
+                        value: challengeValues[index],
+                        name: label
+                    })),
+                    label: {
+                        show: true,
+                        fontSize: 12,
+                        color: '#475569',
+                        formatter: '{b}'
+                    },
+                    // Custom modern color palette
+                    color: ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981']
+                }
+            ]
+        });
 
     // ============================
     // 3. Daily Submission Trend (Horizontal Bar)
@@ -589,76 +641,78 @@ document.addEventListener('DOMContentLoaded', function () {
     // ============================
     // 4. Approval Trend (Line Chart)
     // ============================
-        const approvalTrendChart = echarts.init(document.getElementById('approvalTrendChart'));
+const approvalTrendChart = echarts.init(document.getElementById('approvalTrendChart'));
 
-        approvalTrendChart.setOption({
-            tooltip: { trigger: 'axis' },
-            legend: {
-                data: ['Pending', 'Approved', 'Rejected'], // 改顺序
-                bottom: 0,
-                icon: 'circle'
+approvalTrendChart.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: {
+        data: ['Pending', 'Approved', 'Rejected'],
+        bottom: 0,
+        icon: 'circle'
+    },
+    xAxis: {
+        type: 'category',
+        data: <?= json_encode($trendDates) ?>,
+        axisLine: { lineStyle: { color: '#ccc' } }
+    },
+    yAxis: { 
+        type: 'value',
+        splitLine: { lineStyle: { type: 'dashed' } }
+    },
+    grid: {
+        left: '3%', right: '4%', bottom: '15%', containLabel: true
+    },
+    series: [
+        {
+            name: 'Pending',
+            type: 'line',
+            smooth: true,
+            symbol: 'circle',
+            itemStyle: { color: '#FAAD14' },
+            areaStyle: {
+                opacity: 0.1,
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(250,173,20,0.4)' },
+                    { offset: 1, color: 'rgba(250,173,20,0)' }
+                ])
             },
-            xAxis: {
-                type: 'category',
-                data: trendDates.length ? trendDates : ['No Data'],
-                axisLine: { lineStyle: { color: '#ccc' } }
+            data: <?= json_encode($trendPending) ?>,
+            label: { show: true, position: 'top', fontSize: 12, color: '#FAAD14' }
+        },
+        {
+            name: 'Approved',
+            type: 'line',
+            smooth: true,
+            symbol: 'circle',
+            itemStyle: { color: '#52C41A' },
+            areaStyle: {
+                opacity: 0.1,
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(82, 196, 26,0.4)' },
+                    { offset: 1, color: 'rgba(82, 196, 26,0)' }
+                ])
             },
-            yAxis: { 
-                type: 'value',
-                splitLine: { lineStyle: { type: 'dashed' } }
+            data: <?= json_encode($trendApproved) ?>,
+            label: { show: true, position: 'top', fontSize: 12, color: '#52C41A' }
+        },
+        {
+            name: 'Rejected',
+            type: 'line',
+            smooth: true,
+            symbol: 'circle',
+            itemStyle: { color: '#FF4D4F' },
+            areaStyle: {
+                opacity: 0.1,
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(255,77,79,0.4)' },
+                    { offset: 1, color: 'rgba(255,77,79,0)' }
+                ])
             },
-            grid: {
-                left: '3%', right: '4%', bottom: '15%', containLabel: true
-            },
-            series: [
-                {
-                    name: 'Pending', // 第1条
-                    type: 'line',
-                    smooth: true,
-                    symbol: 'none',
-                    itemStyle: { color: '#FAAD14' }, // Warning Yellow
-                    areaStyle: {
-                        opacity: 0.1,
-                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                            { offset: 0, color: 'rgba(250,173,20,0.4)' },
-                            { offset: 1, color: 'rgba(250,173,20,0)' }
-                        ])
-                    },
-                    data: trendPending.length ? trendPending : [0]
-                },
-                {
-                    name: 'Approved', // 第2条
-                    type: 'line',
-                    smooth: true,
-                    symbol: 'none',
-                    itemStyle: { color: '#52C41A' }, // Success Green
-                    areaStyle: {
-                        opacity: 0.1,
-                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                            { offset: 0, color: 'rgba(82, 196, 26, 0.4)' },
-                            { offset: 1, color: 'rgba(82, 196, 26, 0)' }
-                        ])
-                    },
-                    data: trendApproved.length ? trendApproved : [0]
-                },
-                {
-                    name: 'Rejected', // 第3条
-                    type: 'line',
-                    smooth: true,
-                    symbol: 'none',
-                    itemStyle: { color: '#FF4D4F' }, // Danger Red
-                    areaStyle: {
-                        opacity: 0.1,
-                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                            { offset: 0, color: 'rgba(255, 77, 79, 0.4)' },
-                            { offset: 1, color: 'rgba(255, 77, 79, 0)' }
-                        ])
-                    },
-                    data: trendDenied.length ? trendDenied : [0]
-                }
-            ]
-        });
-
+            data: <?= json_encode($trendDenied) ?>,
+            label: { show: true, position: 'top', fontSize: 12, color: '#FF4D4F' }
+        }
+    ]
+});
 
 
 
@@ -676,10 +730,9 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
-
 function applyTimeFilter() {
-    const val = document.getElementById("timeFilter").value;
-    window.location = "?time=" + val;
+    const time = document.getElementById('timeFilter').value;
+    window.location.href = `?time=${time}`;
 }
 
 // 移除 showTab 函数，因为不再使用 Tab

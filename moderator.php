@@ -612,7 +612,7 @@ include "includes/layout_start.php";
 
                     <div class="mb-4">
                         <label class="block text-sm text-neutral-700 mb-2">Feedback</label>
-                        <textarea id="detail-feedback" name="feedback" class="w-full p-3 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all min-h-[100px]" placeholder="Please Enter Your Feedback..."><?= htmlspecialchars($currentSubmission['feedback'] ?? ''); ?></textarea>
+                        <textarea required id="detail-feedback" name="feedback" class="w-full p-3 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all min-h-[100px]" placeholder="Please Enter Your Feedback..."><?= htmlspecialchars($currentSubmission['feedback'] ?? ''); ?></textarea>
                     </div>
 
                     <button type="submit"
