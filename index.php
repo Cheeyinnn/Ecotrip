@@ -489,7 +489,7 @@ if (isset($_SESSION['userID'])) {
                         PRODUCT
                     </span>
 
-                    <h3 class="font-bold mt-4">Pen</h3>
+                    <h3 class="font-bold mt-4">Chanel</h3>
 
                     <div class="flex justify-between text-sm mt-2">
                         <span>10 pts</span>
@@ -514,7 +514,7 @@ if (isset($_SESSION['userID'])) {
                         VOUCHER
                     </span>
 
-                    <h3 class="font-bold mt-4">Nike 20%</h3>
+                    <h3 class="font-bold mt-4">Shirt</h3>
 
                     <div class="flex justify-between text-sm mt-2">
                         <span>10 pts</span>
@@ -607,10 +607,10 @@ if (isset($_SESSION['userID'])) {
 
         <!-- ================= TEAM NAV TABS ================= -->
         <div class="flex gap-6 mt-8 border-b pb-4 text-blue-600">
+            <span>Overview</span>
             <span class="font-semibold border-b-2 border-blue-600 pb-1">
-                Overview
+                Members
             </span>
-            <span>Members</span>
             <span>Settings</span>
             <span>Join Requests</span>
             <span class="flex items-center gap-1">
