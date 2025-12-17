@@ -21,7 +21,7 @@ $messageType = "";
 // ======================================================================
 function getAvatar($path)
 {
-    $default = "uploads/default.png";
+    $default = "uploads/avatar/default.png";
     if (empty($path)) return $default;
 
     if (file_exists(__DIR__ . "/" . $path)) {
