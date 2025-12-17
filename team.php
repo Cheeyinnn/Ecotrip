@@ -175,8 +175,6 @@ if (
     }
 }
 
-// ====================== OWNER: APPROVE / REJECT REQUESTS ======================
-
 // ====================== OWNER: APPROVE SINGLE REQUEST ======================
 if (
     $_SERVER['REQUEST_METHOD'] === 'POST' &&
@@ -371,11 +369,11 @@ if (
     }
 }
 
-// ====================== OWNER: APPROVE ALL REQUESTS ======================
+// ====================== OWNER: REJECT ALL REQUESTS ======================
 if (
     $_SERVER['REQUEST_METHOD'] === 'POST' &&
     isset($_POST['action']) &&
-    $_POST['action'] === 'approve_all_requests' &&
+    $_POST['action'] === 'reject_all_requests' &&
     isset($_POST['teamID'])
 ) {
     $teamIDFromForm = (int)$_POST['teamID'];
@@ -393,60 +391,48 @@ if (
 
     if ($teamRow && (int)$teamRow['teamLeaderID'] === $userID) {
 
-        // Remaining capacity
-        $currentCount = $conn->query("
-            SELECT COUNT(*) AS c FROM user WHERE teamID = $teamIDFromForm
-        ")->fetch_assoc()['c'];
+        // Fetch all pending users
+        $pending = $conn->query("
+            SELECT userID 
+            FROM user 
+            WHERE pendingTeamID = $teamIDFromForm
+        ");
 
-        $slotsLeft = max(0, 4 - $currentCount);
+        $rejectedCount = 0;
 
-        if ($slotsLeft <= 0) {
-            $message = "Team is already full.";
-            $messageType = "warning";
-        } else {
+        while ($row = $pending->fetch_assoc()) {
+            $uid = (int)$row['userID'];
 
-            // Fetch pending users (limit by capacity)
-            $pending = $conn->query("
-                SELECT userID 
-                FROM user 
-                WHERE pendingTeamID = $teamIDFromForm
-                LIMIT $slotsLeft
+            // Clear pending request
+            $stmt = $conn->prepare("
+                UPDATE user 
+                SET pendingTeamID = NULL 
+                WHERE userID = ?
             ");
+            $stmt->bind_param("i", $uid);
+            $stmt->execute();
+            $stmt->close();
 
-            $approvedCount = 0;
+            // Notify user
+            sendNotification(
+                $conn,
+                $uid,
+                "Your request to join team '{$teamRow['teamName']}' has been rejected.",
+                "team.php"
+            );
 
-            while ($row = $pending->fetch_assoc()) {
-                $uid = (int)$row['userID'];
-
-                $stmt = $conn->prepare("
-                    UPDATE user 
-                    SET teamID = ?, pendingTeamID = NULL 
-                    WHERE userID = ?
-                ");
-                $stmt->bind_param("ii", $teamIDFromForm, $uid);
-                $stmt->execute();
-                $stmt->close();
-
-                // Notify user
-                sendNotification(
-                    $conn,
-                    $uid,
-                    "Your request to join team '{$teamRow['teamName']}' has been approved.",
-                    "team.php"
-                );
-
-                $approvedCount++;
-            }
-
-            $message = "Approved {$approvedCount} join request(s).";
-            $messageType = "success";
+            $rejectedCount++;
         }
+
+        $message = "Rejected {$rejectedCount} join request(s).";
+        $messageType = "info";
 
     } else {
         $message = "Unauthorized action.";
         $messageType = "danger";
     }
 }
+
 
 // ====================== HANDLE TEAM ACTIONS (ONLY IF IN A TEAM) ======================
 if (
