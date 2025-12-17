@@ -10,38 +10,46 @@ require "includes/auth.php";
 // 2. IMAGE LOGIC (Auto-Generator)
 // -------------------------------------
 function getExactHeroImage($title) {
+    // 1. Clean the title
     $t = strtolower(trim($title));
 
     switch ($t) {
-        // --- EXACT MATCHES ---
+        // --- 🔴 EXACT MATCHES (Same as View Page) ---
+       // --- CATEGORY: TRANSPORT ---
         case 'bike to work':            return 'bicycle';
         case 'walk the last mile':      return 'sneakers';
-        case 'carpool crew':            return 'automobile'; 
-        case 'public bus adventure':    return 'bus';
+        case 'carpool crew':            return 'automobile'; // 'carpool' is often misunderstood by AI
+        case 'public bus adventure':    return 'bus vehicle';
 
-        // --- CATEGORY MATCHES ---
-        case 'say no to straws':        return 'drink'; 
-        case 'bring your bottle':       return 'water bottle';
-        case 'tote bag shopper':        return 'shopping bag';
-        case 'compost your scraps':     return 'compost';
+        // --- CATEGORY: WASTE ---
+        case 'say no to straws':        return 'iced drinks '; // Shows drink without straw usually
+        case 'bring your bottle':       return 'reusable water bottle';
+        case 'tote bag shopper':        return 'reuseable bag';
+        case 'compost your scraps':     return 'compost bin';
 
-        // --- FOOD ---
+        // --- CATEGORY: FOOD ---
         case 'meatless monday':         return 'vegetables';
         case 'support local farmers':   return 'farmers market';
-        case 'vegan meal challenge':    return 'fruit';
+        case 'vegan meal challenge':    return 'vegetables';
         case 'love your leftovers':     return 'food container';
 
-        // --- NATURE ---
+        // --- CATEGORY: ENERGY & WATER ---
+        case 'unplug the vampires':     return 'electrical socket';
+        case 'cold wash cycle':         return 'washing ';
+        case 'air dry laundry':         return 'clothesline';
+        case '5-minute shower':         return 'shower head';
+
+        // --- CATEGORY: NATURE ---
         case 'plant a tree':            return 'planting tree';
-        case 'litter pickup':           return 'garbage pickup';
-        case 'clean ocean promise':     return 'beach clean';
+        case 'litter pickup':           return 'garbage';
+        case 'clean ocean promise':     return 'clean beach';
         case 'wild bird watch':         return 'bird';
 
         // --- FALLBACKS ---
         default:
             if (strpos($t, 'transport') !== false) return 'traffic';
             if (strpos($t, 'food') !== false)      return 'fruit';
-            if (strpos($t, 'water') !== false)     return 'water';
+            if (strpos($t, 'water') !== false)     return 'water drop';
             if (strpos($t, 'energy') !== false)    return 'electricity';
             return 'nature'; 
     }
