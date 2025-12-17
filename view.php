@@ -181,11 +181,22 @@ include "includes/layout_start.php";
 
 <div class="hero-section">
     <div class="top-nav-btn">
-        <a href="index.php" class="btn btn-outline-light btn-sm rounded-pill px-3">Dashboard</a>
+        <?php 
+        // 1. Determine the correct link based on the session role
+        if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin') {
+            $dashboardLink = "dashboard_admin.php";
+        } else {
+            $dashboardLink = "dashboard_user.php";
+        }
+        ?>
+
+        <a href="<?php echo $dashboardLink; ?>" class="btn btn-outline-light btn-sm rounded-pill px-3">Dashboard</a>
+
         <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
             <a href="manage.php" class="btn btn-light text-success btn-sm rounded-pill px-3 ms-2">Manage</a>
         <?php endif; ?>
     </div>
+
     <div class="container">
         <h1 class="hero-title">Make an Impact</h1>
         <p class="hero-subtitle">Small actions today, big changes for tomorrow.</p>
