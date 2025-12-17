@@ -250,16 +250,19 @@ if ($team_result) {
 $teamRanksJson = json_encode($teamRanks);
 
 // -----------------------------
-// 8. Login Trend
+// 8. Login Trend (FIXED)
 // -----------------------------
-$loginWindow = $timeInterval ?? 7;
 $loginTrendQuery = "
     SELECT DATE(last_online) AS date, COUNT(*) AS count
     FROM user
-    WHERE last_online >= DATE_SUB(CURDATE(), INTERVAL {$loginWindow} DAY)
+    WHERE last_online IS NOT NULL
+    " . sql_time_filter('last_online', $timeInterval, $timeConditionToday) . "
     GROUP BY DATE(last_online)
+    ORDER BY date ASC
 ";
+
 $loginTrend = $conn->query($loginTrendQuery)->fetch_all(MYSQLI_ASSOC);
+
 
 // -----------------------------
 // 9. Submission Activity Top Users
