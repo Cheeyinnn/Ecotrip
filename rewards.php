@@ -1,4 +1,4 @@
-<?php    
+<?php
 session_start(); 
 include 'db_connect.php';
 
@@ -19,8 +19,7 @@ $pageTitle = "Rewards Center";
 $cols = $conn->query("SHOW COLUMNS FROM redemptionrequest LIKE 'receiver_name'");
 if ($cols->num_rows == 0) { $conn->query("ALTER TABLE redemptionrequest ADD COLUMN receiver_name VARCHAR(255) NULL, ADD COLUMN phone_number VARCHAR(50) NULL, ADD COLUMN address TEXT NULL"); }
 
-// --- UPDATED: Auto-DB fix for 'prefix' ---
-// Checks for 'prefix' column. If missing, adds it with default 'ECO-'
+// Auto-DB fix for 'prefix'
 $cols = $conn->query("SHOW COLUMNS FROM reward LIKE 'prefix'");
 if ($cols->num_rows == 0) { 
     $conn->query("ALTER TABLE reward ADD COLUMN prefix VARCHAR(50) DEFAULT 'ECO-'"); 
@@ -45,14 +44,14 @@ $rankStmt->execute();
 $userRank = $rankStmt->get_result()->fetch_assoc()['rank'];
 $rankStmt->close();
 
-// --- NEW: Count Redeemed Products ---
+// Count Redeemed Products
 $prodCountStmt = $conn->prepare("SELECT COUNT(*) as count FROM redemptionrequest rr JOIN reward r ON rr.rewardID = r.rewardID WHERE rr.userID = ? AND r.category = 'product'");
 $prodCountStmt->bind_param("i", $userID);
 $prodCountStmt->execute();
 $redeemedProductCount = $prodCountStmt->get_result()->fetch_assoc()['count'];
 $prodCountStmt->close();
 
-// --- NEW: Fetch Redeemed Products for Modal ---
+// Fetch Redeemed Products for Modal
 $myProducts = $conn->query("SELECT 
                                 rr.redemptionID, 
                                 r.rewardName, 
@@ -66,7 +65,7 @@ $myProducts = $conn->query("SELECT
                             ORDER BY rr.redemptionID DESC");
 
 
-// --- HANDLE USER CANCELLATION (Requirement 1 & 2) ---
+// --- HANDLE USER CANCELLATION ---
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['cancelRedemptionID'])) {
     $cancelID = $_POST['cancelRedemptionID'];
     
@@ -94,9 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['cancelRedemptionID']))
         $updateStmt->bind_param("i", $cancelID);
         $updateStmt->execute(); $updateStmt->close();
 
-        // 4. NOTIFY ADMINS & MODERATORS (Requirement 2)
+        // 4. Notify Admins
         $msgAdmin = "User " . $uFName . " " . $uLName . " has cancelled their redemption request #" . $cancelID;
-        
         $adminQuery = "SELECT userID FROM user WHERE role IN ('admin', 'moderator')";
         $adminResult = $conn->query($adminQuery);
         while($admin = $adminResult->fetch_assoc()) {
@@ -124,7 +122,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rewardID']) && !isset(
     $stmt->bind_result($currentUserPoints);
     $stmt->fetch(); $stmt->close();
 
-    // UPDATED QUERY: Fetch rewardName as well
     $stmt = $conn->prepare("SELECT stockQuantity, is_active, pointRequired, category, rewardName FROM reward WHERE rewardID = ?");
     $stmt->bind_param("i", $rewardID);
     $stmt->execute();
@@ -156,9 +153,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rewardID']) && !isset(
         $stmt->bind_param("ii", $quantity, $rewardID);
         $stmt->execute(); $stmt->close();
 
-        // 5. NOTIFY ADMINS & MODERATORS of New Request (Requirement 2)
-        // Only if it's pending (i.e., needs review). If auto-approved (voucher), maybe notify differently or not at all.
-        // Assuming "new reward request" means something that needs action.
         if ($status === 'pending') {
             $msgNewReq = "New redemption request #" . $newRedemptionID . " from " . $userName . " for " . $rewardName;
             $adminQuery = "SELECT userID FROM user WHERE role IN ('admin', 'moderator')";
@@ -168,7 +162,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rewardID']) && !isset(
             }
         }
         
-        // Notify User
         $notifMsg = "You have successfully redeemed a " . $rewardName . " " . ucfirst($category);
         sendNotification($conn, $userID, $notifMsg, "rewards.php");
 
@@ -181,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rewardID']) && !isset(
     }
 }
 
-// --- FETCH NEW VOUCHER DETAILS WITH SERIAL NUMBER CALCULATION ---
+// --- FETCH NEW VOUCHER DETAILS ---
 $newVoucherData = null;
 if (isset($_GET['voucher_id'])) {
     $vSql = "SELECT 
@@ -209,8 +202,7 @@ if (isset($_GET['voucher_id'])) {
     $vStmt->close();
 }
 
-// --- FETCH ALL MY VOUCHERS WITH SERIAL NUMBER ---
-// Updated to fetch expiry_date
+// --- FETCH ALL MY VOUCHERS ---
 $myVouchers = $conn->query("SELECT 
                                 rr.redemptionID, 
                                 r.rewardName, 
@@ -352,6 +344,8 @@ include "includes/layout_start.php";
         .status-pending { background: #fff7ed; color: #ea580c; }
         .status-approved { background: #f0fdf4; color: #16a34a; }
         .status-rejected { background: #fef2f2; color: #dc2626; }
+        .status-delivery { background: #eff6ff; color: #2563eb; }
+        .status-delivered { background: #f0fdfa; color: #0d9488; }
 
         .barcode-blur {
             filter: blur(5px);
@@ -384,7 +378,7 @@ include "includes/layout_start.php";
 
             <!-- Dashboard Row -->
             <div class="dashboard-row">
-                <!-- 1. Profile -->
+                <!-- 1. Profile (Points Available) -->
                 <div class="dash-card profile-card-bg">
                     <div class="profile-card-content">
                         <div class="profile-img-container"><img src="<?php echo htmlspecialchars($avatarPath); ?>" class="profile-img"></div>
@@ -396,13 +390,14 @@ include "includes/layout_start.php";
                     </div>
                     <iconify-icon icon="solar:wallet-money-bold-duotone" style="position:absolute; right:-10px; bottom:-20px; font-size:100px; color:rgba(255,255,255,0.1); transform:rotate(15deg);"></iconify-icon>
                 </div>
-                <!-- 2. History -->
-                <div class="dash-card analysis-card" data-bs-toggle="modal" data-bs-target="#historyModal">
+                <!-- 2. My Products -->
+                <div class="dash-card analysis-card" data-bs-toggle="modal" data-bs-target="#myProductsModal">
                     <div class="analysis-content">
-                        <div class="analysis-title">History <iconify-icon icon="solar:history-bold-duotone" class="text-primary"></iconify-icon></div>
-                        <div class="analysis-desc">Redemption logs.</div>
+                        <div class="analysis-title">My Products <iconify-icon icon="solar:box-bold-duotone" class="text-warning"></iconify-icon></div>
+                        <div class="analysis-number text-warning"><?php echo number_format($redeemedProductCount); ?></div>
+                        <div class="analysis-desc">Total products claimed.</div>
                     </div>
-                    <iconify-icon icon="solar:clock-circle-bold-duotone" class="analysis-icon"></iconify-icon>
+                    <iconify-icon icon="solar:bag-heart-bold-duotone" class="analysis-icon text-warning" style="color: #f59e0b !important;"></iconify-icon>
                 </div>
                 <!-- 3. My Vouchers -->
                 <div class="dash-card analysis-card" data-bs-toggle="modal" data-bs-target="#myVouchersModal">
@@ -412,14 +407,13 @@ include "includes/layout_start.php";
                     </div>
                     <iconify-icon icon="solar:ticket-star-bold-duotone" class="analysis-icon text-success" style="color: #16a34a !important;"></iconify-icon>
                 </div>
-                <!-- 4. My Products -->
-                <div class="dash-card analysis-card" data-bs-toggle="modal" data-bs-target="#myProductsModal">
+                <!-- 4. History -->
+                <div class="dash-card analysis-card" data-bs-toggle="modal" data-bs-target="#historyModal">
                     <div class="analysis-content">
-                        <div class="analysis-title">My Products <iconify-icon icon="solar:box-bold-duotone" class="text-warning"></iconify-icon></div>
-                        <div class="analysis-number text-warning"><?php echo number_format($redeemedProductCount); ?></div>
-                        <div class="analysis-desc">Total products claimed.</div>
+                        <div class="analysis-title">History <iconify-icon icon="solar:history-bold-duotone" class="text-primary"></iconify-icon></div>
+                        <div class="analysis-desc">Redemption logs.</div>
                     </div>
-                    <iconify-icon icon="solar:bag-heart-bold-duotone" class="analysis-icon text-warning" style="color: #f59e0b !important;"></iconify-icon>
+                    <iconify-icon icon="solar:clock-circle-bold-duotone" class="analysis-icon"></iconify-icon>
                 </div>
             </div>
 
@@ -484,14 +478,75 @@ include "includes/layout_start.php";
     </div>
 </div>
 
-<!-- History Modal -->
+<!-- History Modal (Redesigned) -->
 <div class="modal fade" id="historyModal" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content border-0 shadow-lg rounded-4"><div class="modal-header border-0 bg-light rounded-top-4"><h5 class="modal-title fw-bold">History</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="bg-light"><tr><th class="ps-4">Reward</th><th>Points</th><th>Status</th><th>Action</th></tr></thead><tbody><?php if ($requests_result->num_rows > 0) { while ($req = $requests_result->fetch_assoc()) { 
-    $canCancel = ($req['status'] == 'pending');
-    echo "<tr><td class='ps-4 fw-bold'>".htmlspecialchars($req['rewardName'])."</td><td class='text-danger'>-".number_format($req['pointSpent'])."</td><td>".ucfirst($req['status'])."</td><td>";
-    if($canCancel) echo '<form method="POST" onsubmit="return confirm(\'Cancel this request?\')"><input type="hidden" name="cancelRedemptionID" value="'.$req['redemptionID'].'"><button type="submit" class="btn btn-xs btn-danger" style="font-size:10px; padding:2px 8px;">Cancel</button></form>';
-    else echo '-';
-    echo "</td></tr>"; }} ?></tbody></table></div></div></div></div>
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+      <div class="modal-header border-0 bg-white pb-0">
+        <div>
+            <h5 class="modal-title fw-bold text-dark">Redemption History</h5>
+            <p class="text-muted small mb-0">Track your past rewards and status.</p>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div class="history-list-container" style="max-height: 450px; overflow-y: auto;">
+            <?php if ($requests_result->num_rows > 0): ?>
+                <div class="list-group list-group-flush">
+                    <?php while ($req = $requests_result->fetch_assoc()) { 
+                        $canCancel = ($req['status'] == 'pending');
+                        $statusClass = 'bg-secondary';
+                        $statusText = ucfirst($req['status']);
+                        
+                        if($req['status'] == 'approved') $statusClass = 'bg-success';
+                        elseif($req['status'] == 'pending') $statusClass = 'bg-warning text-dark';
+                        elseif($req['status'] == 'cancelled') $statusClass = 'bg-light text-muted border';
+                        elseif($req['status'] == 'denied') $statusClass = 'bg-danger';
+                        elseif($req['status'] == 'outOfDiliver') { $statusClass = 'bg-primary'; $statusText = 'Out for Delivery'; }
+                        elseif($req['status'] == 'Delivered') $statusClass = 'bg-info text-white';
+                    ?>
+                    <div class="list-group-item border-0 p-3 mb-2 rounded-3 bg-light d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="history-icon bg-white rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width: 45px; height: 45px;">
+                                <iconify-icon icon="solar:gift-bold-duotone" class="text-primary fs-4"></iconify-icon>
+                            </div>
+                            <div>
+                                <h6 class="mb-1 fw-bold text-dark"><?php echo htmlspecialchars($req['rewardName']); ?></h6>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge rounded-pill <?php echo $statusClass; ?> fw-normal px-2 py-1" style="font-size: 10px;">
+                                        <?php echo $statusText; ?>
+                                    </span>
+                                    <small class="text-muted" style="font-size: 11px;">
+                                        <?php echo date('M d, Y h:i A', strtotime($req['requested_at'])); ?>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <div class="fw-bold text-danger mb-1">-<?php echo number_format($req['pointSpent']); ?> pts</div>
+                            <?php if($canCancel): ?>
+                                <form method="POST" onsubmit="return confirm('Cancel this request?');">
+                                    <input type="hidden" name="cancelRedemptionID" value="<?php echo $req['redemptionID']; ?>">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size: 11px;">Cancel</button>
+                                </form>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <?php } ?>
+                </div>
+            <?php else: ?>
+                <div class="text-center py-5 text-muted">
+                    <iconify-icon icon="solar:history-bold-duotone" class="fs-1 mb-2 opacity-25"></iconify-icon>
+                    <p>No history found.</p>
+                </div>
+            <?php endif; ?>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <a href="dashboard_user.php" class="btn btn-dark w-100 fw-bold">Go to Dashboard</a>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- MY VOUCHERS LIST MODAL -->
@@ -500,16 +555,14 @@ include "includes/layout_start.php";
     <div class="modal-content border-0 shadow-lg rounded-4">
       <div class="modal-header border-0 bg-light"><h5 class="modal-title fw-bold">My Vouchers</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body p-0">
-          <!-- ADDED: fixed-height-list for consistency -->
           <div class="list-group list-group-flush my-vouchers-list fixed-height-list">
               <?php if($myVouchers->num_rows > 0): ?>
                   <?php while($v = $myVouchers->fetch_assoc()): 
-                      // Check Expiry
                       $isExpired = false;
                       if (!empty($v['expiry_date']) && strtotime($v['expiry_date']) < time()) {
                           $isExpired = true;
                       }
-                      $v['isExpired'] = $isExpired; // Add to object for JS
+                      $v['isExpired'] = $isExpired;
                       $vJson = htmlspecialchars(json_encode($v), ENT_QUOTES, 'UTF-8');
                   ?>
                   <div class="list-group-item d-flex align-items-center p-3" onclick="openVoucherFromList(<?php echo $vJson; ?>)">
@@ -526,7 +579,6 @@ include "includes/layout_start.php";
                   </div>
                   <?php endwhile; ?>
               <?php else: ?>
-                  <!-- EMPTY STATE -->
                   <div class="empty-state-msg">No active vouchers found.</div>
               <?php endif; ?>
           </div>
@@ -546,27 +598,34 @@ include "includes/layout_start.php";
                   <button class="modal-filter-btn active" onclick="filterMyProducts('all', this)">All</button>
                   <button class="modal-filter-btn" onclick="filterMyProducts('pending', this)">Pending</button>
                   <button class="modal-filter-btn" onclick="filterMyProducts('approved', this)">Approved</button>
+                  <button class="modal-filter-btn" onclick="filterMyProducts('outOfDiliver', this)">Out for Delivery</button>
+                  <button class="modal-filter-btn" onclick="filterMyProducts('Delivered', this)">Delivered</button>
                   <button class="modal-filter-btn" onclick="filterMyProducts('denied', this)">Denied</button>
               </div>
               <button type="button" class="btn-close m-0" data-bs-dismiss="modal"></button>
           </div>
       </div>
       <div class="modal-body p-0">
-          <!-- FIXED HEIGHT CONTAINER -->
           <div class="list-group list-group-flush fixed-height-list" id="myProductsList">
               <?php if($myProducts->num_rows > 0): ?>
                   <?php while($p = $myProducts->fetch_assoc()): 
                       $statusColor = 'status-pending';
-                      $statusVal = strtolower($p['status']);
+                      $statusVal = strtolower($p['status'] ?? 'pending');
+                      if($p['status'] == 'outOfDiliver') $statusVal = 'outOfDiliver';
+                      if($p['status'] == 'Delivered') $statusVal = 'Delivered';
+
                       $canCancel = ($statusVal == 'pending');
                       
                       if($statusVal == 'approved') $statusColor = 'status-approved';
+                      elseif($statusVal == 'outOfDiliver') $statusColor = 'status-delivery';
+                      elseif($statusVal == 'Delivered') $statusColor = 'status-delivered';
                       elseif($statusVal == 'rejected' || $statusVal == 'denied') { 
                           $statusColor = 'status-rejected'; 
                           $statusVal = 'denied'; 
                       }
                       
                       $displayText = ucfirst($p['status'] == 'rejected' ? 'denied' : $p['status']);
+                      if($p['status'] == 'outOfDiliver') $displayText = 'Out for Delivery';
                   ?>
                   <div class="list-group-item d-flex align-items-center p-3 product-item" data-status="<?php echo $statusVal; ?>">
                       <img src="<?php echo !empty($p['imageURL']) ? $p['imageURL'] : 'upload/reward_placeholder.png'; ?>" style="width:50px; height:50px; object-fit:cover; border-radius:8px; margin-right:15px;">
@@ -577,7 +636,6 @@ include "includes/layout_start.php";
                               <small class="text-muted"><?php echo date('M d, Y', strtotime($p['requested_at'])); ?></small>
                           </div>
                       </div>
-                      <!-- ADDED: Cancel Button for Pending Products -->
                       <?php if($canCancel): ?>
                         <form method="POST" onsubmit="return confirm('Cancel this redemption?');" class="ms-3">
                             <input type="hidden" name="cancelRedemptionID" value="<?php echo $p['redemptionID']; ?>">
@@ -587,9 +645,9 @@ include "includes/layout_start.php";
                   </div>
                   <?php endwhile; ?>
               <?php else: ?>
-                  <!-- EMPTY STATE -->
                   <div class="empty-state-msg">No products redeemed yet.</div>
               <?php endif; ?>
+              <div class="empty-state-msg dynamic-empty-msg hidden">No products found for this status.</div>
           </div>
       </div>
     </div>
@@ -609,21 +667,13 @@ include "includes/layout_start.php";
           </div>
           <div class="voucher-body">
               <img id="ticketImg" src="<?php echo htmlspecialchars(!empty($newVoucherData['imageURL']) ? $newVoucherData['imageURL'] : 'upload/reward_placeholder.png'); ?>" class="voucher-img" style="width:100px; height:100px; object-fit:contain;">
-              
-              <!-- Dynamic Status Text -->
               <p class="fw-bold mb-1" id="voucherStatusText">Valid Voucher</p>
-              
               <p class="voucher-desc" id="ticketDesc"><?php echo htmlspecialchars($newVoucherData['description'] ?? ''); ?></p>
               <hr class="border-dashed my-3">
-              
-              <!-- Barcode Container -->
               <div id="ticketBarcodeContainer" class="text-center">
                   <svg id="barcode"></svg>
               </div>
-              
-              <span class="d-block mt-2 text-muted small letter-spacing-2" id="ticketID">
-                  <!-- JS will fill this -->
-              </span>
+              <span class="d-block mt-2 text-muted small letter-spacing-2" id="ticketID"></span>
           </div>
       </div>
       <button type="button" class="btn btn-light w-100 mt-3 fw-bold" onclick="voucherModal.hide()">Close</button>
@@ -633,29 +683,18 @@ include "includes/layout_start.php";
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // UPDATED JS: Uses "serial" for ID generation, NOT redemptionID
     function generateBarcode(serial, prefix, productName) {
-        
         let codePrefix = "";
-
         if (prefix && prefix !== "null" && prefix !== "") {
             codePrefix = prefix;
-        } 
-        else if (productName) {
+        } else if (productName) {
             codePrefix = productName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 4).toUpperCase() + '-';
-        } 
-        else {
+        } else {
             codePrefix = "ECO-";
         }
-
-        if (codePrefix.slice(-1) !== '-') {
-             codePrefix += '-';
-        }
-
-        // Use the SERIAL number (1, 2, 3) instead of the random RedemptionID (105, 122)
+        if (codePrefix.slice(-1) !== '-') { codePrefix += '-'; }
         let stringValue = serial.toString().padStart(6, '0');
         let fullCode = codePrefix + stringValue;
-
         JsBarcode("#barcode", fullCode, {
             format: "CODE128",
             lineColor: "#334155",
@@ -665,29 +704,20 @@ include "includes/layout_start.php";
             fontSize: 14,
             textMargin: 5
         });
-
         document.getElementById('ticketID').innerText = fullCode;
     }
 
-    // Initialize modals globally to prevent duplicates
     const rewardModalEl = document.getElementById('rewardModal');
     const voucherModalEl = document.getElementById('voucherModal');
     const myVouchersModalEl = document.getElementById('myVouchersModal');
-    
-    // Create new bootstrap instances
     const rewardModal = new bootstrap.Modal(rewardModalEl);
-    
-    // For voucher modal, check if an instance already exists (e.g. from previous inline script execution)
     let voucherModal = bootstrap.Modal.getInstance(voucherModalEl);
-    if(!voucherModal) {
-        voucherModal = new bootstrap.Modal(voucherModalEl);
-    }
+    if(!voucherModal) { voucherModal = new bootstrap.Modal(voucherModalEl); }
     
-    // Show Voucher Modal if param exists
     <?php if ($newVoucherData): ?> 
         generateBarcode(
-            '<?php echo $newVoucherData['voucher_serial']; ?>', // Use Serial
-            '<?php echo !empty($newVoucherData['prefix']) ? $newVoucherData['prefix'] : ''; ?>', // Use 'prefix'
+            '<?php echo $newVoucherData['voucher_serial']; ?>', 
+            '<?php echo !empty($newVoucherData['prefix']) ? $newVoucherData['prefix'] : ''; ?>', 
             '<?php echo addslashes($newVoucherData['rewardName']); ?>'
         );
         voucherModal.show();
@@ -725,52 +755,36 @@ include "includes/layout_start.php";
         document.getElementById('ticketTitle').innerText = v.rewardName;
         document.getElementById('ticketDesc').innerText = v.description;
         document.getElementById('ticketImg').src = v.imageURL || 'upload/reward_placeholder.png';
-        
-        // Handle Expiry UI
         const statusText = document.getElementById('voucherStatusText');
         const barcodeContainer = document.getElementById('ticketBarcodeContainer');
         const ticketID = document.getElementById('ticketID');
-
         if (v.isExpired) {
             statusText.innerText = "Expired Voucher";
             statusText.classList.remove('text-success');
             statusText.classList.add('text-danger');
-            
-            barcodeContainer.classList.add('barcode-blur'); // Blur it
+            barcodeContainer.classList.add('barcode-blur');
             ticketID.classList.add('barcode-blur');
         } else {
             statusText.innerText = "Valid Voucher";
             statusText.classList.remove('text-danger');
             statusText.classList.add('text-success');
-            
             barcodeContainer.classList.remove('barcode-blur');
             ticketID.classList.remove('barcode-blur');
         }
-
-        // Pass SERIAL instead of RedemptionID, using 'prefix'
         generateBarcode(v.voucher_serial, v.prefix, v.rewardName);
-        
-        // Close list modal if open
         const listModal = bootstrap.Modal.getInstance(myVouchersModalEl);
         if(listModal) listModal.hide();
-        
         voucherModal.show();
     }
 
-    // UPDATED: Filter logic for My Products with Button Support
     function filterMyProducts(status, btn) {
-        // Toggle Active Button
         if (btn) {
             document.querySelectorAll('.modal-filter-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
         }
-
         const items = document.querySelectorAll('#myProductsList .product-item');
         let visibleCount = 0;
-        
-        // Get the container to manage empty state
         const listContainer = document.getElementById('myProductsList');
-        // Remove any existing dynamic empty message
         const existingMsg = listContainer.querySelector('.dynamic-empty-msg');
         if(existingMsg) existingMsg.remove();
 
@@ -783,8 +797,7 @@ include "includes/layout_start.php";
             }
         });
 
-        // Show "No products found" if filter results in empty list
-        if(visibleCount === 0 && items.length > 0) {
+        if(visibleCount === 0) {
             const msg = document.createElement('div');
             msg.className = 'empty-state-msg dynamic-empty-msg';
             msg.innerText = 'No ' + status + ' products found.';
@@ -792,7 +805,6 @@ include "includes/layout_start.php";
         }
     }
 
-    // ... existing filters ...
     function filterRewards(status, btn) { if(btn){document.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active');} applyFilters('status', status); }
     function filterCategory(category, btn) { if(btn){document.querySelectorAll('.category-pills .pill').forEach(b => b.classList.remove('active')); btn.classList.add('active');} applyFilters('category', category); }
     let filters = { status: 'available', category: 'all' };

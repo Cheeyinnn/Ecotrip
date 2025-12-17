@@ -27,7 +27,6 @@ if (isset($_SESSION['userID'])) {
     overflow: hidden;
 }
 
-/* Blur only the content */
 .preview-content {
     filter: blur(2.5px);
     opacity: 0.85;
@@ -35,7 +34,6 @@ if (isset($_SESSION['userID'])) {
     user-select: none;
 }
 
-/* Login button INSIDE module */
 .preview-login-btn {
     position: absolute;
     bottom: 16px;
@@ -57,12 +55,10 @@ if (isset($_SESSION['userID'])) {
     background: rgba(0,0,0,0.9);
 }
 
-/* ===== LEADERBOARD CARD ===== */
 .leaderboard-card {
     position: relative;
 }
 
-/* Crown positioning */
 .crown {
     position: absolute;
     top: -16px;
@@ -72,11 +68,9 @@ if (isset($_SESSION['userID'])) {
     z-index: 5;
 }
 
-/* Crown colors */
-.crown-gold   { color: #fbbf24; } /* 🥇 */
-.crown-silver { color: #9ca3af; } /* 🥈 */
-.crown-bronze { color: #fb923c; } /* 🥉 */
-
+.crown-gold   { color: #fbbf24; }
+.crown-silver { color: #9ca3af; }
+.crown-bronze { color: #fb923c; }
 </style>
 </head>
 
@@ -87,8 +81,7 @@ if (isset($_SESSION['userID'])) {
     <h1 class="text-2xl font-bold text-green-700">EcoTrip Challenge</h1>
     <div class="space-x-4">
         <a href="login.php" class="font-semibold text-green-700">Login</a>
-        <a href="register.php"
-           class="bg-green-600 text-white px-4 py-2 rounded-lg">
+        <a href="register.php" class="bg-green-600 text-white px-4 py-2 rounded-lg">
             Register
         </a>
     </div>
@@ -96,22 +89,77 @@ if (isset($_SESSION['userID'])) {
 
 <!-- ================= HERO ================= -->
 <section class="bg-gradient-to-r from-green-500 to-emerald-600 text-white text-center py-20">
-    <h2 class="text-4xl font-bold mb-4">
-        Travel Smarter. Live Greener.
-    </h2>
+    <h2 class="text-4xl font-bold mb-4">Travel Smarter. Live Greener.</h2>
     <p class="max-w-3xl mx-auto text-lg">
-        EcoTrip Challenge is a gamified sustainability platform where users complete
-        eco-friendly challenges, earn points, compete on leaderboards,
-        and redeem rewards.
+        EcoTrip Challenge is a gamified sustainability platform that turns real-world
+        eco-friendly actions into points, rankings, and rewards.
     </p>
 </section>
 
+<!-- ================= SYSTEM INTRO ================= -->
+<section class="bg-white py-16">
+    <div class="max-w-5xl mx-auto px-6 text-center">
+        <h2 class="text-3xl font-bold mb-4 text-green-700">
+            What is EcoTrip Challenge?
+        </h2>
+        <p class="text-gray-600 leading-relaxed">
+            EcoTrip Challenge is a web-based platform designed to encourage sustainable
+            travel and lifestyle habits through gamification. Users complete real-world
+            eco challenges, submit proof for verification, earn points, compete on
+            leaderboards, and redeem rewards — all within a secure and transparent system.
+        </p>
+    </div>
+</section>
+
+<!-- ================= HOW IT WORKS ================= -->
+<section class="bg-gray-50 py-14">
+    <div class="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-5 gap-8 text-center">
+        <div>
+            <div class="text-3xl mb-2">📝</div>
+            <h4 class="font-bold">Register</h4>
+            <p class="text-sm text-gray-500">Create a verified account</p>
+        </div>
+        <div>
+            <div class="text-3xl mb-2">🌱</div>
+            <h4 class="font-bold">Choose Challenges</h4>
+            <p class="text-sm text-gray-500">Browse eco activities</p>
+        </div>
+        <div>
+            <div class="text-3xl mb-2">📸</div>
+            <h4 class="font-bold">Submit Proof</h4>
+            <p class="text-sm text-gray-500">Upload photo evidence</p>
+        </div>
+        <div>
+            <div class="text-3xl mb-2">🏆</div>
+            <h4 class="font-bold">Earn Points</h4>
+            <p class="text-sm text-gray-500">Verified by moderators</p>
+        </div>
+        <div>
+            <div class="text-3xl mb-2">🎁</div>
+            <h4 class="font-bold">Get Rewards</h4>
+            <p class="text-sm text-gray-500">Redeem points</p>
+        </div>
+    </div>
+</section>
+
 <!-- ================= CONTENT ================= -->
-<div class="max-w-7xl mx-auto px-6 py-20 space-y-24">
+<div class="max-w-7xl mx-auto px-6 py-20">
+    <h1 class="text-4xl font-bold text-center text-green-700 mb-16">
+        Platform Preview (Funtion included in our system)
+        </h1>
 
 <!-- ================= CHALLENGE PREVIEW MODULE ================= -->
 <section class="preview-module bg-gray-50 p-8 mt-16">
     <h3 class="text-2xl font-bold mb-6">🌱 Challenge</h3>
+
+    <div class="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+    <h4 class="font-semibold text-green-700 mb-1">🌱 Challenge Module</h4>
+    <p class="text-sm text-gray-600">
+        Browse eco-friendly challenges provided by our system.
+        Log in to join challenges and submit proof to earn points.
+    </p>
+</div>
+
 
     <!-- ===== BLURRED CONTENT ===== -->
     <div class="preview-content">
@@ -248,7 +296,18 @@ if (isset($_SESSION['userID'])) {
 
 <!-- ================= LEADERBOARD PREVIEW MODULE ================= -->
 <section class="preview-module bg-white p-10 mt-24">
-    <h3 class="text-2xl font-bold mb-6">🏆 Leaderboard</h3>
+    <h3 class="text-2xl font-bold mb-2">🏆 Leaderboard</h3>
+
+    <!-- MODULE EXPLANATION -->
+    <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+        <h4 class="font-semibold text-yellow-700 mb-1">🏆 Leaderboard Module</h4>
+        <p class="text-sm text-gray-600">
+            This module ranks users and teams based on verified points earned
+            from completed challenges. Rankings update dynamically to ensure
+            fairness and motivation.
+        </p>
+    </div>
+
 
     <!-- ===== BLURRED CONTENT ===== -->
     <div class="preview-content">
@@ -341,7 +400,18 @@ if (isset($_SESSION['userID'])) {
 
 <!-- ================= REWARDS PREVIEW MODULE ================= -->
 <section class="preview-module bg-gray-50 p-10 mt-24">
-    <h2 class="text-2xl font-bold mb-8">🎁 Rewards Center</h2>
+    <h2 class="text-2xl font-bold mb-2">🎁 Rewards Center</h2>
+
+    <!-- MODULE EXPLANATION -->
+    <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+        <h4 class="font-semibold text-blue-700 mb-1">🎁 Rewards Module</h4>
+        <p class="text-sm text-gray-600">
+            Users can redeem accumulated points for vouchers or products.
+            The system automatically manages stock availability and
+            redemption status.
+        </p>
+    </div>
+
 
     <!-- ===== BLURRED CONTENT ===== -->
     <div class="preview-content">
@@ -503,7 +573,18 @@ if (isset($_SESSION['userID'])) {
 
 <!-- ================= TEAM OVERVIEW PREVIEW MODULE ================= -->
 <section class="preview-module bg-gray-50 p-10 mt-24">
-<h2 class="text-2xl font-bold mb-8">👥 Team</h2>
+    <h2 class="text-2xl font-bold mb-2">👥 Team</h2>
+
+    <!-- MODULE EXPLANATION -->
+    <div class="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-xl">
+        <h4 class="font-semibold text-purple-700 mb-1">👥 Team Module</h4>
+        <p class="text-sm text-gray-600">
+            This module allows users to create or join teams.
+            Team members collaborate, compete together, and
+            contribute to team leaderboard rankings.
+        </p>
+    </div>
+
     <!-- ===== BLURRED CONTENT ===== -->
     <div class="preview-content">
 
@@ -639,6 +720,172 @@ if (isset($_SESSION['userID'])) {
 
 </section>
 
+<!-- ================= USER DASHBOARD PREVIEW MODULE ================= -->
+<section class="preview-module bg-gray-50 p-10 mt-24">
+    <h2 class="text-2xl font-bold mb-2">🎓 User Dashboard</h2>
+
+    <!-- MODULE EXPLANATION -->
+    <div class="mb-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+        <h4 class="font-semibold text-slate-700 mb-1">🎓 User Dashboard Module</h4>
+        <p class="text-sm text-gray-600">
+            This dashboard provides users with an overview of their activity,
+            including submission status, earned points, rankings, and
+            contribution analytics.
+        </p>
+    </div>
+
+
+    <!-- ===== BLURRED CONTENT ===== -->
+    <div class="preview-content">
+
+        <!-- Header -->
+        <h2 class="text-2xl font-bold mb-8">EcoTrip Dashboard</h2>
+
+        <!-- Contribution Analytics -->
+        <div class="flex justify-between items-center mb-6">
+            <h3 class="text-xl font-semibold">Contribution Analytics</h3>
+
+            <div class="flex gap-3">
+                <select class="border rounded-lg px-4 py-2 text-sm">
+                    <option>All Time</option>
+                    <option>Last 30 Days</option>
+                    <option>Last 7 Days</option>
+                </select>
+
+                <button class="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2">
+                    🔄 Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- Analytics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+            <!-- Left: Bar Chart -->
+            <div class="bg-white rounded-2xl shadow p-6">
+                <div class="bg-green-50 text-green-700 text-center py-3 rounded-lg font-semibold mb-6">
+                    Total Approved Submissions: 6
+                </div>
+
+                <h4 class="font-semibold mb-4">Top Challenges: Points Earned</h4>
+
+                <!-- Fake chart bars (preview only) -->
+                <div class="space-y-4">
+
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>Langkawi Geo Park</span>
+                            <span>300</span>
+                        </div>
+                        <div class="h-3 bg-gray-200 rounded-full">
+                            <div class="h-3 bg-green-500 rounded-full" style="width:100%"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>Transport: KL Monorail</span>
+                            <span>200</span>
+                        </div>
+                        <div class="h-3 bg-gray-200 rounded-full">
+                            <div class="h-3 bg-green-500 rounded-full" style="width:67%"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>Ipoh Cave Explore</span>
+                            <span>160</span>
+                        </div>
+                        <div class="h-3 bg-gray-200 rounded-full">
+                            <div class="h-3 bg-green-500 rounded-full" style="width:53%"></div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Right: Submission Status Distribution -->
+<div class="bg-white rounded-2xl shadow p-6 text-center">
+
+    <h4 class="font-semibold mb-6">
+        Submission Status Distribution
+    </h4>
+
+    <!-- ===== STATIC RADAR DIAGRAM CONTAINER ===== -->
+    <div class="flex justify-center">
+
+        <div class="w-64 h-64">
+
+            <svg viewBox="0 0 200 200" class="w-full h-full">
+
+                <!-- Background triangle -->
+                <polygon points="100,20 20,180 180,180"
+                         fill="#ecfdf5"
+                         stroke="#d1fae5"
+                         stroke-width="2" />
+
+                <!-- Data polygon (Approved=4, Pending=1, Denied=1) -->
+                <polygon points="100,40 80,150 120,150"
+                         fill="rgba(16,185,129,0.35)"
+                         stroke="#10b981"
+                         stroke-width="2" />
+
+                <!-- Data points -->
+                <circle cx="100" cy="40" r="5" fill="#10b981" />
+                <circle cx="80" cy="150" r="5" fill="#f59e0b" />
+                <circle cx="120" cy="150" r="5" fill="#ef4444" />
+
+                <!-- Labels -->
+                <text x="100" y="15" text-anchor="middle"
+                      font-size="12" fill="#065f46">
+                    Approved (4)
+                </text>
+
+                <text x="18" y="195" text-anchor="start"
+                      font-size="12" fill="#92400e">
+                    Pending (1)
+                </text>
+
+                <text x="182" y="195" text-anchor="end"
+                      font-size="12" fill="#991b1b">
+                    Denied (1)
+                </text>
+
+            </svg>
+
+        </div>
+    </div>
+
+    <!-- ===== LEGEND ===== -->
+    <div class="flex justify-center gap-6 text-sm mt-6">
+        <span class="flex items-center gap-2">
+            <span class="w-3 h-3 bg-green-500 rounded-full"></span>
+            Approved
+        </span>
+        <span class="flex items-center gap-2">
+            <span class="w-3 h-3 bg-yellow-400 rounded-full"></span>
+            Pending
+        </span>
+        <span class="flex items-center gap-2">
+            <span class="w-3 h-3 bg-red-400 rounded-full"></span>
+            Denied
+        </span>
+    </div>
+
+</div>
+
+
+        </div>
+
+    </div>
+
+    <!-- ===== LOGIN CTA ===== -->
+    <a href="login.php" class="preview-login-btn">
+        🔒 Login to interact
+    </a>
+
+</section>
 
 </div>
 
