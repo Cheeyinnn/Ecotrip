@@ -401,6 +401,8 @@ include "includes/layout_start.php";
                         data-challenge-id="<?= htmlspecialchars($submission['challengeID']); ?>"
                         data-challenge-title="<?= htmlspecialchars($submission['challengeTitle']); ?>"
                         data-challenge-desc="<?= htmlspecialchars($submission['challengeDesc']); ?>"        
+                        data-challenge-city="<?= htmlspecialchars($submission['challengeCity']); ?>"
+
                     >
 
 
@@ -451,12 +453,7 @@ include "includes/layout_start.php";
                     <div class="p-4 border-b border-neutral-100 flex justify-between items-center">
                         <h3 class="font-medium text-neutral-700">Submission Details</h3>
                         <div class="flex items-center space-x-2">
-                            <button class="p-2 rounded-full hover:bg-neutral-100 transition-colors text-neutral-500">
-                                <i class="fas fa-ellipsis-v"></i>
-                            </button>
-                            <button class="p-2 rounded-full hover:bg-neutral-100 transition-colors text-neutral-500">
-                                <i class="fas fa-print"></i>
-                            </button>
+                            
                         </div>
                     </div>
                     <div class="flex-1 overflow-y-auto scrollbar-hide p-2 space-y-3">
@@ -488,26 +485,41 @@ include "includes/layout_start.php";
                             <!-- submission details START -->
 
                                     
-                <div class="mb-6">
-                        <div class="flex flex-wrap items-start justify-between gap-4 mb-4">
-                            <div>
-                                <h2 id="detail-title" class="text-xl font-bold text-neutral-700">
+                    <div class="mb-6">
+                        
+                        <div class="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6 pb-6 border-b border-gray-100">
+                            <div class="pl-4 border-l-4 border-blue-600 space-y-2">
+                                <h2 id="detail-title" class="text-2xl font-extrabold text-gray-800 tracking-tight leading-tight">
                                     <?= $currentSubmission['title']; ?>
                                 </h2>
 
-                                <p id="detail-username" class="text-l font-semibold text-neutral-500">
-                                    UserName: <?= $currentSubmission['user']; ?>
-                                </p>
+                                <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+                                    <p id="detail-username" class="flex items-center text-sm font-bold text-blue-600">
+                                        <i class="fas fa-user-circle mr-2"></i>
+                                        <span class="text-gray-500 font-medium mr-1">User:</span> 
+                                        <?= $currentSubmission['user']; ?>
+                                    </p>
 
-                                <p id="detail-type" class="text-neutral-400 mt-1">
-                                    Challenge Submission · Sent at <?= $currentSubmission['submit_time']; ?>
-                                </p>
+                                    <span class="hidden md:block text-gray-300">|</span>
+
+                                    <p id="detail-type" class="flex items-center text-sm text-gray-400">
+                                        <i class="far fa-clock mr-2"></i>
+                                        Challenge Submission · <?= $currentSubmission['submit_time']; ?>
+                                    </p>
+                                </div>
                             </div>
+
                         </div>
 
                         <div class="bg-neutral-50 rounded-xl p-4 mb-6 shadow-sm">
 
-                            <h4 class="font-semibold text-neutral-700 mb-3">Challenge Information</h4>
+                            
+                          <div class="flex items-center gap-2 mb-4">
+                            <div class="w-1 h-4 bg-blue-500 rounded-full"></div> <h3 class="font-bold text-neutral-700 text-sm uppercase tracking-wide">
+                                Challenge Information
+                            </h3>
+                        </div>
+                        
 
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
 
@@ -553,11 +565,14 @@ include "includes/layout_start.php";
 
                             </div>
 
-
                         </div>
 
                        <div class="mb-6">
-                            <label class="font-medium text-neutral-700 mb-3">Submitted Proof</label>
+                            <div class="flex items-center gap-2 mb-4">
+                                <div class="w-1 h-4 bg-blue-500 rounded-full"></div> <h3 class="font-bold text-neutral-700 text-sm uppercase tracking-wide">
+                                    Submitted Proof
+                                </h3>
+                            </div>
                             <div class="mb-6 flex justify-center">
                                 <div class="w-full max-w-md h-64 bg-gray-100 rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
                                     <img id="detail-image"
@@ -572,8 +587,12 @@ include "includes/layout_start.php";
                     </div>
                
              
-                       
-        <h3 class="font-medium text-neutral-700 mb-3">Review actions</h3>
+        <div class="flex items-center gap-2 mb-4">
+            <div class="w-1 h-4 bg-blue-500 rounded-full"></div> <h3 class="font-bold text-neutral-700 text-sm uppercase tracking-wide">
+                Review actions
+            </h3>
+        </div>               
+        
         <div class="bg-neutral-50 rounded-lg p-4">
 
             <?php
