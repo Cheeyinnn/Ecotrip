@@ -40,7 +40,7 @@ $currentUser = $result->fetch_assoc();
 $_SESSION['role'] = $currentUser['role'];
 
 $avatarPath = 'upload/default.png';
-if (!file_exists(__DIR__ . '/' . $avatarPath)) { if (file_exists(__DIR__ . '/uploads/default.png')) $avatarPath = 'uploads/default.png'; }
+if (!file_exists(__DIR__ . '/' . $avatarPath)) { if (file_exists(__DIR__ . '/uploads/avatar/default.png')) $avatarPath = 'uploads/avatar/default.png'; }
 if (!empty($currentUser['avatarURL']) && file_exists(__DIR__ . '/' . $currentUser['avatarURL'])) $avatarPath = $currentUser['avatarURL'];
 
 // --- STATISTICS CALCULATIONS ---

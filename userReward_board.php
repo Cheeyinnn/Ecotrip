@@ -289,7 +289,7 @@ include "includes/layout_start.php"; // Assuming you have this
         }
     });
 </script>
-
+<?php include "includes/layout_end.php"; ?>
 
 </body>
 </html>
