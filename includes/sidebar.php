@@ -159,7 +159,7 @@ $teamPendingCountSidebar = $teamPendingCountSidebar ?? 0;
                 </div>
                 <div id="user-rewards" class="sidebar-dropdown-content">
                     <a href="rewards.php" class="sidebar-link <?= isActive('rewards.php') ?>">Browse Rewards</a>
-                    <a href="userReward_board.php" class="sidebar-link <?= isActive('userReward_board.php') ?>">Reward History</a>
+                    <a href="userReward_board.php" class="sidebar-link <?= isActive('userReward_board.php') ?>">Reward Analysis</a>
                 </div>
             </div>
 

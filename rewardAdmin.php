@@ -596,6 +596,5 @@ function previewImage(input) {
 }
 </script>
 
-<?php include "includes/layout_end.php"; ?>
 </body>
 </html>
