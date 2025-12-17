@@ -350,7 +350,9 @@ include 'includes/layout_start.php';
                                     <?php 
                                         $category = strtolower($row['category']); 
                                         $status = $row['status'];
-                                        $img = !empty($row['imageURL']) ? 'uploads/' . $row['imageURL'] : 'upload/default.png'; // Corrected Path
+                                        $img = !empty($row['imageURL']) ? '/Ecotrip/' . $row['imageURL']
+    : '/Ecotrip/uploads/rewards/default.png';
+
                                         $shipName = htmlspecialchars($row['receiver_name'] ?? '-');
                                         $shipPhone = htmlspecialchars($row['phone_number'] ?? '-');
                                         $shipAddr = htmlspecialchars($row['address'] ?? '-');
