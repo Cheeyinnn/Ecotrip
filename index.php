@@ -1,256 +1,488 @@
 <?php
 session_start();
 
-/* Redirect logged-in users (same as login.php) */
-if (isset($_SESSION['userID'], $_SESSION['role'])) {
-    if ($_SESSION['role'] === 'admin') {
-        header('Location: manage.php');
-    } elseif ($_SESSION['role'] === 'moderator') {
-        header('Location: moderator.php');
-    } else {
-        header('Location: view.php');
-    }
+// If logged in, redirect to dashboard
+if (isset($_SESSION['userID'])) {
+    header("Location: view.php");
     exit;
 }
 ?>
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>EcoTrip Challenge</title>
+<meta charset="utf-8">
+<title>EcoTrip Challenge – Public Preview</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 
 <style>
-body {
-    background: linear-gradient(135deg, #e6f7f1, #f9fff9);
-    font-family: Inter, Arial, sans-serif;
-}
-
-/* ================= HERO ================= */
-.hero {
-    padding: 90px 20px 40px;
-    text-align: center;
-}
-
-/* ================= LEADERBOARD PREVIEW ================= */
-.preview-wrapper {
-    max-width: 1100px;
-    margin: auto;
+/* ================= PREVIEW MODULE STYLE ================= */
+.preview-module {
     position: relative;
-    cursor: pointer;
-}
-
-.preview-card {
     background: #ffffff;
-    border-radius: 26px;
-    padding: 40px;
-    box-shadow: 0 15px 40px rgba(0,0,0,0.12);
-    transition: all 0.25s ease;
+    border-radius: 1.25rem;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.08);
+    overflow: hidden;
 }
 
-/* SOFT BLUR (VISIBLE) */
-.preview-locked {
-    filter: blur(3px);
-    opacity: 0.9;
+/* Blur only the content */
+.preview-content {
+    filter: blur(2.5px);
+    opacity: 0.85;
+    pointer-events: none;
+    user-select: none;
 }
 
-/* Hover hint */
-.preview-wrapper:hover .preview-card {
-    box-shadow: 0 20px 50px rgba(0,0,0,0.18);
-}
-
-/* Lock hint */
-.lock-hint {
+/* Login button INSIDE module */
+.preview-login-btn {
     position: absolute;
-    bottom: 18px;
-    right: 22px;
-    background: rgba(0,0,0,0.65);
-    color: white;
-    padding: 6px 14px;
-    border-radius: 20px;
+    bottom: 16px;
+    right: 16px;
+    background: rgba(0,0,0,0.75);
+    color: #fff;
+    padding: 8px 14px;
     font-size: 13px;
+    border-radius: 999px;
     display: flex;
     align-items: center;
     gap: 6px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+    z-index: 10;
 }
 
-/* ================= RANK CARDS ================= */
-.rank-card {
-    background: #fff;
-    border-radius: 22px;
-    padding: 30px 20px;
+.preview-login-btn:hover {
+    background: rgba(0,0,0,0.9);
+}
+
+/* ===== LEADERBOARD CARD ===== */
+.leaderboard-card {
     position: relative;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-}
-.rank-card.gold   { border: 2px solid #facc15; }
-.rank-card.silver { border: 2px solid #cbd5e1; }
-.rank-card.bronze { border: 2px solid #fb923c; }
-
-.avatar {
-    width: 90px;
-    height: 90px;
-    border-radius: 50%;
 }
 
-.rank-badge {
-    position: absolute;
-    top: 78px;
-    right: calc(50% - 15px);
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    color: white;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.rank-badge.gold { background:#facc15; }
-.rank-badge.silver { background:#94a3b8; }
-.rank-badge.bronze { background:#fb923c; }
-
+/* Crown positioning */
 .crown {
-    position:absolute;
-    top:-18px;
-    left:calc(50% - 17px);
-    font-size:34px;
-}
-.crown.gold { color:#facc15; }
-.crown.silver { color:#94a3b8; }
-.crown.bronze { color:#fb923c; }
-
-.points {
-    color:#16a34a;
-    font-weight:700;
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 26px;
+    z-index: 5;
 }
 
-.current-rank-bar {
-    background: linear-gradient(90deg, #22c55e, #16a34a);
-    border-radius: 50px;
-    padding: 18px 26px;
-    color: white;
-    display: flex;
-    align-items: center;
-}
+/* Crown colors */
+.crown-gold   { color: #fbbf24; } /* 🥇 */
+.crown-silver { color: #9ca3af; } /* 🥈 */
+.crown-bronze { color: #fb923c; } /* 🥉 */
 
-.rank-circle {
-    width:36px;
-    height:36px;
-    border-radius:50%;
-    background:rgba(255,255,255,0.25);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-weight:700;
-}
 </style>
 </head>
 
-<body>
+<body class="bg-green-50">
+
+<!-- ================= HEADER ================= -->
+<header class="bg-white px-8 py-4 shadow flex justify-between items-center">
+    <h1 class="text-2xl font-bold text-green-700">EcoTrip Challenge</h1>
+    <div class="space-x-4">
+        <a href="login.php" class="font-semibold text-green-700">Login</a>
+        <a href="register.php"
+           class="bg-green-600 text-white px-4 py-2 rounded-lg">
+            Register
+        </a>
+    </div>
+</header>
 
 <!-- ================= HERO ================= -->
-<section class="hero container">
-    <iconify-icon icon="solar:leaf-bold-duotone" width="70" class="text-success"></iconify-icon>
-    <h1 class="fw-bold mt-3">EcoTrip Challenge</h1>
-    <p class="lead text-muted">
-        Compete, collaborate, and earn rewards for sustainable actions.
+<section class="bg-gradient-to-r from-green-500 to-emerald-600 text-white text-center py-20">
+    <h2 class="text-4xl font-bold mb-4">
+        Travel Smarter. Live Greener.
+    </h2>
+    <p class="max-w-3xl mx-auto text-lg">
+        EcoTrip Challenge is a gamified sustainability platform where users complete
+        eco-friendly challenges, earn points, compete on leaderboards,
+        and redeem rewards.
     </p>
 </section>
 
-<!-- ================= LEADERBOARD PREVIEW ================= -->
-<section class="container mb-5">
+<!-- ================= CONTENT ================= -->
+<div class="max-w-7xl mx-auto px-6 py-20 space-y-24">
 
-<div class="preview-wrapper" data-bs-toggle="modal" data-bs-target="#loginModal">
+<!-- ================= CHALLENGE PREVIEW MODULE ================= -->
+<section class="preview-module bg-gray-50 p-8 mt-16">
+    <h3 class="text-2xl font-bold mb-6">🎁 Challenge</h3>
 
-    <div class="preview-card preview-locked">
+    <!-- ===== BLURRED CONTENT ===== -->
+    <div class="preview-content">
 
-        <div class="text-center mb-4">
-            <iconify-icon icon="solar:cup-star-bold-duotone" width="48" class="text-success"></iconify-icon>
-            <h2 class="fw-bold mt-2">Leaderboard</h2>
-            <p class="text-muted">Top performers in our eco-challenge community</p>
+        <!-- Green Header -->
+        <div class="bg-gradient-to-r from-green-500 to-emerald-600
+                    rounded-3xl p-16 text-center text-white mb-10">
+            <h2 class="text-4xl font-bold mb-2">Make an Impact</h2>
+            <p class="text-lg">
+                Small actions today, big changes for tomorrow.
+            </p>
         </div>
 
-        <div class="row justify-content-center align-items-end g-4 mb-5">
-            <div class="col-md-3 text-center">
-                <div class="rank-card silver">
-                    <iconify-icon icon="solar:crown-bold-duotone" class="crown silver"></iconify-icon>
-                    <img src="https://i.pravatar.cc/100?img=12" class="avatar">
-                    <div class="rank-badge silver">2</div>
-                    <h5 class="mt-3">yx</h5>
-                    <div class="points">90 pts</div>
-                    <small>Blue Team</small>
-                </div>
-            </div>
+        <!-- Filter Bar -->
+        <div class="bg-white rounded-2xl shadow p-6 flex gap-4 mb-10">
+            <input type="text"
+                   class="flex-1 border rounded-lg px-4 py-3"
+                   placeholder="Type & Press Enter...">
 
-            <div class="col-md-3 text-center">
-                <div class="rank-card gold">
-                    <iconify-icon icon="solar:crown-bold-duotone" class="crown gold"></iconify-icon>
-                    <img src="https://i.pravatar.cc/100?img=32" class="avatar">
-                    <div class="rank-badge gold">1</div>
-                    <h5 class="mt-3">xx</h5>
-                    <div class="points">400 pts</div>
-                    <small>Blue Team</small>
-                </div>
-            </div>
+            <select class="border rounded-lg px-4 py-3">
+                <option>All Categories</option>
+            </select>
 
-            <div class="col-md-3 text-center">
-                <div class="rank-card bronze">
-                    <iconify-icon icon="solar:crown-bold-duotone" class="crown bronze"></iconify-icon>
-                    <img src="https://i.pravatar.cc/100?img=56" class="avatar">
-                    <div class="rank-badge bronze">3</div>
-                    <h5 class="mt-3">cy</h5>
-                    <div class="points">80 pts</div>
-                    <small>Blue Team</small>
-                </div>
-            </div>
+            <select class="border rounded-lg px-4 py-3">
+                <option>All Cities</option>
+            </select>
+
+            <button class="bg-blue-600 text-white px-6 rounded-lg flex items-center gap-2">
+                🔍 Filter
+            </button>
         </div>
 
-        <div class="current-rank-bar">
-            <div class="d-flex align-items-center gap-3">
-                <img src="https://i.pravatar.cc/50?img=56" class="rounded-circle">
-                <strong>You Currently Rank</strong>
+        <!-- Challenge Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+
+            <!-- Card 1 -->
+            <div class="bg-white rounded-2xl shadow overflow-hidden">
+                <img src="https://images.unsplash.com/photo-1544025162-d76694265947"
+                     class="h-48 w-full object-cover">
+
+                <div class="p-6">
+                    <span class="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full">
+                        Public Transport
+                    </span>
+
+                    <h3 class="font-bold text-lg mt-4">
+                        Penang Ferry Fun
+                    </h3>
+
+                    <p class="text-gray-500 text-sm mt-2">
+                        Experience the heritage of Penang by crossing the channel on the
+                        iconic ferry — a cleaner way to travel.
+                    </p>
+
+                    <div class="flex justify-between items-center mt-4">
+                        <span class="bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-sm">
+                            ⭐ 80 pts
+                        </span>
+                        <span class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-sm">
+                            📍 Penang
+                        </span>
+                    </div>
+                </div>
             </div>
-            <div class="ms-auto d-flex align-items-center gap-3">
-                <span>80 pts</span>
-                <span class="rank-circle">3</span>
+
+            <!-- Card 2 -->
+            <div class="bg-white rounded-2xl shadow overflow-hidden">
+                <img src="https://images.unsplash.com/photo-1529070538774-1843cb3265df"
+                     class="h-48 w-full object-cover">
+
+                <div class="p-6">
+                    <span class="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full">
+                        Green Living
+                    </span>
+
+                    <h3 class="font-bold text-lg mt-4">
+                        Seremban Local Eat
+                    </h3>
+
+                    <p class="text-gray-500 text-sm mt-2">
+                        Support small local businesses instead of international fast-food chains.
+                    </p>
+
+                    <div class="flex justify-between items-center mt-4">
+                        <span class="bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-sm">
+                            ⭐ 75 pts
+                        </span>
+                        <span class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-sm">
+                            📍 Seremban
+                        </span>
+                    </div>
+                </div>
             </div>
+
+            <!-- Card 3 -->
+            <div class="bg-white rounded-2xl shadow overflow-hidden">
+                <img src="https://images.unsplash.com/photo-1501004318641-b39e6451bec6"
+                     class="h-48 w-full object-cover">
+
+                <div class="p-6">
+                    <span class="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full">
+                        Nature & Conservation
+                    </span>
+
+                    <h3 class="font-bold text-lg mt-4">
+                        Ipoh Cave Explore
+                    </h3>
+
+                    <p class="text-gray-500 text-sm mt-2">
+                        Visit limestone caves such as Perak Tong to appreciate natural geology.
+                    </p>
+
+                    <div class="flex justify-between items-center mt-4">
+                        <span class="bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-sm">
+                            ⭐ 80 pts
+                        </span>
+                        <span class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-sm">
+                            📍 Ipoh
+                        </span>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
-    <div class="lock-hint">
-        <iconify-icon icon="solar:lock-keyhole-bold"></iconify-icon>
-        Login to interact
-    </div>
+    <!-- ===== LOGIN CTA (VISIBLE & CLICKABLE) ===== -->
+    <a href="login.php" class="preview-login-btn">
+        🔒 Login to interact
+    </a>
 
-</div>
 </section>
 
-<!-- ================= LOGIN MODAL ================= -->
-<div class="modal fade" id="loginModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0 rounded-4 shadow">
-      <div class="modal-body p-4 text-center">
-        <iconify-icon icon="solar:lock-keyhole-bold-duotone"
-                      width="48" class="text-success mb-3"></iconify-icon>
-        <h4 class="fw-bold">Login Required</h4>
-        <p class="text-muted mb-4">
-            Sign in to view full leaderboard, join teams, and earn rewards.
-        </p>
 
-        <a href="login.php" class="btn btn-success w-100 mb-2">Login</a>
-        <a href="register.php" class="btn btn-outline-success w-100">Create Account</a>
-      </div>
+<!-- ================================================= -->
+<!-- LEADERBOARD PREVIEW -->
+<!-- ================================================= -->
+<section class="preview-module p-10">
+    <h3 class="text-2xl font-bold mb-6">🏆 Leaderboard</h3>
+
+    <div class="preview-content">
+
+        <div class="text-center mb-10">
+            <p class="text-gray-500">
+                Top performers in our eco-challenge community
+            </p>
+        </div>
+
+        <div class="flex justify-center gap-10 mb-12">
+            <div class="border rounded-2xl w-44 text-center p-6 shadow">
+                <img src="https://i.pravatar.cc/100?img=12"
+                     class="mx-auto rounded-full mb-3">
+                <div class="font-semibold">yx</div>
+                <div class="text-green-600 font-bold">90 pts</div>
+                <div class="text-sm text-gray-500">Blue Team</div>
+            </div>
+
+            <div class="border-2 border-yellow-400 bg-green-50 rounded-2xl w-48 text-center p-6 shadow-lg scale-110">
+                <img src="https://i.pravatar.cc/100?img=32"
+                     class="mx-auto rounded-full mb-3">
+                <div class="font-semibold">xx</div>
+                <div class="text-green-600 font-bold text-lg">400 pts</div>
+                <div class="text-sm text-gray-500">Blue Team</div>
+            </div>
+
+            <div class="border rounded-2xl w-44 text-center p-6 shadow">
+                <img src="https://i.pravatar.cc/100?img=5"
+                     class="mx-auto rounded-full mb-3">
+                <div class="font-semibold">cy</div>
+                <div class="text-green-600 font-bold">80 pts</div>
+                <div class="text-sm text-gray-500">Blue Team</div>
+            </div>
+        </div>
+
+        <div class="bg-green-600 text-white rounded-full px-8 py-4 flex justify-between items-center">
+            <span>You Currently Rank</span>
+            <span class="font-bold">80 pts • #3</span>
+        </div>
+
     </div>
-  </div>
+
+    <a href="login.php" class="preview-login-btn">
+        <i class="bi bi-lock-fill"></i> Login to interact
+    </a>
+</section>
+
+<!-- ================= REWARDS PREVIEW MODULE ================= -->
+<section class="preview-module bg-gray-50 p-10 mt-24">
+
+    <!-- ===== BLURRED CONTENT ===== -->
+    <div class="preview-content">
+
+        <!-- Header -->
+        <h2 class="text-2xl font-bold mb-8">Rewards Center</h2>
+
+        <!-- Top Info Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+
+            <!-- Wallet -->
+            <div class="bg-gradient-to-r from-slate-800 to-slate-700 text-white
+                        rounded-2xl p-6 flex items-center gap-4">
+                <img src="https://i.pravatar.cc/60?img=5"
+                     class="rounded-full border-2 border-white">
+                <div>
+                    <div class="font-semibold">Hi, cy c</div>
+                    <div class="text-sm opacity-80">Your available points</div>
+                    <div class="text-3xl font-bold text-green-400 mt-1">0</div>
+                </div>
+            </div>
+
+            <!-- History -->
+            <div class="bg-white rounded-2xl p-6 shadow">
+                <div class="font-semibold">History</div>
+                <div class="text-sm text-gray-500">Redemption logs</div>
+            </div>
+
+            <!-- Vouchers -->
+            <div class="bg-white rounded-2xl p-6 shadow">
+                <div class="font-semibold">My Vouchers</div>
+                <div class="text-sm text-gray-500">Active tickets</div>
+            </div>
+
+            <!-- Products -->
+            <div class="bg-white rounded-2xl p-6 shadow">
+                <div class="font-semibold">My Products</div>
+                <div class="text-3xl font-bold text-yellow-500 mt-1">0</div>
+                <div class="text-sm text-gray-500">Total products claimed</div>
+            </div>
+
+        </div>
+
+        <!-- Filters -->
+        <div class="flex justify-between items-center mb-10">
+
+            <div class="flex gap-3">
+                <button class="px-6 py-2 rounded-full bg-green-100 text-green-700 font-semibold">
+                    Available
+                </button>
+                <button class="px-6 py-2 rounded-full bg-gray-100 text-gray-500">
+                    Unavailable
+                </button>
+            </div>
+
+            <div class="flex gap-3">
+                <button class="px-5 py-2 rounded-full bg-blue-100 text-blue-700 font-semibold">
+                    All Items
+                </button>
+                <button class="px-5 py-2 rounded-full bg-gray-100 text-gray-500">
+                    Vouchers
+                </button>
+                <button class="px-5 py-2 rounded-full bg-gray-100 text-gray-500">
+                    Products
+                </button>
+            </div>
+
+        </div>
+
+        <!-- Rewards Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+
+            <!-- Reward Card -->
+            <div class="bg-white rounded-2xl shadow overflow-hidden">
+                <img src="https://images.unsplash.com/photo-1585386959984-a4155224a1ad"
+                     class="h-48 w-full object-cover">
+
+                <div class="p-6">
+                    <span class="text-xs bg-gray-100 px-3 py-1 rounded-full">
+                        PRODUCT
+                    </span>
+
+                    <h3 class="font-bold mt-4">Pen</h3>
+
+                    <div class="flex justify-between text-sm mt-2">
+                        <span>10 pts</span>
+                        <span class="text-gray-400">Need 10 pts</span>
+                    </div>
+
+                    <div class="h-2 bg-gray-200 rounded-full mt-3"></div>
+
+                    <button class="w-full mt-4 py-2 bg-blue-50 text-blue-600 rounded-lg">
+                        View Details
+                    </button>
+                </div>
+            </div>
+
+            <!-- Reward Card -->
+            <div class="bg-white rounded-2xl shadow overflow-hidden">
+                <img src="https://images.unsplash.com/photo-1512436991641-6745cdb1723f"
+                     class="h-48 w-full object-cover">
+
+                <div class="p-6">
+                    <span class="text-xs bg-gray-100 px-3 py-1 rounded-full">
+                        VOUCHER
+                    </span>
+
+                    <h3 class="font-bold mt-4">Nike 20%</h3>
+
+                    <div class="flex justify-between text-sm mt-2">
+                        <span>10 pts</span>
+                        <span class="text-gray-400">Need 10 pts</span>
+                    </div>
+
+                    <div class="h-2 bg-gray-200 rounded-full mt-3"></div>
+
+                    <button class="w-full mt-4 py-2 bg-blue-50 text-blue-600 rounded-lg">
+                        View Details
+                    </button>
+                </div>
+            </div>
+
+            <!-- Reward Card -->
+            <div class="bg-white rounded-2xl shadow overflow-hidden">
+                <img src="https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9"
+                     class="h-48 w-full object-cover">
+
+                <div class="p-6">
+                    <span class="text-xs bg-gray-100 px-3 py-1 rounded-full">
+                        PRODUCT
+                    </span>
+
+                    <h3 class="font-bold mt-4">Mirror</h3>
+
+                    <div class="flex justify-between text-sm mt-2">
+                        <span>40 pts</span>
+                        <span class="text-gray-400">Need 40 pts</span>
+                    </div>
+
+                    <div class="h-2 bg-gray-200 rounded-full mt-3"></div>
+
+                    <button class="w-full mt-4 py-2 bg-blue-50 text-blue-600 rounded-lg">
+                        View Details
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- ===== LOGIN CTA ===== -->
+    <a href="login.php" class="preview-login-btn">
+        🔒 Login to interact
+    </a>
+
+</section>
+
+
+<!-- ================================================= -->
+<!-- TEAM PREVIEW -->
+<!-- ================================================= -->
+<section class="preview-module p-10">
+    <h3 class="text-2xl font-bold mb-6">👥 Teams</h3>
+
+    <div class="preview-content grid grid-cols-1 md:grid-cols-4 gap-6 text-center">
+        <div class="bg-white p-5 rounded-xl shadow">Green Warriors</div>
+        <div class="bg-white p-5 rounded-xl shadow">Eco Rangers</div>
+        <div class="bg-white p-5 rounded-xl shadow">Zero Waste Crew</div>
+        <div class="bg-white p-5 rounded-xl shadow">Planet Protectors</div>
+    </div>
+
+    <a href="login.php" class="preview-login-btn">
+        <i class="bi bi-lock-fill"></i> Login to interact
+    </a>
+</section>
+
 </div>
 
-<footer class="text-center text-muted py-4 border-top">
-    © <?= date('Y') ?> EcoTrip Challenge
+<!-- ================= FOOTER ================= -->
+<footer class="bg-white border-t text-center py-6 text-sm text-gray-500">
+    © <?= date('Y') ?> EcoTrip Challenge. All rights reserved.
 </footer>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

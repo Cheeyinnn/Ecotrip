@@ -55,8 +55,6 @@ if ($scope == "monthly") {
 // --- USER LEADERBOARD QUERY ---
 if ($scope == "all") {
     // DIRECT PATH: Read from user.scorePoint
-    // Removed specific role check strictly to 'member' to ensure data shows up for testing.
-    // If you need strictly members, change WHERE clause to: WHERE u.role = 'member' AND u.scorePoint > 0
     $user_sql = "SELECT 
                     u.userID, 
                     u.firstName, 
@@ -416,6 +414,11 @@ include 'includes/layout_start.php';
         }
     </style>
     <script>
+        // PASS PHP VARIABLES TO JS
+        const currentScope = "<?php echo $scope; ?>";
+        const selectedMonth = "<?php echo $selectedMonth; ?>";
+        const selectedYear = "<?php echo $selectedYear; ?>";
+
         function showTab(view) {
             document.getElementById("userLeaderboard").classList.add("hidden");
             document.getElementById("teamLeaderboard").classList.add("hidden");
@@ -475,7 +478,8 @@ include 'includes/layout_start.php';
                     
                     document.getElementById('modalTitle').innerText = name + "'s Performance";
                     
-                    fetch(`lbDetail.php?id=${id}&type=${type}`)
+                    // UPDATED FETCH CALL: Passing scope parameters
+                    fetch(`lbDetail.php?id=${id}&type=${type}&scope=${currentScope}`)
                         .then(response => {
                             if (!response.ok) {
                                 throw new Error('Network response was not ok: ' + response.statusText);
