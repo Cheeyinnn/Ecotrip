@@ -24,11 +24,34 @@ elseif ($timeFilter === 'today') $timeCondition = " AND DATE(uploaded_at) = CURD
 // ======================
 // KPI 卡片
 $totalSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE 1=1 $timeCondition")->fetch_assoc()['c'];
+
 $pendingSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status = 'pending' $timeCondition")->fetch_assoc()['c'];
-$approvedSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='approved' $timeCondition $moderatorCondition")->fetch_assoc()['c'];
-$deniedSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status='denied' $timeCondition $moderatorCondition")->fetch_assoc()['c'];
+// ======================
+// total approved / denied by current moderator
+$approvedSubmission = $conn->query("
+    SELECT COUNT(*) AS c 
+    FROM sub 
+    WHERE status = 'approved' 
+      AND moderatorID = $userID
+      " . ($days !== null ? " AND approved_at >= NOW() - INTERVAL $days DAY" : "") . "
+      " . ($timeFilter === 'today' ? " AND DATE(approved_at) = CURDATE()" : "") . "
+")->fetch_assoc()['c'];
+
+$deniedSubmission = $conn->query("
+    SELECT COUNT(*) AS c 
+    FROM sub 
+    WHERE status = 'denied' 
+      AND moderatorID = $userID
+      " . ($days !== null ? " AND denied_at >= NOW() - INTERVAL $days DAY" : "") . "
+      " . ($timeFilter === 'today' ? " AND DATE(denied_at) = CURDATE()" : "") . "
+")->fetch_assoc()['c'];
+
 $approveCount = $approvedSubmission;
 $rejectCount  = $deniedSubmission;
+
+// total Reviews
+$totalReviews = $approveCount + $rejectCount;
+
 
 // ======================
 // Challenge Type (全站)
@@ -51,31 +74,108 @@ while ($c = $challengeType->fetch_assoc()) {
     $challengeValues[] = (int)$c['total'];
 }
 
-// ======================
+
 // Approval Trend (当前 moderator)
+// ----------------------
+// 1. 生成日期列表
 
-// SQL 抓取每天的统计
-// 获取当前 moderator 所审核的所有日期，保证即便没有审批也显示 0
-$trendSQL = "
-    SELECT DATE(uploaded_at) AS d,
-           SUM(status='approved' AND moderatorID = $userID) AS approved,
-           SUM(status='denied' AND moderatorID = $userID) AS denied,
-           SUM(status='pending' AND moderatorID = $userID) AS pending
-    FROM sub
-    WHERE 1=1
-";
-if ($days !== null) $trendSQL .= " AND uploaded_at >= NOW() - INTERVAL $days DAY";
-elseif ($timeFilter === 'today') $trendSQL .= " AND DATE(uploaded_at) = CURDATE()";
-$trendSQL .= " GROUP BY DATE(uploaded_at) ORDER BY d";
+$endDate = date('Y-m-d'); // today
 
-$trendData = $conn->query($trendSQL);
-$trendDates = $trendApproved = $trendDenied = $trendPending = [];
-while ($t = $trendData->fetch_assoc()) {
-    $trendDates[] = $t['d'];
-    $trendApproved[] = (int)$t['approved'];
-    $trendDenied[] = (int)$t['denied'];
-    $trendPending[] = (int)$t['pending'];
+if ($timeFilter === 'today') {
+    $startDate = $endDate;
+} elseif ($days !== null) {
+    $startDate = date('Y-m-d', strtotime("-$days days"));
+} else {
+    // All Time → 基于 submission 生命周期最早上传
+    $minDateRow = $conn->query("
+        SELECT MIN(uploaded_at) AS minDate
+        FROM sub
+        WHERE moderatorID = $userID
+    ")->fetch_assoc();
+
+    $startDate = $minDateRow['minDate']
+        ? date('Y-m-d', strtotime($minDateRow['minDate']))
+        : $endDate;
 }
+
+
+
+$trendDates = [];
+
+$currentDate = $startDate;
+while ($currentDate <= $endDate) {
+    $trendDates[$currentDate] = [
+        'pending'  => 0,
+        'approved' => 0,
+        'denied'   => 0
+    ];
+    $currentDate = date('Y-m-d', strtotime($currentDate . ' +1 day'));
+}
+
+
+
+$pendingSQL = "
+    SELECT DATE(uploaded_at) AS d, COUNT(*) AS c
+    FROM sub
+    WHERE status = 'pending'
+      AND moderatorID = $userID
+      " . ($days !== null ? " AND uploaded_at >= NOW() - INTERVAL $days DAY" : "") . "
+      " . ($timeFilter === 'today' ? " AND DATE(uploaded_at) = CURDATE()" : "") . "
+    GROUP BY DATE(uploaded_at)
+";
+
+$res = $conn->query($pendingSQL);
+while ($row = $res->fetch_assoc()) {
+    $trendDates[$row['d']]['pending'] = (int)$row['c'];
+}
+
+
+$approvedSQL = "
+    SELECT DATE(approved_at) AS d, COUNT(*) AS c
+    FROM sub
+    WHERE status = 'approved'
+      AND moderatorID = $userID
+      AND approved_at IS NOT NULL
+      " . ($days !== null ? " AND approved_at >= NOW() - INTERVAL $days DAY" : "") . "
+      " . ($timeFilter === 'today' ? " AND DATE(approved_at) = CURDATE()" : "") . "
+    GROUP BY DATE(approved_at)
+";
+
+$res = $conn->query($approvedSQL);
+while ($row = $res->fetch_assoc()) {
+    $trendDates[$row['d']]['approved'] = (int)$row['c'];
+}
+
+$deniedSQL = "
+    SELECT DATE(denied_at) AS d, COUNT(*) AS c
+    FROM sub
+    WHERE status = 'denied'
+      AND moderatorID = $userID
+      AND denied_at IS NOT NULL
+      " . ($days !== null ? " AND denied_at >= NOW() - INTERVAL $days DAY" : "") . "
+      " . ($timeFilter === 'today' ? " AND DATE(denied_at) = CURDATE()" : "") . "
+    GROUP BY DATE(denied_at)
+";
+
+$res = $conn->query($deniedSQL);
+while ($row = $res->fetch_assoc()) {
+    $trendDates[$row['d']]['denied'] = (int)$row['c'];
+}
+
+
+$trendDatesArr  = array_keys($trendDates);
+$trendPending   = array_column($trendDates, 'pending');
+$trendApproved  = array_column($trendDates, 'approved');
+$trendDenied    = array_column($trendDates, 'denied');
+
+
+
+
+
+
+
+
+
 
 
 // ======================
@@ -448,289 +548,178 @@ const approveCount = <?= $approveCount ?>;
 const rejectCount = <?= $rejectCount ?>;
 const challengeLabels = <?= json_encode($challengeLabels) ?>;
 const challengeValues = <?= json_encode($challengeValues) ?>;
-const trendDates = <?= json_encode($trendDates) ?>;
+const dailyDates = <?= json_encode($dailyDates) ?>;
+const dailyTotals = <?= json_encode($dailyTotals) ?>;
+
+// 处理 Approval Trend 日期，保证每天都有数据
+const trendDates = <?= json_encode($trendDatesArr) ?>;
 const trendApproved = <?= json_encode($trendApproved) ?>;
 const trendDenied = <?= json_encode($trendDenied) ?>;
 const trendPending = <?= json_encode($trendPending) ?>;
-const dailyDates = <?= json_encode($dailyDates) ?>;
-const dailyTotals = <?= json_encode($dailyTotals) ?>;
 const hasReview = approveCount > 0 || rejectCount > 0;
 
-document.addEventListener('DOMContentLoaded', function () {
-
-    // ============================
-    // 1. Approval Rate Donut Chart
-    // ============================
-
-const approvalRateChart = echarts.init(
-    document.getElementById('approvalRateChart')
-);
-
-if (!hasReview) {
-
-    // 🟡 EMPTY STATE
-    approvalRateChart.setOption({
-        series: [{
-            type: 'pie',
-            radius: ['50%', '75%'],
-            silent: true,                 // 不可 hover
-            label: {
-                show: true,
-                position: 'center',
-                formatter: 'No reviews\nyet',
-                color: '#86909C',
-                fontSize: 14,
-                lineHeight: 20,
-                fontWeight: 500
-            },
-            data: [{
-                value: 1,
-                name: 'Empty',
-                itemStyle: { color: '#F2F3F5' }
-            }]
-        }]
-    });
-
-} else {
-
-    // 🟢 NORMAL STATE
-    approvalRateChart.setOption({
-        tooltip: {
-            trigger: 'item',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            borderColor: '#E5E6EB',
-            borderWidth: 1,
-            textStyle: { color: '#1D2129' },
-            padding: 10,
-            formatter: '{b}: {c} ({d}%)',
-            extraCssText: 'box-shadow:0 4px 12px rgba(0,0,0,0.08); border-radius:8px;'
-        },
-        legend: {
-            show: true,
-            orient: 'horizontal',
-            top: 'bottom',
-            left: 'center',
-            textStyle: { color: '#1D2129', fontSize: 14 },
-        },
-        series: [{
-            name: 'Rate',
-            type: 'pie',
-            radius: ['50%', '75%'],
-            avoidLabelOverlap: true,
-            itemStyle: {
-                borderRadius: 8,
-                borderColor: '#fff',
-                borderWidth: 2
-            },
-            label: { show: false },
-            emphasis: {
-                scale: true,
-                scaleSize: 8,
-                label: {
-                    show: true,
-                    formatter: '{d}%',
-                    fontSize: 18,
-                    fontWeight: 'bold',
-                    color: '#1D2129'
-                }
-            },
-            labelLine: { show: false },
-            data: [
-                { value: approveCount, name: 'Approved', itemStyle: { color: '#52C41A' } },
-                { value: rejectCount, name: 'Rejected', itemStyle: { color: '#FF4D4F' } }
-            ]
-        }]
-    });
-
-}
-
-    const challengeTypeChart = echarts.init(document.getElementById('challengeTypeChart'));
-
-        challengeTypeChart.setOption({
-            tooltip: {
-                trigger: 'item',
-                formatter: '{b}: <b>{c}</b> ({d}%)'
-            },
-            legend: {
-                bottom: '0%',
-                left: 'center',
-                itemWidth: 10,
-                itemHeight: 10,
-                textStyle: { color: '#64748b', fontSize: 11 }
-            },
-            series: [
-                {
-                    name: 'Challenge Type',
-                    type: 'pie',
-                    radius: ['20%', '70%'], // Inner and outer radius
-                    center: ['50%', '45%'],
-                    roseType: 'area', // This makes it a Nightingale Chart
-                    itemStyle: {
-                        borderRadius: 8
-                    },
-                    data: challengeLabels.map((label, index) => ({
-                        value: challengeValues[index],
-                        name: label
-                    })),
-                    label: {
-                        show: true,
-                        fontSize: 12,
-                        color: '#475569',
-                        formatter: '{b}'
-                    },
-                    // Custom modern color palette
-                    color: ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981']
-                }
-            ]
-        });
-
-    // ============================
-    // 3. Daily Submission Trend (Horizontal Bar)
-    // ============================
-    const dailyReviewChart = echarts.init(document.getElementById('dailyReviewChart'));
-
-    dailyReviewChart.setOption({
-        tooltip: { 
-            trigger: 'axis',
-            axisPointer: { type: 'shadow' },
-            formatter: '{b}: {c} Submissions'
-        },
-        grid: {
-            left: '3%', right: '10%', bottom: '3%', top: '10%', containLabel: true
-        },
-        // X 轴：数值轴
-        xAxis: {
-            type: 'value',
-            minInterval: 1, 
-            axisLine: { show: false },
-            splitLine: { lineStyle: { type: 'solid', color: '#f0f0f0' } }
-        },
-        // Y 轴：类目轴（日期）
-        yAxis: { 
-            type: 'category',
-            data: dailyDates.length ? dailyDates : ['No Data'],
-            axisLine: { show: false }, 
-            axisTick: { show: false }
-        },
-        series: [{
-            name: 'Total Submissions',
-            type: 'bar',
-            data: dailyTotals.length ? dailyTotals : [0],
-            barWidth: '60%', 
-            itemStyle: {
-                borderRadius: 5, 
-                color: '#36CBCB' // Secondary Color (Teal)
-            },
-            label: {
-                show: true,
-                position: 'right', 
-                formatter: '{c}',
-                color: '#1D2129',
-                fontSize: 12 
-            }
-        }]
-    });
-
-    // ============================
-    // 4. Approval Trend (Line Chart)
-    // ============================
-const approvalTrendChart = echarts.init(document.getElementById('approvalTrendChart'));
-
-approvalTrendChart.setOption({
-    tooltip: { trigger: 'axis' },
-    legend: {
-        data: ['Pending', 'Approved', 'Rejected'],
-        bottom: 0,
-        icon: 'circle'
-    },
-    xAxis: {
-        type: 'category',
-        data: <?= json_encode($trendDates) ?>,
-        axisLine: { lineStyle: { color: '#ccc' } }
-    },
-    yAxis: { 
-        type: 'value',
-        splitLine: { lineStyle: { type: 'dashed' } }
-    },
-    grid: {
-        left: '3%', right: '4%', bottom: '15%', containLabel: true
-    },
-    series: [
-        {
-            name: 'Pending',
-            type: 'line',
-            smooth: true,
-            symbol: 'circle',
-            itemStyle: { color: '#FAAD14' },
-            areaStyle: {
-                opacity: 0.1,
-                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: 'rgba(250,173,20,0.4)' },
-                    { offset: 1, color: 'rgba(250,173,20,0)' }
-                ])
-            },
-            data: <?= json_encode($trendPending) ?>,
-            label: { show: true, position: 'top', fontSize: 12, color: '#FAAD14' }
-        },
-        {
-            name: 'Approved',
-            type: 'line',
-            smooth: true,
-            symbol: 'circle',
-            itemStyle: { color: '#52C41A' },
-            areaStyle: {
-                opacity: 0.1,
-                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: 'rgba(82, 196, 26,0.4)' },
-                    { offset: 1, color: 'rgba(82, 196, 26,0)' }
-                ])
-            },
-            data: <?= json_encode($trendApproved) ?>,
-            label: { show: true, position: 'top', fontSize: 12, color: '#52C41A' }
-        },
-        {
-            name: 'Rejected',
-            type: 'line',
-            smooth: true,
-            symbol: 'circle',
-            itemStyle: { color: '#FF4D4F' },
-            areaStyle: {
-                opacity: 0.1,
-                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: 'rgba(255,77,79,0.4)' },
-                    { offset: 1, color: 'rgba(255,77,79,0)' }
-                ])
-            },
-            data: <?= json_encode($trendDenied) ?>,
-            label: { show: true, position: 'top', fontSize: 12, color: '#FF4D4F' }
-        }
-    ]
-});
-
-
-
-
-
-    // 调整图表大小以适应窗口变化
-    window.dashboardCharts = {
-        approvalRateChart,
-        challengeTypeChart,
-        dailyReviewChart,
-        approvalTrendChart
-    };
-    window.addEventListener('resize', () => {
-        Object.values(window.dashboardCharts).forEach(chart => chart.resize());
-    });
-});
 
 function applyTimeFilter() {
     const time = document.getElementById('timeFilter').value;
     window.location.href = `?time=${time}`;
 }
 
-// 移除 showTab 函数，因为不再使用 Tab
+
+document.addEventListener('DOMContentLoaded', function () {
+
+    // ============================
+    // 1. Approval Rate Donut Chart
+    // ============================
+    const approvalRateChart = echarts.init(document.getElementById('approvalRateChart'));
+
+    if (!hasReview) {
+        approvalRateChart.setOption({
+            series: [{
+                type: 'pie',
+                radius: ['50%', '75%'],
+                silent: true,
+                label: {
+                    show: true,
+                    position: 'center',
+                    formatter: 'No reviews\nyet',
+                    color: '#86909C',
+                    fontSize: 14,
+                    lineHeight: 20,
+                    fontWeight: 500
+                },
+                data: [{ value: 1, name: 'Empty', itemStyle: { color: '#F2F3F5' } }]
+            }]
+        });
+    } else {
+        approvalRateChart.setOption({
+            tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+            legend: { show: true, orient: 'horizontal', bottom: '0%', left: 'center', textStyle: { color: '#1D2129' } },
+            series: [{
+                name: 'Rate',
+                type: 'pie',
+                radius: ['50%', '75%'],
+                avoidLabelOverlap: true,
+                itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
+                label: { show: false },
+                emphasis: { scale: true, scaleSize: 8, label: { show: true, formatter: '{d}%', fontSize: 18, fontWeight: 'bold', color: '#1D2129' } },
+                labelLine: { show: false },
+                data: [
+                    { value: approveCount, name: 'Approved', itemStyle: { color: '#52C41A' } },
+                    { value: rejectCount, name: 'Rejected', itemStyle: { color: '#FF4D4F' } }
+                ]
+            }]
+        });
+    }
+
+    // ============================
+    // 2. Challenge Type Pie Chart
+    // ============================
+    const challengeTypeChart = echarts.init(document.getElementById('challengeTypeChart'));
+    challengeTypeChart.setOption({
+        tooltip: { trigger: 'item', formatter: '{b}: <b>{c}</b> ({d}%)' },
+        legend: { bottom: '0%', left: 'center', itemWidth: 10, itemHeight: 10, textStyle: { color: '#64748b', fontSize: 11 } },
+        series: [{
+            name: 'Challenge Type',
+            type: 'pie',
+            radius: ['20%', '70%'],
+            center: ['50%', '45%'],
+            roseType: 'area',
+            itemStyle: { borderRadius: 8 },
+            data: challengeLabels.map((label, idx) => ({ value: challengeValues[idx], name: label })),
+            label: { show: true, fontSize: 12, color: '#475569', formatter: '{b}' },
+            color: ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981']
+        }]
+    });
+
+    // ============================
+    // 3. Daily Submission Trend (Horizontal Bar)
+    // ============================
+    const dailyReviewChart = echarts.init(document.getElementById('dailyReviewChart'));
+    dailyReviewChart.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: '{b}: {c} Submissions' },
+        grid: { left: '3%', right: '10%', bottom: '3%', top: '10%', containLabel: true },
+        xAxis: { type: 'value', minInterval: 1, axisLine: { show: false }, splitLine: { lineStyle: { type: 'solid', color: '#f0f0f0' } } },
+        yAxis: { type: 'category', data: dailyDates.length ? dailyDates : ['No Data'], axisLine: { show: false }, axisTick: { show: false } },
+        series: [{
+            name: 'Total Submissions',
+            type: 'bar',
+            data: dailyTotals.length ? dailyTotals : [0],
+            barWidth: '60%',
+            itemStyle: { borderRadius: 5, color: '#36CBCB' },
+            label: { show: true, position: 'right', formatter: '{c}', color: '#1D2129', fontSize: 12 }
+        }]
+    });
+
+
+// ============================
+// 4. Approval Trend (NORMAL Line Chart)
+// ============================
+const approvalTrendChart = echarts.init(
+    document.getElementById('approvalTrendChart')
+);
+
+approvalTrendChart.setOption({
+    tooltip: {
+        trigger: 'axis'
+    },
+    legend: {
+        data: ['Pending', 'Approved', 'Rejected'],
+        bottom: 0,
+        icon: 'circle'
+    },
+    grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '15%',
+        containLabel: true
+    },
+    xAxis: {
+        type: 'category',
+        data: trendDates,
+        axisLine: { lineStyle: { color: '#ccc' } }
+    },
+    yAxis: {
+        type: 'value',
+        minInterval: 1,
+        splitLine: { lineStyle: { type: 'dashed' } }
+    },
+    series: [
+       
+        {
+            name: 'Approved',
+            type: 'line',
+            smooth: true,
+            symbolSize: 8,
+            data: trendApproved,
+            itemStyle: { color: '#52C41A' },
+            label: {
+                show: true,
+                position: 'top',
+                formatter: v => v.value === 0 ? '' : v.value
+            }
+        },
+        {
+            name: 'Rejected',
+            type: 'line',
+            smooth: true,
+            symbolSize: 8,
+            data: trendDenied,
+            itemStyle: { color: '#FF4D4F' },
+            label: {
+                show: true,
+                position: 'top',
+                formatter: v => v.value === 0 ? '' : v.value
+            }
+        }
+    ]
+});
+
+
+
+});
 
 </script>
+
 
 <?php include "includes/layout_end.php"; ?>
 

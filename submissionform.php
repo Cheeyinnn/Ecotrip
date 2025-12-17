@@ -228,39 +228,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
           <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="bg-gray-50 px-6 py-3 border-b border-gray-100 flex justify-between items-center">
-                        <h2 class="font-bold text-gray-800">Required Format</h2>
+                        <h2 class="font-bold text-gray-800">Upload Guidelines</h2>
                         <i class="fa-solid fa-circle-exclamation text-yellow-500"></i>
                     </div>
                     
-                    <div class="p-5">
-                        <div class="bg-slate-800 rounded-lg w-full aspect-video relative flex items-center justify-center mb-4 shadow-inner border border-slate-700">
-                            <span class="text-slate-500 font-medium">Your Photo Here</span>
-                            
-                            <div class="absolute bottom-3 right-3 text-right">
-                                <p class="text-yellow-400 font-mono text-xs font-bold leading-tight drop-shadow-md">
-                                    2025-12-11 09:30:15<br>
-                                    Perak, Malaysia<br>
-                                    Lat: 4.342, Long: 101.123
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="bg-red-50 border-l-4 border-red-500 p-3 rounded-r mb-6">
-                            <div class="flex">
-                                <div class="flex-shrink-0">
-                                    <i class="fa-solid fa-triangle-exclamation text-red-500"></i>
-                                </div>
-                                <div class="ml-3">
-                                    <p class="text-xs text-red-700 font-semibold">
-                                        Photos WITHOUT this date/location text will be rejected immediately.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
+                    <div class="p-3">
+                        
                         <!-- Guidelines Card -->
-                        <h2 class="text-lg font-semibold text-gray-800 mb-3">Upload Guidelines</h2>
-
                             <ul class="space-y-2 text-sm text-gray-700">
                                 <li class="flex items-start">
                                     <i class="fa fa-circle-check text-green-500 mt-1 mr-2"></i>
