@@ -111,7 +111,7 @@ if (isset($_SESSION['userID'])) {
 
 <!-- ================= CHALLENGE PREVIEW MODULE ================= -->
 <section class="preview-module bg-gray-50 p-8 mt-16">
-    <h3 class="text-2xl font-bold mb-6">🎁 Challenge</h3>
+    <h3 class="text-2xl font-bold mb-6">🌱 Challenge</h3>
 
     <!-- ===== BLURRED CONTENT ===== -->
     <div class="preview-content">
@@ -246,60 +246,102 @@ if (isset($_SESSION['userID'])) {
 </section>
 
 
-<!-- ================================================= -->
-<!-- LEADERBOARD PREVIEW -->
-<!-- ================================================= -->
-<section class="preview-module p-10">
+<!-- ================= LEADERBOARD PREVIEW MODULE ================= -->
+<section class="preview-module bg-white p-10 mt-24">
     <h3 class="text-2xl font-bold mb-6">🏆 Leaderboard</h3>
 
+    <!-- ===== BLURRED CONTENT ===== -->
     <div class="preview-content">
 
+        <!-- Header -->
         <div class="text-center mb-10">
+            <h2 class="text-3xl font-bold text-green-700 flex justify-center items-center gap-2">
+                🏆 Leaderboard
+            </h2>
             <p class="text-gray-500">
                 Top performers in our eco-challenge community
             </p>
         </div>
 
-        <div class="flex justify-center gap-10 mb-12">
-            <div class="border rounded-2xl w-44 text-center p-6 shadow">
+        <!-- Tabs -->
+        <div class="flex justify-between items-center mb-12">
+            <div class="flex gap-2 bg-gray-100 p-2 rounded-full">
+                <span class="px-4 py-1 bg-white rounded-full font-semibold text-green-600">
+                    Users
+                </span>
+                <span class="px-4 py-1 text-gray-500">Teams</span>
+            </div>
+
+            <div class="flex gap-2 bg-gray-100 p-2 rounded-full">
+                <span class="px-4 py-1 bg-white rounded-full font-semibold text-green-600">
+                    All-Time
+                </span>
+                <span class="px-4 py-1 text-gray-500">Weekly</span>
+                <span class="px-4 py-1 text-gray-500">Monthly</span>
+            </div>
+        </div>
+
+        <!-- ===== TOP 3 USERS ===== -->
+        <div class="flex justify-center gap-10 mb-14">
+
+            <!-- 🥈 Rank 2 -->
+            <div class="leaderboard-card border rounded-2xl w-44 text-center p-6 shadow">
+                <div class="crown crown-silver">👑</div>
+
                 <img src="https://i.pravatar.cc/100?img=12"
                      class="mx-auto rounded-full mb-3">
+
                 <div class="font-semibold">yx</div>
                 <div class="text-green-600 font-bold">90 pts</div>
                 <div class="text-sm text-gray-500">Blue Team</div>
             </div>
 
-            <div class="border-2 border-yellow-400 bg-green-50 rounded-2xl w-48 text-center p-6 shadow-lg scale-110">
+            <!-- 🥇 Rank 1 -->
+            <div class="leaderboard-card border-2 border-yellow-400 bg-green-50
+                        rounded-2xl w-48 text-center p-6 shadow-lg scale-110">
+                <div class="crown crown-gold">👑</div>
+
                 <img src="https://i.pravatar.cc/100?img=32"
                      class="mx-auto rounded-full mb-3">
+
                 <div class="font-semibold">xx</div>
                 <div class="text-green-600 font-bold text-lg">400 pts</div>
                 <div class="text-sm text-gray-500">Blue Team</div>
             </div>
 
-            <div class="border rounded-2xl w-44 text-center p-6 shadow">
+            <!-- 🥉 Rank 3 -->
+            <div class="leaderboard-card border rounded-2xl w-44 text-center p-6 shadow">
+                <div class="crown crown-bronze">👑</div>
+
                 <img src="https://i.pravatar.cc/100?img=5"
                      class="mx-auto rounded-full mb-3">
+
                 <div class="font-semibold">cy</div>
                 <div class="text-green-600 font-bold">80 pts</div>
                 <div class="text-sm text-gray-500">Blue Team</div>
             </div>
+
         </div>
 
-        <div class="bg-green-600 text-white rounded-full px-8 py-4 flex justify-between items-center">
+        <!-- ===== CURRENT USER RANK ===== -->
+        <div class="bg-green-600 text-white rounded-full px-8 py-4 flex justify-between items-center shadow">
             <span>You Currently Rank</span>
-            <span class="font-bold">80 pts • #3</span>
+            <span class="font-bold">80 pts • Rank #3</span>
         </div>
 
     </div>
 
+    <!-- ===== LOGIN CTA (NOT BLURRED) ===== -->
     <a href="login.php" class="preview-login-btn">
-        <i class="bi bi-lock-fill"></i> Login to interact
+        🔒 Login to interact
     </a>
+
 </section>
+
 
 <!-- ================= REWARDS PREVIEW MODULE ================= -->
 <section class="preview-module bg-gray-50 p-10 mt-24">
+    <h2 class="text-2xl font-bold mb-8">🎁 Rewards Center</h2>
 
     <!-- ===== BLURRED CONTENT ===== -->
     <div class="preview-content">
@@ -459,23 +501,144 @@ if (isset($_SESSION['userID'])) {
 </section>
 
 
-<!-- ================================================= -->
-<!-- TEAM PREVIEW -->
-<!-- ================================================= -->
-<section class="preview-module p-10">
-    <h3 class="text-2xl font-bold mb-6">👥 Teams</h3>
+<!-- ================= TEAM OVERVIEW PREVIEW MODULE ================= -->
+<section class="preview-module bg-gray-50 p-10 mt-24">
+<h2 class="text-2xl font-bold mb-8">👥 Team</h2>
+    <!-- ===== BLURRED CONTENT ===== -->
+    <div class="preview-content">
 
-    <div class="preview-content grid grid-cols-1 md:grid-cols-4 gap-6 text-center">
-        <div class="bg-white p-5 rounded-xl shadow">Green Warriors</div>
-        <div class="bg-white p-5 rounded-xl shadow">Eco Rangers</div>
-        <div class="bg-white p-5 rounded-xl shadow">Zero Waste Crew</div>
-        <div class="bg-white p-5 rounded-xl shadow">Planet Protectors</div>
+        <!-- ================= TEAM HEADER ================= -->
+        <div class="bg-slate-800 text-white rounded-2xl p-8 flex justify-between items-center">
+
+            <div>
+                <h2 class="text-3xl font-bold">Blue Team</h2>
+                <p class="text-gray-300 mt-1 italic">
+                    Descriptions: Welcome to join Blue Team!
+                </p>
+
+                <div class="flex gap-6 text-sm mt-6 text-gray-300">
+                    <span><strong class="text-white">Owner:</strong> cy c</span>
+                    <span><strong class="text-white">Members:</strong> 4</span>
+                    <span><strong class="text-white">Created:</strong> Dec 17, 2025</span>
+                </div>
+            </div>
+
+            <!-- Team Logo -->
+            <div class="bg-white rounded-xl p-3 shadow">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/HD_transparent_picture.png/240px-HD_transparent_picture.png"
+                     class="w-28 h-28 object-contain">
+            </div>
+        </div>
+
+        <!-- ================= TEAM NAV TABS ================= -->
+        <div class="flex gap-6 mt-8 border-b pb-4 text-blue-600">
+            <span class="font-semibold border-b-2 border-blue-600 pb-1">
+                Overview
+            </span>
+            <span>Members</span>
+            <span>Settings</span>
+            <span>Join Requests</span>
+            <span class="flex items-center gap-1">
+                Dashboard
+            </span>
+        </div>
+
+        <!-- ================= MEMBER LIST ================= -->
+        <div class="bg-white rounded-2xl shadow mt-8 overflow-hidden">
+
+            <!-- Member Item -->
+            <div class="flex justify-between items-center px-6 py-4 border-b">
+                <div class="flex items-center gap-4">
+                    <img src="https://i.pravatar.cc/60?img=5"
+                         class="rounded-full">
+                    <div>
+                        <div class="font-semibold">
+                            cy c <span class="ml-2 px-2 py-0.5 bg-blue-100 text-blue-600 text-xs rounded-full">You</span>
+                        </div>
+                        <span class="text-xs bg-gray-800 text-white px-2 py-0.5 rounded-full">
+                            Owner
+                        </span>
+                        <div class="text-sm text-gray-500 mt-1">
+                            Last online: Dec 18, 2025 02:36 AM
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Member Item -->
+            <div class="flex justify-between items-center px-6 py-4 border-b">
+                <div class="flex items-center gap-4">
+                    <img src="https://i.pravatar.cc/60?img=15"
+                         class="rounded-full">
+                    <div>
+                        <div class="font-semibold">kj y</div>
+                        <span class="text-xs bg-gray-600 text-white px-2 py-0.5 rounded-full">
+                            Member
+                        </span>
+                        <div class="text-sm text-gray-500 mt-1">
+                            Last online: Dec 18, 2025 02:03 AM
+                        </div>
+                    </div>
+                </div>
+
+                <button class="text-red-500 border border-red-400 px-4 py-1 rounded">
+                    Remove
+                </button>
+            </div>
+
+            <!-- Member Item -->
+            <div class="flex justify-between items-center px-6 py-4 border-b">
+                <div class="flex items-center gap-4">
+                    <img src="https://i.pravatar.cc/60?img=32"
+                         class="rounded-full">
+                    <div>
+                        <div class="font-semibold">xx a</div>
+                        <span class="text-xs bg-gray-600 text-white px-2 py-0.5 rounded-full">
+                            Member
+                        </span>
+                        <div class="text-sm text-gray-500 mt-1">
+                            Last online: Dec 18, 2025 01:56 AM
+                        </div>
+                    </div>
+                </div>
+
+                <button class="text-red-500 border border-red-400 px-4 py-1 rounded">
+                    Remove
+                </button>
+            </div>
+
+            <!-- Member Item -->
+            <div class="flex justify-between items-center px-6 py-4">
+                <div class="flex items-center gap-4">
+                    <img src="https://i.pravatar.cc/60?img=12"
+                         class="rounded-full">
+                    <div>
+                        <div class="font-semibold">yx f</div>
+                        <span class="text-xs bg-gray-600 text-white px-2 py-0.5 rounded-full">
+                            Member
+                        </span>
+                        <div class="text-sm text-gray-500 mt-1">
+                            Last online: Dec 18, 2025 01:58 AM
+                        </div>
+                    </div>
+                </div>
+
+                <button class="text-red-500 border border-red-400 px-4 py-1 rounded">
+                    Remove
+                </button>
+            </div>
+
+        </div>
+
     </div>
 
+    <!-- ===== LOGIN CTA ===== -->
     <a href="login.php" class="preview-login-btn">
-        <i class="bi bi-lock-fill"></i> Login to interact
+        🔒 Login to interact
     </a>
+
 </section>
+
 
 </div>
 
