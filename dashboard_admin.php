@@ -1344,12 +1344,15 @@ document.getElementById('kpiDenied').innerText = dashboardData.submissionCounts.
         },
         scales: {
             x: {
-                offset: true,  
-                grid: { display:false }
+                offset: true,
+                grid: { display:false },
+                ticks: {
+                    maxTicksLimit: 5  // 最多显示 5 个日期
+                }
             },
             y: {
                 beginAtZero: true,
-                grace: 1       
+                grace: 1
             }
         }
     }
