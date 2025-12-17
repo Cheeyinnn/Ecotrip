@@ -37,14 +37,14 @@ $_SESSION['challengeID'] = $challenge['challengeID'];
 
 // --------------------------------------------------
 // 2. IMAGE LOGIC (Custom URL + Fallback)
-// --------------------------------------------------
+    // --------------------------------------------------
 function getHeroImageURL($title, $id) {
     
     // -------------------------------------------------------------
     // 🟢 CUSTOM IMAGE LIST (EDIT HERE)
     // Format: Challenge_ID => 'URL',
     // -------------------------------------------------------------
-     $custom_urls = [
+                 $custom_urls = [
                     30 => 'https://cj.my/wp-content/uploads/2023/03/the-iconic-penang-ferry-service-7-1300x500.jpg', 
                     45 => 'https://wallpapers.com/images/hd/food-4k-spdnpz7bhmx4kv2r.jpg',
                     41 => 'https://bangkokattractions.com/wp-content/uploads/2023/04/ipoh.jpg',
@@ -54,18 +54,64 @@ function getHeroImageURL($title, $id) {
                     37 => 'https://media.tacdn.com/media/attractions-content--1x-1/0b/39/b0/98.jpg',
                     35 => 'https://tse3.mm.bing.net/th/id/OIP.gRliVC74pBhaqeP7DTxj1wHaHa?pid=Api&P=0&h=180',
                     31 => 'https://tse4.mm.bing.net/th/id/OIP.Cts7VCGtR3PqXCt9lUaGCgHaCe?pid=Api&P=0&h=180',
-                    32=> 'https://malaysia.images.search.yahoo.com/images/view;_ylt=AwrO6t6V7EJp_ZoNdUjlPwx.;_ylu=c2VjA3NyBHNsawNpbWcEb2lkA2Q4OGQ2NmI4ZDUwODYxZTk0Yjg1NDNkMmRkOGRmOTQ0BGdwb3MDOARpdANiaW5n?back=https%3A%2F%2Fmalaysia.images.search.yahoo.com%2Fsearch%2Fimages%3Fp%3Dno%2Bcar%26ei%3DUTF-8%26fr%3Dmcafee-malaysia%26fr2%3Dp%253As%252Cv%253Ai%252Cm%253Asb-top%26tab%3Dorganic%26ri%3D8&w=1200&h=675&imgurl=gumlet.assettype.com%2Fknocksense%2F2023-09%2Fe17d1e74-1a37-4cfa-8bcc-45fe84255bd0%2F1200_675_19553541_thumbnail_16x9_air.jpg%3Fauto%3Dformat%252Ccompress%26fit%3Dmax%26w%3D1200&rurl=https%3A%2F%2Fwww.knocksense.com%2Findore%2Fknocksense-shorts-indores-eco-friendly-no-car-day-promises-cleaner-air&size=90KB&p=no+car&oid=d88d66b8d50861e94b8543d2dd8df944&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top&fr=mcafee-malaysia&tt=Knocksense+Shorts+%7C+Indore%26%2339%3Bs+eco-friendly+%26%2339%3BNo+Car+Day%26%2339%3B+promises+cleaner+air&b=0&ni=80&no=8&ts=&tab=organic&sigr=xnvqx5fMc3Pc&sigb=Czpx9ic36o_7&sigi=qYP2UsbuXC83&sigt=hV0iBassoeKm&.crumb=Sj0dlJWGzYr&fr=mcafee-malaysia&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top',
+                    32=> 'https://th.bing.com/th/id/OIP.LkVjBr2VGh2iKsTd5aJfMAHaH6?w=89&h=90&c=1&rs=1&qlt=70&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=InlineBlock&rm=3&ucfimg=1',
                     33=> 'https://img.freepik.com/premium-vector/single-use-plastic-ban-environmental-concept-say-no-plastic-concept-vector-illustration_494556-955.jpg?w=2000',
                     34=> 'https://malaysia.images.search.yahoo.com/images/view;_ylt=AwrO6t7i7EJprP4Map7lPwx.;_ylu=c2VjA3NyBHNsawNpbWcEb2lkAzIxNjNjYTM4NjY5NzNkMGU0Mjg0MWUwMGFkZmQzOWNhBGdwb3MDMQRpdANiaW5n?back=https%3A%2F%2Fmalaysia.images.search.yahoo.com%2Fsearch%2Fimages%3Fp%3Dclean%2Bbeach%26ei%3DUTF-8%26fr%3Dmcafee-malaysia%26fr2%3Dp%253As%252Cv%253Ai%252Cm%253Asb-top%26tab%3Dorganic%26ri%3D1&w=2000&h=1333&imgurl=cdn.shopify.com%2Fs%2Ffiles%2F1%2F0569%2F0615%2F4154%2Ffiles%2FGettyImages-187164094.jpg&rurl=https%3A%2F%2Fnaturespath.com%2Fblogs%2Fposts%2Forganize-beach-cleanup&size=230KB&p=clean+beach&oid=2163ca3866973d0e42841e00adfd39ca&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top&fr=mcafee-malaysia&tt=How+to+Organize+a+Beach+Cleanup+%E2%80%93+Nature%26%2339%3Bs+Path&b=0&ni=80&no=1&ts=&tab=organic&sigr=am6Mz8pOwVpS&sigb=_iA30vHEmdE4&sigi=a1R8sA_5gX.w&sigt=iuVnXO1nPLft&.crumb=Sj0dlJWGzYr&fr=mcafee-malaysia&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top',
-                    36 =>'https://malaysia.images.search.yahoo.com/images/view;_ylt=AwrO6t4E7UJpduUPqwvlPwx.;_ylu=c2VjA3NyBHNsawNpbWcEb2lkAzU1NmJlMjM5YTA0MjVjNzFlM2JkMjE1MGMzZGU3M2U4BGdwb3MDMwRpdANiaW5n?back=https%3A%2F%2Fmalaysia.images.search.yahoo.com%2Fsearch%2Fimages%3Fp%3Dbottle%2Breturn%26ei%3DUTF-8%26fr%3Dmcafee-malaysia%26fr2%3Dp%253As%252Cv%253Ai%252Cm%253Asb-top%26tab%3Dorganic%26ri%3D3&w=1300&h=470&imgurl=environmentalcouncil.org%2Fwp-content%2Fuploads%2F2024%2F02%2FA-man-pushes-a-plastic-bottle-into-a-bottle-return-machine.png&rurl=https%3A%2F%2Fenvironmentalcouncil.org%2Fcampaigns%2Fmichigans-bottle-deposit-law-reform%2F&size=1145KB&p=bottle+return&oid=556be239a0425c71e3bd2150c3de73e8&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top&fr=mcafee-malaysia&tt=Michigan%E2%80%99s+Bottle+Return+Reform+-+Michigan+Environmental+Council&b=0&ni=80&no=3&ts=&tab=organic&sigr=P3Ld.vsdiFwm&sigb=6y5VIcQ0PW1K&sigi=SDMpIyDWiG.5&sigt=GHGLn.7X2CGS&.crumb=Sj0dlJWGzYr&fr=mcafee-malaysia&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top',
+                    36 =>'https://th.bing.com/th/id/OIP.wHoPaK1Fk6KMu0HjixrqfwHaFH?w=252&h=180&c=7&r=0&o=5&cb=ucfimg2&dpr=1.3&pid=1.7&ucfimg=1',
                     39 => 'https://tse4.mm.bing.net/th/id/OIP.N1leuql4JYM4pvuatxhFYAHaEK?pid=Api&P=0&h=180',
                     40 => 'https://malaysia.images.search.yahoo.com/images/view;_ylt=AwrO6t5r7UJpyXsPgEPlPwx.;_ylu=c2VjA3NyBHNsawNpbWcEb2lkA2Y2NGJkYzA3N2Q5ZTI2ODViMTM4ZmJiZDQ3ZjFkNTZjBGdwb3MDMwRpdANiaW5n?back=https%3A%2F%2Fmalaysia.images.search.yahoo.com%2Fsearch%2Fimages%3Fp%3Dcar%2Bfree%26ei%3DUTF-8%26fr%3Dmcafee-malaysia%26fr2%3Dp%253As%252Cv%253Ai%252Cm%253Asb-top%26tab%3Dorganic%26ri%3D3&w=1600&h=900&imgurl=newsd.in%2Fwp-content%2Fuploads%2F2022%2F09%2FWorld-Car-Free-Day-2022-1.jpg&rurl=https%3A%2F%2Fnewsd.in%2Fworld-car-free-day-2022-date-history-and-benefits-of-the-day%2F&size=61KB&p=car+free&oid=f64bdc077d9e2685b138fbbd47f1d56c&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top&fr=mcafee-malaysia&tt=World+Car-Free+Day+2022%3A+Date%2C+History+and+benefits+of+the+day&b=0&ni=80&no=3&ts=&tab=organic&sigr=NG1wltyIkxxj&sigb=5ZJGGmnQhmHV&sigi=hFH.7CpPiXIn&sigt=hrhXbrxnFBeA&.crumb=Sj0dlJWGzYr&fr=mcafee-malaysia&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top',
-                    43 => 'https://malaysia.images.search.yahoo.com/images/view;_ylt=Awr9.daA7UJp.OMAO07lPwx.;_ylu=c2VjA3NyBHNsawNpbWcEb2lkA2ZmYTBiZjM3OGViMjhmNDhlODlkMTc4NGFkNWVhZTI0BGdwb3MDMgRpdANiaW5n?back=https%3A%2F%2Fmalaysia.images.search.yahoo.com%2Fsearch%2Fimages%3Fp%3Dplant%2Btree%26ei%3DUTF-8%26fr%3Dmcafee-malaysia%26fr2%3Dp%253As%252Cv%253Ai%252Cm%253Asb-top%26tab%3Dorganic%26ri%3D2&w=1024&h=768&imgurl=www.cambridgegardencentre.ca%2Fwp-content%2Fuploads%2F2020%2F06%2FTree-Planting-2.jpg&rurl=https%3A%2F%2Fwww.cambridgegardencentre.ca%2Fwhy-homeowners-must-go-for-tree-planting-services%2F&size=180KB&p=plant+tree&oid=ffa0bf378eb28f48e89d1784ad5eae24&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top&fr=mcafee-malaysia&tt=Tree+planting+services+%7C+Cambridge+Garden+Centre&b=0&ni=80&no=2&ts=&tab=organic&sigr=dkzqzAh7epLa&sigb=Ph131gzz6VDe&sigi=O5Tpt6lU19KF&sigt=DkEr5LgtqOsB&.crumb=Sj0dlJWGzYr&fr=mcafee-malaysia&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top',
-                    46 => 'https://tse4.mm.bing.net/th/id/OIP.wPVwMUzReX6MNd444l-rQgHaHa?pid=Api&P=0&h=180',
+                    43 => 'https://contentgrid.homedepot-static.com/hdus/en_US/DTCCOMNEW/Articles/how-to-plant-a-tree-update-hero.jpg',
                     47 => 'https://tse2.mm.bing.net/th/id/OIP.qmqkdV-FnDI-FmxMeu41ZwHaFg?pid=Api&P=0&h=180',
-                    48 => 'https://malaysia.images.search.yahoo.com/images/view;_ylt=Awr999nq7UJpj1MSCA_lPwx.;_ylu=c2VjA3NyBHNsawNpbWcEb2lkA2I2OWNlMWM0OTdmMDc0ZmIwNTA1YzVjMTdjZTBlOTFjBGdwb3MDMTMEaXQDYmluZw--?back=https%3A%2F%2Fmalaysia.images.search.yahoo.com%2Fsearch%2Fimages%3Fp%3Dcarpool%26ei%3DUTF-8%26fr%3Dmcafee-malaysia%26fr2%3Dp%253As%252Cv%253Ai%252Cm%253Asb-top%26tab%3Dorganic%26ri%3D13&w=700&h=490&imgurl=static.vecteezy.com%2Fsystem%2Fresources%2Fpreviews%2F000%2F147%2F625%2Fnon_2x%2Fcarpool-vector.jpg&rurl=https%3A%2F%2Feverypixel.com%2Ffree%2Fvector%2Ftransportation%2Fcars%2F83&size=39KB&p=carpool&oid=b69ce1c497f074fb0505c5c17ce0e91c&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top&fr=mcafee-malaysia&tt=Everypixel.com+%7C+Search&b=0&ni=80&no=13&ts=&tab=organic&sigr=6gxFLnJVAQL0&sigb=R3s9ZKXGuhga&sigi=mhUJUeydbhDt&sigt=RMYC3Fnoz60L&.crumb=Sj0dlJWGzYr&fr=mcafee-malaysia&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top', 
+                    48 => 'https://th.bing.com/th/id/OIP.j2cOlW3Fc-IJnJF_O0b5lAHaHa?w=182&h=182&c=7&r=0&o=5&cb=ucfimg2&dpr=1.3&pid=1.7&ucfimg=1', 
                     38 => 'https://malaysia.images.search.yahoo.com/images/view;_ylt=Awr93aMJ7kJphwoUjRTlPwx.;_ylu=c2VjA3NyBHNsawNpbWcEb2lkA2IwYmE4NjI0YjEwZmViNDQ4NTNkNGNmMTBhMjk2MzE3BGdwb3MDMjkEaXQDYmluZw--?back=https%3A%2F%2Fmalaysia.images.search.yahoo.com%2Fsearch%2Fimages%3Fp%3Dcycling%26ei%3DUTF-8%26fr%3Dmcafee-malaysia%26fr2%3Dp%253As%252Cv%253Ai%252Cm%253Asb-top%26tab%3Dorganic%26ri%3D29&w=1600&h=1068&imgurl=cdn.britannica.com%2F63%2F82563-050-3FCFC72A%2FFamily-country-road.jpg&rurl=https%3A%2F%2Fwww.britannica.com%2Ftechnology%2Fbicycle&size=369KB&p=cycling&oid=b0ba8624b10feb44853d4cf10a296317&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top&fr=mcafee-malaysia&tt=Bicycle+%7C+Definition%2C+History%2C+Types%2C+%26+Facts+%7C+Britannica&b=0&ni=80&no=29&ts=&tab=organic&sigr=Y60yMSYhGhES&sigb=6vPuZX4fpzzA&sigi=dsTxW41uJdyV&sigt=DXBNZJlqRAZ8&.crumb=Sj0dlJWGzYr&fr=mcafee-malaysia&fr2=p%3As%2Cv%3Ai%2Cm%3Asb-top',
                 ];
+
+    function getExactHeroImage($title) {
+    // 1. Clean the title
+    $t = strtolower(trim($title));
+
+    switch ($t) {
+        // --- 🔴 EXACT MATCHES (Same as View Page) ---
+       // --- CATEGORY: TRANSPORT ---
+        case 'bike to work':            return 'bicycle';
+        case 'walk the last mile':      return 'sneakers';
+        case 'carpool crew':            return 'automobile'; // 'carpool' is often misunderstood by AI
+        case 'public bus adventure':    return 'bus vehicle';
+
+        // --- CATEGORY: WASTE ---
+        case 'say no to straws':        return 'iced drinks '; // Shows drink without straw usually
+        case 'bring your bottle':       return 'reusable water bottle';
+        case 'tote bag shopper':        return 'reuseable bag';
+        case 'compost your scraps':     return 'compost bin';
+
+        // --- CATEGORY: FOOD ---
+        case 'meatless monday':         return 'vegetables';
+        case 'support local farmers':   return 'farmers market';
+        case 'vegan meal challenge':    return 'vegetables';
+        case 'love your leftovers':     return 'food container';
+
+        // --- CATEGORY: ENERGY & WATER ---
+        case 'unplug the vampires':     return 'electrical socket';
+        case 'cold wash cycle':         return 'washing machine';
+        case 'air dry laundry':         return 'clothesline';
+        case '5-minute shower':         return 'shower head';
+
+        // --- CATEGORY: NATURE ---
+        case 'plant a tree':            return 'planting tree';
+        case 'litter pickup':           return 'garbage';
+        case 'clean ocean promise':     return 'clean beach';
+        case 'wild bird watch':         return 'bird';
+
+        // --- FALLBACKS ---
+        default:
+            if (strpos($t, 'transport') !== false) return 'traffic';
+            if (strpos($t, 'food') !== false)      return 'fruit';
+            if (strpos($t, 'water') !== false)     return 'water drop';
+            if (strpos($t, 'energy') !== false)    return 'electricity';
+            return 'nature'; 
+    }
+}
+
 
     // 1. Check Custom List
     if (array_key_exists($id, $custom_urls)) {

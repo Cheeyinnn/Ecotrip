@@ -6,6 +6,7 @@ header('Content-Type: application/json');
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $type = isset($_GET['type']) ? $_GET['type'] : 'user';
+$scope = isset($_GET['scope']) ? $_GET['scope'] : 'all'; // Get scope parameter
 
 if ($id === 0) {
     echo json_encode(['error' => 'Invalid ID']);
@@ -23,6 +24,16 @@ function handleSqlError($stmt, $conn) {
     }
 }
 
+// Build date condition based on scope
+$dateCondition = "";
+if ($scope === 'weekly') {
+    // Current week (starting Monday)
+    $dateCondition = " AND pt.generate_at >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)";
+} elseif ($scope === 'monthly') {
+    // Current month
+    $dateCondition = " AND pt.generate_at >= DATE_FORMAT(NOW() ,'%Y-%m-01')";
+}
+
 // Prepare query based on User or Team
 if ($type === 'user') {
     // UPDATED NAMES based on your specific instructions:
@@ -37,7 +48,7 @@ if ($type === 'user') {
               FROM pointtransaction pt 
               LEFT JOIN sub s ON pt.submissionID = s.submissionID
               LEFT JOIN challenge c ON s.challengeID = c.challengeID
-              WHERE pt.userID = ? AND pt.transactionType = 'earn' 
+              WHERE pt.userID = ? AND pt.transactionType = 'earn' $dateCondition
               ORDER BY pt.generate_at ASC";
               
     $stmt = $conn->prepare($query);
@@ -55,7 +66,7 @@ if ($type === 'user') {
               JOIN user u ON pt.userID = u.userID 
               LEFT JOIN sub s ON pt.submissionID = s.submissionID
               LEFT JOIN challenge c ON s.challengeID = c.challengeID
-              WHERE u.teamID = ? AND pt.transactionType = 'earn' 
+              WHERE u.teamID = ? AND pt.transactionType = 'earn' $dateCondition
               ORDER BY pt.generate_at ASC";
               
     $stmt = $conn->prepare($query);
