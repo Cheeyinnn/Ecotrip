@@ -583,20 +583,7 @@ include "includes/layout_start.php";
                     </h2>
                     <p class="text-gray-500 mt-1">Comprehensive view of your eco-contribution, team status, and rewards.</p>
                 </div>
-                   <div class="flex items-center gap-3">
-                        <select id="timeFilter" class="border rounded-lg px-3 py-2 bg-white shadow-sm focus:ring-primary focus:border-primary" onchange="applyTimeFilter()">
-                            <option value="all" <?= $timeFilter === 'all' ? 'selected' : '' ?>>All Time</option>
-                            <option value="today" <?= $timeFilter === 'today' ? 'selected' : '' ?>>Today</option>
-                            <option value="7" <?= $timeFilter === '7' ? 'selected' : '' ?>>Last 7 Days</option>
-                            <option value="30" <?= $timeFilter === '30' ? 'selected' : '' ?>>Last 30 Days</option>
-                        </select>
-                       <button 
-                            onclick="window.location = '?time=all'" 
-                            class="bg-primary hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-md transition-colors"
-                        >
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
-                   </div>
+                  
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -606,6 +593,7 @@ include "includes/layout_start.php";
                     <div class="stat-value-large eco-text-point mt-2 flex items-center gap-2">
                         <i class="fas fa-trophy text-2xl"></i> <?= number_format($userRank); ?> 
                     </div>
+                    <div class="text-xs text-gray-500 mt-2">My Points: <span class="font-semibold text-yellow-600">#<?= $myPoints ?> </span></div>
                 </div>
 
 
@@ -640,7 +628,25 @@ include "includes/layout_start.php";
             </div>
             
             
-            <h3 class="text-2xl font-bold text-gray-800 pt-4 border-t border-gray-200">Contribution Analytics</h3>
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-4 border-t border-gray-200">
+                <h3 class="text-2xl font-bold text-gray-800">Contribution Analytics</h3>
+
+                <div class="flex items-center gap-3">
+                    <select id="timeFilter" class="border rounded-lg px-3 py-2 bg-white shadow-sm focus:ring-primary focus:border-primary" onchange="applyTimeFilter()">
+                        <option value="all" <?= $timeFilter === 'all' ? 'selected' : '' ?>>All Time</option>
+                        <option value="today" <?= $timeFilter === 'today' ? 'selected' : '' ?>>Today</option>
+                        <option value="7" <?= $timeFilter === '7' ? 'selected' : '' ?>>Last 7 Days</option>
+                        <option value="30" <?= $timeFilter === '30' ? 'selected' : '' ?>>Last 30 Days</option>
+                    </select>
+                    
+                    <button 
+                        onclick="window.location = '?time=all'" 
+                        class="bg-primary hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-md transition-colors flex items-center gap-2"
+                    >
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
@@ -871,56 +877,79 @@ include "includes/layout_start.php";
 
 
         // C. Challenge Chart (Horizontal Bar Chart)
-        function initializeChallengeChart() {
-            const chartContainerEl = document.getElementById('challengeChartContainer');
-            const challengeData = <?php echo json_encode($userChallenges); ?>; 
-            
-            if (window.chartInstances.challengeChart) { window.chartInstances.challengeChart.resize(); return; }
-
-
-            if (chartContainerEl && challengeData.length > 0) {
-                
-                const totalCompleted = challengeData.reduce((sum, c) => sum + c.times, 0);
-
-                chartContainerEl.innerHTML = `
-                    <div class="mb-4 flex items-center justify-center bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 shadow-sm">
-                        <span class="text-green-800 font-semibold text-base">Total Approved Submissions: 
-                        <span class="text-green-900 font-bold text-xl ml-2">${totalCompleted}</span>
-                        </span>
-                    </div>
-                `;
-
-                const chartEl = document.createElement('div');
-                chartEl.style.height = '300px';
-                chartContainerEl.appendChild(chartEl);
-
-                const challengeChart = echarts.init(chartEl);
-
-                challengeChart.setOption({
-                    title: { text: 'Top Challenges: Points Earned', left: 'center', top: '0%', textStyle: { fontSize: 14, fontWeight: 'bold' } },
-                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                    grid: { left: '3%', right: '10%', bottom: '3%', top: '15%', containLabel: true },
-                    yAxis: { 
-                        type: 'category', 
-                        data: challengeData.map(c => c.name), 
-                        inverse: true,
-                        axisLabel: { formatter: function (value) { return value.length > 20 ? value.substring(0, 17) + '...' : value; } }
-                    },
-                    xAxis: { type: 'value', name: 'Points Earned' },
-                    series: [{
-                        type: 'bar',
-                        data: challengeData.map(c => c.points),
-                        barWidth: '70%',
-                        itemStyle: { color: '#10b981' },
-                        label: { show: true, position: 'right', color: '#475569', fontWeight: 'bold', fontSize: 10 }
-                    }]
-                });
-
-                window.chartInstances.challengeChart = challengeChart;
-            } else if(chartContainerEl) {
-                 chartContainerEl.innerHTML = noDataHtml('fas fa-trophy', 'No approved challenges yet!', 'Start submitting to earn points!');
-            }
+     function initializeChallengeChart() {
+        const chartContainerEl = document.getElementById('challengeChartContainer');
+        const challengeData = <?php echo json_encode($userChallenges); ?>; 
+        
+        if (window.chartInstances.challengeChart) { 
+            window.chartInstances.challengeChart.resize(); 
+            return; 
         }
+
+        if (chartContainerEl && challengeData.length > 0) {
+            const totalCompleted = challengeData.reduce((sum, c) => sum + c.times, 0);
+
+            chartContainerEl.innerHTML = `
+                <div class="mb-4 flex items-center justify-center bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 shadow-sm">
+                    <span class="text-green-800 font-semibold text-base">Total Approved Submissions: 
+                    <span class="text-green-900 font-bold text-xl ml-2">${totalCompleted}</span>
+                    </span>
+                </div>
+            `;
+
+            const chartEl = document.createElement('div');
+            chartEl.style.height = '300px';
+            chartContainerEl.appendChild(chartEl);
+
+            const challengeChart = echarts.init(chartEl);
+
+            challengeChart.setOption({
+                title: { 
+                    text: 'Top Challenges: Points Earned', 
+                    left: 'center', 
+                    top: '0%', 
+                    textStyle: { fontSize: 14, fontWeight: 'bold' } 
+                },
+                tooltip: { 
+                    trigger: 'axis', 
+                    axisPointer: { type: 'shadow' },
+                    formatter: function(params) {
+                        const c = params[0].data;
+                        return `${c.name}<br/>Points: ${c.points}<br/>Times Completed: ${c.times}`;
+                    }
+                },
+                grid: { left: '3%', right: '10%', bottom: '3%', top: '15%', containLabel: true },
+                yAxis: { 
+                    type: 'category', 
+                    data: challengeData.map(c => c.name), 
+                    inverse: true,
+                    axisLabel: { 
+                        formatter: function (value) { 
+                            return value.length > 20 ? value.substring(0, 17) + '...' : value; 
+                        } 
+                    }
+                },
+                xAxis: { type: 'value', name: 'Points Earned' },
+                series: [{
+                    type: 'bar',
+                    data: challengeData.map(c => ({
+                        value: c.points,
+                        name: c.name,
+                        points: c.points,
+                        times: c.times
+                    })),
+                    barWidth: '70%',
+                    itemStyle: { color: '#10b981' },
+                    label: { show: true, position: 'right', color: '#475569', fontWeight: 'bold', fontSize: 10 }
+                }]
+            });
+
+        window.chartInstances.challengeChart = challengeChart;
+    } else if(chartContainerEl) {
+         chartContainerEl.innerHTML = noDataHtml('fas fa-trophy', 'No approved challenges yet!', 'Start submitting to earn points!');
+    }
+}
+
 
         // --- 2. Chart.js 初始化函数 (已修复和确认) ---
         function initializeRewardCharts() {

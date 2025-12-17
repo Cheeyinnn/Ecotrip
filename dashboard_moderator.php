@@ -95,15 +95,8 @@ while ($d = $dailyData->fetch_assoc()) {
 }
 
 // ======================
-// Average Review Time (当前 moderator)
-$avgReviewTimeSQL = "
-    SELECT AVG(TIMESTAMPDIFF(MINUTE, uploaded_at, approved_at)) AS avg_minutes
-    FROM sub
-    WHERE status IN ('approved', 'denied') $timeCondition $moderatorCondition
-    AND approved_at IS NOT NULL
-";
-$avgMinutes = $conn->query($avgReviewTimeSQL)->fetch_assoc()['avg_minutes'];
-$avgHours = round($avgMinutes / 60, 1);
+// total Review  
+$totalReviews = $approvedSubmission + $deniedSubmission;
 
 include "includes/layout_start.php";
 
@@ -383,7 +376,7 @@ include "includes/layout_start.php";
         <div class="flex flex-col">
             <div class="flex items-center justify-between mb-4 px-2">
                 <h4 class="font-semibold text-gray-700 flex items-center gap-2">
-                    <i class="fas fa-fire text-orange-500 text-sm"></i> Most Participate Challenge
+                    <i class="fas fa-fire text-orange-500 text-sm"></i> Most Participate Challenge Category
                 </h4>
                 <span class="text-[10px] px-2 py-1 bg-gray-100 text-gray-400 font-bold rounded-lg uppercase">Bar Chart</span>
             </div>
@@ -415,8 +408,8 @@ include "includes/layout_start.php";
         </div>
         
         <div class="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 shadow-lg shadow-indigo-100">
-            <p class="text-sm font-semibold text-indigo-100">Avg Review Time</p>
-            <h3 class="text-3xl font-bold text-white mt-1"><?= $avgHours ?> <span class="text-lg font-normal opacity-80">hrs</span></h3>
+            <p class="text-sm font-semibold text-indigo-100">Total Reviews</p>
+            <h3 class="text-3xl font-bold text-white mt-1"><?= $totalReviews  ?> <span class="text-lg font-normal opacity-80">submission</span></h3>
         </div>
     </div>
 

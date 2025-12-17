@@ -205,18 +205,19 @@ $submissionTrendQuery = "
 $submissionTrend = $conn->query($submissionTrendQuery)->fetch_all(MYSQLI_ASSOC);
 
 // -----------------------------
-// 6. Top Categories (challenge) within timeframe
+// Most Participated Challenges (by submission count)
 // -----------------------------
-$topCategoriesQuery = "
-    SELECT COALESCE(c.challengeTitle, 'Unknown') AS category, COUNT(*) AS cnt
+$categoryQuery = "
+    SELECT c.challengeTitle AS challenge, COUNT(s.submissionID) AS total
     FROM sub s
-    LEFT JOIN challenge c ON s.challengeID = c.challengeID
+    JOIN challenge c ON s.challengeID = c.challengeID
     WHERE 1 " . sql_time_filter('s.uploaded_at', $timeInterval) . "
-    GROUP BY s.challengeID
-    ORDER BY cnt DESC
-    LIMIT 5
+    GROUP BY s.challengeID, c.challengeTitle
+    ORDER BY total DESC
 ";
-$topCategories = $conn->query($topCategoriesQuery)->fetch_all(MYSQLI_ASSOC);
+
+$submissionCategories = $conn->query($categoryQuery)->fetch_all(MYSQLI_ASSOC);
+
 
 // -----------------------------
 // 7. Team Overview
@@ -388,6 +389,26 @@ $alertRes = $conn->query($alertSql);
 
 $lowStockCount = $conn->query("SELECT COUNT(*) as cnt FROM reward WHERE stockQuantity < 5 AND is_active = 1")->fetch_assoc()['cnt'] ?? 0;
 
+// -----------------------------
+// Reward Redemption Trend (by status)
+// -----------------------------
+$rewardTrendByStatusQuery = "
+    SELECT DATE(requested_at) AS day,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN status IN ('approved','outOfDiliver','Delivered') THEN 1 ELSE 0 END) AS approved,
+        SUM(CASE WHEN status = 'denied' THEN 1 ELSE 0 END) AS denied
+    FROM redemptionrequest
+    WHERE status != 'cancelled'
+    " . sql_time_filter('requested_at', $timeInterval) . "
+    GROUP BY DATE(requested_at)
+    ORDER BY day ASC
+";
+
+$rewardTrendByStatus = $conn->query($rewardTrendByStatusQuery)->fetch_all(MYSQLI_ASSOC);
+
+
+
+
 include "includes/layout_start.php";
 
 
@@ -492,7 +513,8 @@ const dashboardData = {
     // trends
     newUsers: <?= json_encode($newUsers) ?>,
     submissionTrend: <?= json_encode($submissionTrend) ?>,
-    topCategories: <?= json_encode($topCategories) ?>,
+    submissionCategories: <?= json_encode($submissionCategories) ?>,
+
 
     // user analytics
     teamScores: <?= json_encode($teamRanks ?? []) ?>,
@@ -524,10 +546,14 @@ const dashboardData = {
         successCount: <?= json_encode($successCount) ?>,
         pendingCount: <?= json_encode($pendingCount) ?>,
         lowStockCount: <?= json_encode($lowStockCount) ?>,
+
+        rewardTrendStatus: <?= json_encode($rewardTrendByStatus) ?>,
+
         trendLabels: <?= json_encode($months) ?>,
         trendData: <?= json_encode($trendData) ?>,
         topLabels: <?= json_encode($popLabels) ?>,
         topData: <?= json_encode($popData) ?>
+        
 
     }
 
@@ -716,7 +742,7 @@ function formatDate(dateStr) {
 
         <!-- Categories -->
         <div class="bg-white p-6 rounded-2xl shadow-card h-[380px] flex flex-col">
-            <h3 class="font-semibold text-lg mb-4">Top Submission Categories</h3>
+            <h3 class="font-semibold text-lg mb-4">Top Submission Challenge</h3>
             <canvas id="topCategoriesChart" class="flex-1"></canvas>
         </div>
 
@@ -1302,8 +1328,9 @@ document.getElementById('kpiDenied').innerText = dashboardData.submissionCounts.
 // ---- Top Categories Doughnut Chart ----
 const ctxCat = document.getElementById("topCategoriesChart").getContext("2d");
 
-const catLabels = (dashboardData.topCategories || []).map(r => r.category);
-const catCounts = (dashboardData.topCategories || []).map(r => r.cnt);
+const catLabels = dashboardData.submissionCategories.map(r => r.challenge);
+const catCounts = dashboardData.submissionCategories.map(r => r.total);
+
 
 window.submissionCharts.cat = new Chart(ctxCat, {
     type: "bar",
@@ -1314,8 +1341,8 @@ window.submissionCharts.cat = new Chart(ctxCat, {
             data: catCounts,
             backgroundColor: "#6366F1",
             borderRadius: 6,
-            barThickness: 12,      
-            maxBarThickness: 14     
+            barThickness: 12,
+            maxBarThickness: 14
         }]
     },
     options: {
@@ -1323,11 +1350,11 @@ window.submissionCharts.cat = new Chart(ctxCat, {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-            x: { 
-                beginAtZero: false, 
+            x: {
+                beginAtZero: true,
                 grid: { display: false }
             },
-            y: { 
+            y: {
                 grid: { display: false },
                 ticks: { padding: 6 }
             }
@@ -1337,6 +1364,7 @@ window.submissionCharts.cat = new Chart(ctxCat, {
         }
     }
 });
+
 
 
 
@@ -1487,58 +1515,88 @@ window.usersCharts.points = new Chart(pointsCtx, {
 
 /* Reward tab */
 function initRewardTab() {
+
     // Redemption Trend
-    const trendCtx = document.getElementById('trendChart').getContext('2d');
+ const trendCtx = document.getElementById('trendChart').getContext('2d');
+
+    const labels = (dashboardData.rewards.rewardTrendStatus || []).map(d => d.day);
+    const pending = (dashboardData.rewards.rewardTrendStatus || []).map(d => d.pending || 0);
+    const approved = (dashboardData.rewards.rewardTrendStatus || []).map(d => d.approved || 0);
+    const denied = (dashboardData.rewards.rewardTrendStatus || []).map(d => d.denied || 0);
+
     new Chart(trendCtx, {
         type: 'line',
         data: {
-            labels: dashboardData.rewards.trendLabels,
-            datasets: [{
-                label: 'Redemptions',
-                data: dashboardData.rewards.trendData,
-                borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59, 130, 246,0.2)',
-                fill: true,
-                tension: 0.3
-            }]
+            labels,
+            datasets: [
+                {
+                    label: 'Pending',
+                    data: pending,
+                    borderColor: '#FBBF24',
+                    backgroundColor: 'rgba(251,191,36,0.15)',
+                    fill: true,
+                    tension: 0.3
+                },
+                {
+                    label: 'Approved',
+                    data: approved,
+                    borderColor: '#22C55E',
+                    backgroundColor: 'rgba(34,197,94,0.15)',
+                    fill: true,
+                    tension: 0.3
+                },
+                {
+                    label: 'Denied',
+                    data: denied,
+                    borderColor: '#EF4444',
+                    backgroundColor: 'rgba(239,68,68,0.15)',
+                    fill: true,
+                    tension: 0.3
+                }
+            ]
         },
         options: {
             responsive: true,
-            plugins: { legend: { display: true } },
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' }
+            },
             scales: {
-                y: { beginAtZero: true }
+                y: {
+                    beginAtZero: true,
+                    grace: 1
+                }
             }
         }
     });
 
-
     // Top 5 Rewards
-const popColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+        const popColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 
-const ctxPop = document.getElementById('popChart').getContext('2d');
-new Chart(ctxPop, {
-    type: 'doughnut',
-    data: {
-        labels: <?php echo json_encode($popLabels); ?>,
-        datasets: [{
-            data: <?php echo json_encode($popData); ?>,
-            backgroundColor: popColors,
-            borderWidth: 0,
-            hoverOffset: 10
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        cutout: '70%',
-        plugins: {
-            legend: { 
-                position: 'right', 
-                labels: { boxWidth: 12, font: { size: 11 } } 
-            }
-        }
-    }
-});
+            const ctxPop = document.getElementById('popChart').getContext('2d');
+            new Chart(ctxPop, {
+                type: 'doughnut',
+                data: {
+                    labels: <?php echo json_encode($popLabels); ?>,
+                    datasets: [{
+                        data: <?php echo json_encode($popData); ?>,
+                        backgroundColor: popColors,
+                        borderWidth: 0,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: {
+                        legend: { 
+                            position: 'right', 
+                            labels: { boxWidth: 12, font: { size: 11 } } 
+                        }
+                    }
+                }
+            });
 }
 
 </script>
