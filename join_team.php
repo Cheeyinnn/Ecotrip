@@ -162,12 +162,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
 
                         // ---------------------------------------
-                        // SUCCESS MESSAGE
-                        // ---------------------------------------
-                        $message     = "You have joined the team successfully!";
-                        $messageType = "success";
-                        $canJoin     = false;
-                        $currentTeamID = $joinTeamID;
+// SUCCESS → redirect (PREVENT stale state)
+// ---------------------------------------
+$_SESSION['flash_success'] = "You have joined the team '{$teamName}' successfully!";
+header("Location: team.php");
+exit;
+
 
                     } else {
                         $message = "Error joining team.";

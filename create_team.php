@@ -82,8 +82,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canCreate) {
 
             // Insert team
             $stmt = $conn->prepare("
-                INSERT INTO team (teamName, teamDesc, teamLeaderID, joinCode, teamImage, created_at)
-                VALUES (?, ?, ?, ?, ?, NOW())
+                INSERT INTO team (teamName, teamDesc, teamLeaderID, joinCode, teamImage, teamPoint, created_at)
+                VALUES (?, ?, ?, ?, ?, 0, NOW())
+
             ");
             $stmt->bind_param("ssiss", $teamName, $teamDesc, $userID, $joinCode, $teamImage);
 
