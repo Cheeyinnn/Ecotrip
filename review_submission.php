@@ -35,7 +35,7 @@ $tempStmt->close();
 $status = $decision === 'approve' ? 'Approved' : 'Denied';
 $points = $decision === 'approve' ? (int)$temp['pointAward'] : 0;
 
-// 更新 submission + moderatorID
+// renew submission + moderatorID
 if ($decision === 'approve') {
     $sql = "UPDATE sub SET status=?, pointEarned=?, reviewNote=?, approved_at=NOW(), denied_at=NULL, moderatorID=? WHERE submissionID=?";
 } else {
@@ -50,7 +50,7 @@ if (!$stmt->execute()) {
 }
 $stmt->close();
 
-// 插入 points（approve）
+// points（approve）
 if ($decision==='approve' && !empty($temp['userID'])) {
     $insert = $conn->prepare("
         INSERT INTO pointtransaction 
