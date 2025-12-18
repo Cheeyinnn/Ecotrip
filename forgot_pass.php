@@ -20,21 +20,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $userID = $user['userID'];
 
         // Create reset token
-        $token = bin2hex(random_bytes(32));
-        $expires = date("Y-m-d H:i:s", time() + 300); // expires in 5 min
+        $token   = bin2hex(random_bytes(32));
         $channel = 1; // email
 
-        // Insert token
+        // INSERT TOKEN (timezone-safe)
         $insert = $conn->prepare("
             INSERT INTO verificationtoken (otpCode, channel, expires_at, userID)
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 5 MINUTE), ?)
         ");
-        $insert->bind_param("sssi", $token, $channel, $expires, $userID);
+        $insert->bind_param("sii", $token, $channel, $userID);
         $insert->execute();
 
-        $reset_link = "http://localhost/ecotest/reset_password.php?token=" . $token;
+        $reset_link = "http://localhost/ecotrip/reset_password.php?token=" . urlencode($token);
 
-        // Assuming reset_email.php and sendResetEmail() function exist
+        // Send email
         require 'reset_email.php';
         sendResetEmail($email, $reset_link);
 
@@ -43,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     } else {
         $message = "Email not found in our system. Please check the spelling.";
-        $messageType = "danger"; // Use danger for errors/warnings
+        $messageType = "danger";
     }
 }
 ?>
@@ -73,12 +72,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-radius: 12px;
             box-shadow: 0 4px 25px rgba(0,0,0,0.1);
         }
-        /* Customizing the main button color */
         .btn-send {
-            background-color: #1f7a4c; /* EcoTrip green */
+            background-color: #1f7a4c;
             border-color: #1f7a4c;
             transition: background-color 0.2s;
-            color: white; 
+            color: white;
         }
         .btn-send:hover {
             background-color: #145a32;
@@ -93,18 +91,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="forgot-card mx-auto">
         
         <div class="text-center mb-4">
-             <iconify-icon icon="material-symbols:vpn-key-outline" width="48" height="48" class="text-secondary mb-2"></iconify-icon>
+            <iconify-icon icon="material-symbols:vpn-key-outline" width="48" height="48" class="text-secondary mb-2"></iconify-icon>
             <h3 class="mb-0 fw-bold">Forgot Password</h3>
         </div>
 
         <?php if ($message != ""): ?>
             <div class="alert alert-<?= $messageType === 'success' ? 'success' : 'danger' ?> alert-dismissible fade show small">
-                <iconify-icon icon="<?= $messageType === 'success' ? 'ic:round-check-circle' : 'ic:round-error-outline' ?>" class="me-1"></iconify-icon> <?= htmlspecialchars($message); ?>
+                <iconify-icon icon="<?= $messageType === 'success' ? 'ic:round-check-circle' : 'ic:round-error-outline' ?>" class="me-1"></iconify-icon>
+                <?= htmlspecialchars($message); ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         <?php endif; ?>
 
-        <p class="text-muted small text-center mb-4">Enter your account's email address and we will send you a reset link.</p>
+        <p class="text-muted small text-center mb-4">
+            Enter your account's email address and we will send you a reset link.
+        </p>
 
         <form method="post">
             <div class="form-floating mb-4">
@@ -113,13 +114,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
             <button class="btn btn-send btn-lg w-100 fw-bold" type="submit">
-                <iconify-icon icon="ic:round-email" class="me-1"></iconify-icon> Send Reset Link
+                <iconify-icon icon="ic:round-email" class="me-1"></iconify-icon>
+                Send Reset Link
             </button>
         </form>
 
         <div class="text-center small mt-4 pt-3 border-top">
             <a href="login.php" class="btn btn-outline-secondary w-100">
-                <iconify-icon icon="ic:round-arrow-back"></iconify-icon> Back to Login
+                <iconify-icon icon="ic:round-arrow-back"></iconify-icon>
+                Back to Login
             </a>
         </div>
     </div>

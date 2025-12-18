@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
 
     $allowedTypes = ['jpeg', 'png', 'jpg'];
-    $maxSize = 5 * 1024 * 1024; //10MB
+    $maxSize = 5 * 1024 * 1024; //5MB
 
     if ($fileError === 4) {
         $uploadResults[] = "Error: Please Upload a Picture.";
@@ -399,7 +399,7 @@ const previewContainer = document.getElementById("preview-container");
 const previewImage = document.getElementById("preview-image");
 const uploadPlaceholder = document.getElementById("upload-placeholder");
 
-// 初始化显示
+
 function resetPreview() {
     if (hasExisting) {
         previewImage.src = existingFilePath;
@@ -414,7 +414,7 @@ function resetPreview() {
 
 resetPreview();
 
-// 文件选择事件
+
 fileInput.addEventListener('change', function() {
     const file = fileInput.files[0];
 
@@ -424,12 +424,12 @@ fileInput.addEventListener('change', function() {
     }
 
     const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    const maxSize = 3 * 1024 * 1024; // 5MB
 
-    // 显示文件名
+ 
     fileNameDisplay.textContent = "Selected file: " + file.name;
 
-    // 类型检查
+
     if (!allowedTypes.includes(file.type)) {
         alert("Error: Unsupported file type! Please upload JPG/PNG only.");
         fileInput.value = "";
@@ -437,7 +437,6 @@ fileInput.addEventListener('change', function() {
         return;
     }
 
-    // 大小检查
     if (file.size > maxSize) {
         alert("Error: File exceeds 5MB limit!");
         fileInput.value = "";
@@ -445,7 +444,7 @@ fileInput.addEventListener('change', function() {
         return;
     }
 
-    // 显示预览
+    
     const reader = new FileReader();
     reader.onload = function(e) {
         previewImage.src = e.target.result;
@@ -455,7 +454,6 @@ fileInput.addEventListener('change', function() {
     reader.readAsDataURL(file);
 });
 
-// 取消按钮
 cancelBtn.addEventListener('click', function () {
     fileInput.value = "";
     resetPreview();
