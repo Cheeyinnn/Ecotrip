@@ -95,7 +95,10 @@ $stmtNoti->close();
         <!-- ====================== USER AVATAR DROPDOWN ====================== -->
         <div class="dropdown">
             <a href="#" data-bs-toggle="dropdown">
-                <img src="<?= htmlspecialchars($avatarPath) ?>" class="nav-avatar">
+                <img src="<?= htmlspecialchars($avatarPath) ?>"
+     class="nav-avatar"
+     onerror="this.src='/Ecotrip/uploads/avatar/default.png'">
+
             </a>
 
             <ul class="dropdown-menu dropdown-menu-end">

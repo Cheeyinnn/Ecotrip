@@ -26,8 +26,8 @@ if (!empty($currentUser['avatarURL'])) {
     $rawPath = $currentUser['avatarURL'];
     if (file_exists(__DIR__ . '/' . $rawPath)) {
         $avatarPath = $rawPath;
-    } elseif (file_exists(__DIR__ . '/uploads/' . $rawPath)) {
-        $avatarPath = 'uploads/' . $rawPath;
+    } elseif (file_exists(__DIR__ . '/uploads/avatar/' . $rawPath)) {
+        $avatarPath = 'uploads/avatar/' . $rawPath;
     }
 }
 
@@ -50,6 +50,17 @@ if ($scope == "monthly") {
     $startDate = date('Y-m-01', mktime(0, 0, 0, $selectedMonth, 1, $selectedYear));
     $endDate = date('Y-m-t', mktime(0, 0, 0, $selectedMonth, 1, $selectedYear));
     $dateCondition = "AND pt.generate_at BETWEEN '$startDate 00:00:00' AND '$endDate 23:59:59'";
+}
+
+function teamImg($img) {
+    if (empty($img)) return 'uploads/team/default.png';
+
+    $path = 'uploads/team/' . $img;
+    if (file_exists(__DIR__ . '/' . $path)) {
+        return $path;
+    }
+
+    return 'uploads/team/default.png';
 }
 
 // --- USER LEADERBOARD QUERY ---
@@ -104,28 +115,33 @@ if ($user_result) {
 if ($scope == "all") {
     // DIRECT PATH: Sum of user.scorePoint
     $team_sql = "SELECT 
-                    t.teamID, 
-                    t.teamName, 
-                    COALESCE(SUM(u.scorePoint), 0) AS scorePoint, 
-                    COUNT(DISTINCT u.userID) AS memberCount 
-                 FROM team t 
-                 LEFT JOIN user u ON u.teamID = t.teamID
-                 GROUP BY t.teamID, t.teamName 
-                 HAVING scorePoint > 0
-                 ORDER BY scorePoint DESC";
+    t.teamID,
+    t.teamName,
+    t.teamImage,
+    COALESCE(SUM(u.scorePoint), 0) AS scorePoint,
+    COUNT(DISTINCT u.userID) AS memberCount
+FROM team t
+LEFT JOIN user u ON u.teamID = t.teamID
+GROUP BY t.teamID, t.teamName, t.teamImage
+HAVING scorePoint > 0
+ORDER BY scorePoint DESC";
 } else {
     // CALCULATED PATH
     $team_sql = "SELECT 
-                    t.teamID, 
-                    t.teamName, 
-                    COALESCE(SUM(pt.pointsTransaction), 0) AS scorePoint, 
-                    COUNT(DISTINCT u.userID) AS memberCount 
-                 FROM team t 
-                 LEFT JOIN user u ON u.teamID = t.teamID
-                 LEFT JOIN pointtransaction pt ON pt.userID = u.userID AND pt.transactionType = 'earn' $dateCondition
-                 GROUP BY t.teamID, t.teamName 
-                 HAVING scorePoint > 0
-                 ORDER BY scorePoint DESC";
+                t.teamID, 
+                t.teamName,
+                t.teamImage,
+                COALESCE(SUM(pt.pointsTransaction), 0) AS scorePoint, 
+                COUNT(DISTINCT u.userID) AS memberCount 
+             FROM team t 
+             LEFT JOIN user u ON u.teamID = t.teamID
+             LEFT JOIN pointtransaction pt 
+                ON pt.userID = u.userID 
+                AND pt.transactionType = 'earn' $dateCondition
+             GROUP BY t.teamID, t.teamName, t.teamImage
+             HAVING scorePoint > 0
+             ORDER BY scorePoint DESC";
+
 }
 
 $team_result = $conn->query($team_sql);
@@ -584,7 +600,7 @@ include 'includes/layout_start.php';
                             <div class="podium-item rank-<?= $rank ?>" data-id="<?= $user['userID'] ?>" data-type="user" data-name="<?= htmlspecialchars($user['firstName']) ?>">
                                 <div class="position-relative d-inline-block mb-2">
                                     <i class="fas fa-crown crown-icon"></i>
-                                    <img src="<?= $user['avatarURL'] ?? 'uploads/default.png' ?>" class="podium-avatar">
+                                    <img src="<?= $user['avatarURL'] ?? 'uploads/avatar/default.png' ?>" class="podium-avatar">
                                     <div class="rank-badge"><?= $rank ?></div>
                                 </div>
                                 <div class="podium-name"><?= htmlspecialchars($user['firstName']) ?></div>
@@ -621,7 +637,7 @@ include 'includes/layout_start.php';
                             <div class="leaderboard-card" data-id="<?= $user['userID'] ?>" data-type="user" data-name="<?= htmlspecialchars($user['firstName']) ?>">
                                 <div class="lb-col-rank"><?= $rank ?></div>
                                 <div class="lb-col-avatar">
-                                    <img src="<?= $user['avatarURL'] ?? 'uploads/default.png' ?>" class="lb-avatar">
+                                    <img src="<?= $user['avatarURL'] ?? 'uploads/avatar/default.png' ?>" class="lb-avatar">
                                 </div>
                                 <div class="lb-col-name"><?= htmlspecialchars($user['firstName']) ?></div>
                                 <div class="lb-col-team"><?= htmlspecialchars($user['teamName'] ?? '-') ?></div>
@@ -639,7 +655,13 @@ include 'includes/layout_start.php';
                             <div class="podium-item rank-<?= $rank ?>" data-id="<?= $team['teamID'] ?>" data-type="team" data-name="<?= htmlspecialchars($team['teamName']) ?>">
                                 <div class="position-relative d-inline-block mb-2">
                                     <i class="fas fa-crown crown-icon"></i>
-                                    <div class="podium-avatar d-flex align-items-center justify-content-center bg-light"><i class="fas fa-users fa-2x text-secondary"></i></div>
+                                    <img src="<?= htmlspecialchars(
+        !empty($team['teamImage']) && file_exists(__DIR__ . '/' . $team['teamImage'])
+            ? $team['teamImage']
+            : 'uploads/team/default_team.png'
+    ) ?>"
+    class="podium-avatar">
+
                                     <div class="rank-badge"><?= $rank ?></div>
                                 </div>
                                 <div class="podium-name"><?= htmlspecialchars($team['teamName']) ?></div>
@@ -652,7 +674,13 @@ include 'includes/layout_start.php';
                     <?php if ($myTeamRank > 0): ?>
                     <div class="current-rank-bar" style="background: linear-gradient(90deg, #ff8c00, #ff4500);" onclick="scrollToRank('team', <?= $userTeamID ?>)">
                         <div class="cr-left">
-                            <div class="cr-avatar d-flex align-items-center justify-content-center bg-white text-dark"><i class="fas fa-users"></i></div>
+                            <img src="<?= htmlspecialchars(
+        !empty($team['teamImage']) && file_exists(__DIR__ . '/' . $team['teamImage'])
+            ? $team['teamImage']
+            : 'uploads/team/default_team.png'
+    ) ?>"
+    class="lb-avatar">
+
                             <span class="cr-text">Your Team Ranks</span>
                         </div>
                         <div class="d-flex align-items-center">
@@ -714,3 +742,4 @@ include 'includes/layout_start.php';
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+

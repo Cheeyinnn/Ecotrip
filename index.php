@@ -27,6 +27,13 @@ if (isset($_SESSION['userID'])) {
     overflow: hidden;
 }
 
+.preview-content {
+    filter: none;
+    opacity: 1;
+    pointer-events: auto;
+    user-select: auto;
+}
+
 
 .preview-login-btn {
     position: absolute;
@@ -153,6 +160,8 @@ if (isset($_SESSION['userID'])) {
         Log in to join challenges and submit proof to earn points.
     </p>
 </div>
+
+    <div class="preview-content">
 
         <!-- Green Header -->
         <div class="bg-gradient-to-r from-green-500 to-emerald-600
@@ -285,8 +294,8 @@ if (isset($_SESSION['userID'])) {
 
 
 <!-- ================= LEADERBOARD PREVIEW MODULE ================= -->
-    <section class="preview-module bg-gray-50 p-8 mt-16">
-    <h3 class="text-2xl font-bold mb-6">🏆 Leaderboard</h3>
+<section class="preview-module bg-white p-10 mt-24">
+    <h3 class="text-2xl font-bold mb-2">🏆 Leaderboard</h3>
 
     <!-- MODULE EXPLANATION -->
     <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
@@ -297,6 +306,8 @@ if (isset($_SESSION['userID'])) {
             fairness and motivation.
         </p>
     </div>
+
+    <div class="preview-content">
 
         <!-- Header -->
         <div class="text-center mb-10">
@@ -398,6 +409,8 @@ if (isset($_SESSION['userID'])) {
         </p>
     </div>
 
+    <div class="preview-content">
+
         <!-- Header -->
         <h2 class="text-2xl font-bold mb-8">Rewards Center</h2>
 
@@ -476,7 +489,7 @@ if (isset($_SESSION['userID'])) {
                         PRODUCT
                     </span>
 
-                    <h3 class="font-bold mt-4">Pen</h3>
+                    <h3 class="font-bold mt-4">Chanel</h3>
 
                     <div class="flex justify-between text-sm mt-2">
                         <span>10 pts</span>
@@ -501,7 +514,7 @@ if (isset($_SESSION['userID'])) {
                         VOUCHER
                     </span>
 
-                    <h3 class="font-bold mt-4">Nike 20%</h3>
+                    <h3 class="font-bold mt-4">Shirt</h3>
 
                     <div class="flex justify-between text-sm mt-2">
                         <span>10 pts</span>
@@ -567,6 +580,8 @@ if (isset($_SESSION['userID'])) {
         </p>
     </div>
 
+    <div class="preview-content">
+
         <!-- ================= TEAM HEADER ================= -->
         <div class="bg-slate-800 text-white rounded-2xl p-8 flex justify-between items-center">
 
@@ -592,10 +607,10 @@ if (isset($_SESSION['userID'])) {
 
         <!-- ================= TEAM NAV TABS ================= -->
         <div class="flex gap-6 mt-8 border-b pb-4 text-blue-600">
+            <span>Overview</span>
             <span class="font-semibold border-b-2 border-blue-600 pb-1">
-                Overview
+                Members
             </span>
-            <span>Members</span>
             <span>Settings</span>
             <span>Join Requests</span>
             <span class="flex items-center gap-1">
@@ -712,6 +727,8 @@ if (isset($_SESSION['userID'])) {
             contribution analytics.
         </p>
     </div>
+
+    <div class="preview-content">
 
         <!-- Header -->
         <h2 class="text-2xl font-bold mb-8">EcoTrip Dashboard</h2>

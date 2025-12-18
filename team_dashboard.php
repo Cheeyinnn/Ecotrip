@@ -179,7 +179,7 @@ include "includes/layout_start.php";
         <ul class="list-group list-group-flush">
             <li class="list-group-item d-flex justify-content-between align-items-center bg-light small text-muted fw-bold py-2">
                 <div style="flex-basis: 50%;">MEMBER NAME</div>
-                <div style="flex-basis: 30%; text-align: center;">LAST SEEN</div>
+                <div style="flex-basis: 30%; text-align: center;">LAST ACTIVE</div>
                 <div style="flex-basis: 20%; text-align: right;">SCORE</div>
             </li>
             
@@ -196,7 +196,7 @@ include "includes/layout_start.php";
                 <li class="list-group-item d-flex justify-content-between align-items-center <?= $isCurrentUser ? 'bg-light-info' : '' ?>">
                     <div style="flex-basis: 50%;">
                         <div class="d-flex align-items-center">
-                            <img src="<?= htmlspecialchars($m['avatarURL'] ?? 'uploads/default.png') ?>" 
+                            <img src="<?= htmlspecialchars($m['avatarURL'] ?? 'uploads/avatar/default.png') ?>" 
                                  style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" class="me-2">
                             <div>
                                 <strong>

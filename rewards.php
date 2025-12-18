@@ -35,7 +35,11 @@ $_SESSION['role'] = $currentUser['role'];
 $userPhone = $currentUser['phoneNumber'] ?? $currentUser['phone_number'] ?? $currentUser['phone'] ?? '';
 $userAddress = $currentUser['address'] ?? '';
 $userName = $currentUser['firstName'] . ' ' . $currentUser['lastName'];
-$avatarPath = !empty($currentUser['avatarURL']) && file_exists(__DIR__.'/'.$currentUser['avatarURL']) ? $currentUser['avatarURL'] : 'upload/default.png';
+$avatarPath = '/Ecotrip/uploads/avatar/default.png';
+
+if (!empty($currentUser['avatarURL'])) {
+    $avatarPath = '/Ecotrip/' . $currentUser['avatarURL'];
+}
 
 // User Rank
 $rankStmt = $conn->prepare("SELECT COUNT(*) + 1 AS rank FROM user WHERE walletPoint > ?");
@@ -381,7 +385,10 @@ include "includes/layout_start.php";
                 <!-- 1. Profile (Points Available) -->
                 <div class="dash-card profile-card-bg">
                     <div class="profile-card-content">
-                        <div class="profile-img-container"><img src="<?php echo htmlspecialchars($avatarPath); ?>" class="profile-img"></div>
+                        <div class="profile-img-container"><img src="<?= htmlspecialchars($avatarPath) ?>"
+     class="profile-img"
+     onerror="this.src='/Ecotrip/uploads/avatar/default.png'">
+</div>
                         <div class="profile-text">
                             <h4 class="profile-greeting">Hi, <?php echo htmlspecialchars($userName); ?></h4>
                             <div class="profile-points-label">Your Available Points</div>
