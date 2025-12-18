@@ -42,7 +42,7 @@ if ($timeFilter === '7') {
 $sql_challenge_count = "
     SELECT COUNT(DISTINCT challengeID) AS challengeCount
     FROM sub
-    WHERE userID = ? $subTimeCondition
+    WHERE userID = ? 
 ";
 $stmt = $conn->prepare($sql_challenge_count);
 $stmt->bind_param("i", $userID);
@@ -81,10 +81,10 @@ $rankStmt->close();
 $sql_subs = "SELECT 
         SUM(CASE WHEN status = 'Approved' THEN 1 ELSE 0 END) AS approvedCount,
         SUM(CASE WHEN status = 'Pending' THEN 1 ELSE 0 END) AS pendingCount,
-        SUM(CASE WHEN status = 'Denied' THEN 1 ELSE 0 END) AS deniedCount,
-        COUNT(submissionID) AS totalSubmission
+        SUM(CASE WHEN status = 'Denied' THEN 1 ELSE 0 END) AS deniedCount
     FROM sub
     WHERE userID = ? $subTimeCondition";
+
 
 $stmt_subs = $conn->prepare($sql_subs);
 $stmt_subs->bind_param("i", $userID);
@@ -94,8 +94,21 @@ $res_subs = $stmt_subs->get_result()->fetch_assoc();
 $approvedCount = $res_subs['approvedCount'] ?? 0;
 $pendingCount = $res_subs['pendingCount'] ?? 0;
 $deniedCount = $res_subs['deniedCount'] ?? 0;
-$totalSubmission = $res_subs['totalSubmission'] ?? 0;
+
 $stmt_subs->close();
+
+////////////////////////////////
+$sql_total_subs = "
+    SELECT COUNT(submissionID) AS totalSubmission
+    FROM sub
+    WHERE userID = ?
+";
+$stmt_total = $conn->prepare($sql_total_subs);
+$stmt_total->bind_param("i", $userID);
+$stmt_total->execute();
+$totalSubmission = $stmt_total->get_result()->fetch_assoc()['totalSubmission'] ?? 0;
+$stmt_total->close();
+
 
 // ============================
 // Submission details
