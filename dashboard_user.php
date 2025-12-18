@@ -580,6 +580,22 @@ include "includes/layout_start.php";
                     <p class="text-gray-500 mt-1">Comprehensive view of your eco-contribution, team status, and rewards.</p>
                 </div>
                   
+                  <div class="flex items-center gap-3">
+                    <select id="timeFilter" class="border rounded-lg px-3 py-2 bg-white shadow-sm focus:ring-primary focus:border-primary" onchange="applyTimeFilter()">
+                        <option value="all" <?= $timeFilter === 'all' ? 'selected' : '' ?>>All Time</option>
+                        <option value="today" <?= $timeFilter === 'today' ? 'selected' : '' ?>>Today</option>
+                        <option value="7" <?= $timeFilter === '7' ? 'selected' : '' ?>>Last 7 Days</option>
+                        <option value="30" <?= $timeFilter === '30' ? 'selected' : '' ?>>Last 30 Days</option>
+                    </select>
+                    
+                    <button 
+                        onclick="window.location = '?time=all'" 
+                        class="bg-primary hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-md transition-colors flex items-center gap-2"
+                    >
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -627,21 +643,7 @@ include "includes/layout_start.php";
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-4 border-t border-gray-200">
                 <h3 class="text-2xl font-bold text-gray-800">Contribution Analytics</h3>
 
-                <div class="flex items-center gap-3">
-                    <select id="timeFilter" class="border rounded-lg px-3 py-2 bg-white shadow-sm focus:ring-primary focus:border-primary" onchange="applyTimeFilter()">
-                        <option value="all" <?= $timeFilter === 'all' ? 'selected' : '' ?>>All Time</option>
-                        <option value="today" <?= $timeFilter === 'today' ? 'selected' : '' ?>>Today</option>
-                        <option value="7" <?= $timeFilter === '7' ? 'selected' : '' ?>>Last 7 Days</option>
-                        <option value="30" <?= $timeFilter === '30' ? 'selected' : '' ?>>Last 30 Days</option>
-                    </select>
-                    
-                    <button 
-                        onclick="window.location = '?time=all'" 
-                        class="bg-primary hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-md transition-colors flex items-center gap-2"
-                    >
-                        <i class="fas fa-sync-alt"></i> Refresh
-                    </button>
-                </div>
+              
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
