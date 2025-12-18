@@ -80,8 +80,8 @@ if (isset($_POST['register'])) {
                     $mail->Port       = 2525; 
 
                     // Your Mailtrap Sandbox credentials
-                    $mail->Username   = '5dd41c29aa2141'; 
-                    $mail->Password   = '4d68efed9cf9d4'; 
+                    $mail->Username   = 'b8bbcfb6e70940'; 
+                    $mail->Password   = 'faa75c357b0d79'; 
                     
                     $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS; 
 
