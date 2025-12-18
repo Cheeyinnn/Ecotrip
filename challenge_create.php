@@ -25,6 +25,23 @@ $start_date     = !empty($_POST['start_date']) ? $_POST['start_date'] : null;
 $end_date       = !empty($_POST['end_date'])   ? $_POST['end_date']   : null;
 
 // ========================================================
+// 🆕 DATE VALIDATION
+// ========================================================
+$today = date('Y-m-d');
+
+if ($start_date !== null && $start_date < $today) {
+    $_SESSION['flash'] = "Error: Start date cannot be earlier than today.";
+    header("Location: challenge_create_form.php");
+    exit;
+}
+
+if ($start_date !== null && $end_date !== null && $end_date < $start_date) {
+    $_SESSION['flash'] = "Error: End date cannot be earlier than the start date.";
+    header("Location: challenge_create_form.php");
+    exit;
+}
+
+// ========================================================
 // 🆕 CATEGORY LOGIC: CHECK NEW vs EXISTING
 // ========================================================
 $categoryID = intval($_POST['categoryID'] ?? 0);
