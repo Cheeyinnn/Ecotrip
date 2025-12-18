@@ -459,6 +459,64 @@ if (
 
     $action = $_POST['action'];
 
+    // ================== DELETE TEAM (OWNER ONLY, SOLO TEAM) ==================
+if ($action === 'delete_team') {
+
+    if ($userID != $ownerID) {
+        $message = "Only the team owner can delete the team.";
+        $messageType = "danger";
+    } else {
+
+        // Count members
+        $stmtCnt = $conn->prepare("SELECT COUNT(*) AS total FROM user WHERE teamID = ?");
+        $stmtCnt->bind_param("i", $teamID);
+        $stmtCnt->execute();
+        $total = $stmtCnt->get_result()->fetch_assoc()['total'];
+        $stmtCnt->close();
+
+        if ($total > 1) {
+            $message = "You must remove all members before deleting the team.";
+            $messageType = "warning";
+        } else {
+
+            // Remove leader from team
+            $stmt = $conn->prepare("UPDATE user SET teamID = NULL WHERE userID = ?");
+            $stmt->bind_param("i", $userID);
+            $stmt->execute();
+            $stmt->close();
+
+            // Delete team image (if not default)
+            if (!empty($currentTeamImage) &&
+                file_exists($currentTeamImage) &&
+                $currentTeamImage !== 'uploads/team/default_team.png') {
+                @unlink($currentTeamImage);
+            }
+
+            // Delete team record
+            $stmt = $conn->prepare("DELETE FROM team WHERE teamID = ?");
+            $stmt->bind_param("i", $teamID);
+            $stmt->execute();
+            $stmt->close();
+
+            // Notify owner
+            sendNotification(
+                $conn,
+                $userID,
+                "You have successfully deleted the team '{$teamNameCurrent}'.",
+                "team.php"
+            );
+
+            // Reset local state
+            $teamID = null;
+
+            $_SESSION['flash_success'] = "Team deleted successfully.";
+            header("Location: team.php");
+            exit;
+        }
+    }
+}
+
+
     // ================== UPLOAD TEAM IMAGE HANDLER ==================
     if ($action === 'upload_team_image' && $userID == $ownerID && isset($_FILES['teamImage'])) {
 
@@ -1009,6 +1067,7 @@ include "includes/layout_start.php";
                 </button>
             </li>
             
+            
             <?php if ($userID == $ownerID): ?>
                 <?php 
                     $pendingCount = ($pendingRequests && $pendingRequests->num_rows > 0) 
@@ -1023,6 +1082,7 @@ include "includes/layout_start.php";
                         <?php endif; ?>
                     </button>
                 </li>
+                
             <?php endif; ?>
 
             <!-- 🔗 Dashboard Nav Link (ADDED ONLY) -->
@@ -1221,30 +1281,49 @@ include "includes/layout_start.php";
                         </div>
 
                     <?php endif; ?>
+                    <?php if ($userID == $ownerID && $totalMembers == 1): ?>
+<div class="col-12">
+    <div class="card p-4 shadow-sm border-danger border-3 border-start">
+        <h5 class="card-title text-danger mb-3">
+            <iconify-icon icon="ic:round-delete-forever" class="me-2"></iconify-icon>
+            Delete Team
+        </h5>
 
-                    <div class="col-12">
-                        <div class="card p-4 shadow-sm border-danger border-3 border-start">
-                            <h5 class="card-title text-danger mb-3">
-                                <iconify-icon icon="ic:baseline-logout" class="me-2"></iconify-icon>
-                                Team Exit
-                            </h5>
-                            <form method="POST"
-                                  onsubmit="return confirm('Are you sure you want to leave the team?');">
-                                <input type="hidden" name="action" value="leave_team">
+        <p class="text-muted small">
+            This action is <strong>permanent</strong>.  
+            The team will be deleted and cannot be recovered.
+        </p>
 
-                                <button class="btn btn-danger btn-lg"
-                                    <?= ($userID == $ownerID ? 'disabled' : '') ?>>
-                                    Leave Team
-                                </button>
+        <form method="POST"
+              onsubmit="return confirm('⚠️ WARNING:\nThis will permanently delete the team.\nThis action CANNOT be undone.\n\nProceed?');">
+            <input type="hidden" name="action" value="delete_team">
+            <button class="btn btn-danger btn-lg w-100">
+                Delete Team Permanently
+            </button>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
 
-                                <?php if ($userID == $ownerID): ?>
-                                    <p class="text-muted small mt-2 mb-0">
-                                        You must transfer ownership to another member before you can leave the team.
-                                    </p>
-                                <?php endif; ?>
-                            </form>
-                        </div>
-                    </div>
+
+                    <?php if ($userID != $ownerID): ?>
+<div class="col-12">
+    <div class="card p-4 shadow-sm border-danger border-3 border-start">
+        <h5 class="card-title text-danger mb-3">
+            <iconify-icon icon="ic:baseline-logout" class="me-2"></iconify-icon>
+            Leave Team
+        </h5>
+        <form method="POST"
+              onsubmit="return confirm('Are you sure you want to leave the team?');">
+            <input type="hidden" name="action" value="leave_team">
+            <button class="btn btn-danger btn-lg">
+                Leave Team
+            </button>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+                        
 
                 </div>
             </div>

@@ -478,9 +478,9 @@ include "includes/layout_start.php";
                 $collapseId = "user-" . $u['userID'];
 
                 // Avatar fix
-                $avatar = "uploads/default.png";
+                $avatar = "uploads/avatar/default.png";
                 if (!empty($u['avatarURL'])) {
-                    $filePath = str_replace("upload/", "uploads/", $u['avatarURL']);
+                    $filePath = str_replace("upload/", "uploads/avatar/", $u['avatarURL']);
                     $fullPath = __DIR__ . "/" . $filePath;
                     if (file_exists($fullPath)) {
                         $avatar = $filePath;
@@ -559,7 +559,7 @@ include "includes/layout_start.php";
                         <?php endif; ?>
 
                     <?php else: ?>
-                        <span class="text-muted small">No actions</span>
+                        <span class="text-muted small">Current Session</span>
                     <?php endif; ?>
                 </td>
             </tr>
