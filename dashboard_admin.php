@@ -981,7 +981,7 @@ function showTab(tabName) {
     activeBtn.classList.remove('text-dark-2');
   }
 
-  // 🚀 INIT CHARTS ONCE
+ 
   if (!tabInitialized[tabName]) {
     switch (tabName) {
       case 'charts':
@@ -1062,9 +1062,7 @@ function initGrowthChart(dashboardData) {
     const newUsersSeries = labels.map(d => newUsersMap[d] || 0);
     const newAdminsSeries = labels.map(d => newAdminsMap[d] || 0);
 
-    // -----------------------------
-   
-    // -----------------------------
+
     chart.setOption({
     tooltip: { trigger: 'axis' },
     legend: {

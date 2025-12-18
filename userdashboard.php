@@ -1,8 +1,6 @@
 <?php
 
-// =============================================================
-// Protect Page (SESSION + BROWSER TOKEN)
-// =============================================================
+
 require_once "includes/auth.php";  // <--- REQUIRED FIRST
 
 // Only normal users can access dashboard (admin/mod cannot see dashboard)
