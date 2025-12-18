@@ -1,4 +1,8 @@
 <?php
+echo "RESET PAGE REACHED";
+exit;
+
+
 require 'db_connect.php';
 
 $token = $_GET['token'] ?? '';
@@ -8,16 +12,18 @@ $showForm = false;
 $userID = null;
 
 // ===================================================
-// 1. VALIDATE TOKEN (GET)
+// 1. VALIDATE TOKEN (GET) — FIXED
 // ===================================================
 if ($token !== '') {
 
-    $stmt = $conn->prepare(
-        "SELECT vt.tokenID, vt.expires_at, vt.used_at, vt.userID
-         FROM verificationtoken vt
-         WHERE vt.otpCode = ?
-         LIMIT 1"
-    );
+    $stmt = $conn->prepare("
+        SELECT userID
+        FROM verificationtoken
+        WHERE otpCode = ?
+          AND used_at IS NULL
+          AND expires_at > NOW()
+        LIMIT 1
+    ");
     $stmt->bind_param("s", $token);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -25,17 +31,11 @@ if ($token !== '') {
     if ($result->num_rows !== 1) {
         $error = "Invalid or expired reset link.";
     } else {
-        $data = $result->fetch_assoc();
-
-        if (!empty($data['used_at'])) {
-            $error = "This reset link has already been used.";
-        } elseif (strtotime($data['expires_at']) < time()) {
-            $error = "This reset link has expired.";
-        } else {
-            $showForm = true;
-            $userID = (int)$data['userID'];
-        }
+        $row = $result->fetch_assoc();
+        $userID = (int)$row['userID'];
+        $showForm = true;
     }
+
 } else {
     $error = "Invalid reset request.";
 }
@@ -56,7 +56,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $showForm) {
 
         $newHash = password_hash($pass1, PASSWORD_DEFAULT);
 
-        // Use transaction for safety
         $conn->begin_transaction();
 
         try {
@@ -87,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $showForm) {
     }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
