@@ -67,12 +67,13 @@ $stmt_points->close();
 $rankStmt = $conn->prepare("
     SELECT COUNT(*) + 1 AS rank 
     FROM user 
-    WHERE walletPoint > ?
+    WHERE walletPoint > ? 
 ");
 $rankStmt->bind_param("i", $currentPoints); 
 $rankStmt->execute();
 $userRank = $rankStmt->get_result()->fetch_assoc()['rank'];
 $rankStmt->close();
+
 
 
 
@@ -595,7 +596,7 @@ include "includes/layout_start.php";
                         <i class="fas fa-sync-alt"></i> Refresh
                     </button>
                 </div>
-                
+
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

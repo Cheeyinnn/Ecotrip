@@ -460,7 +460,7 @@ include "includes/layout_start.php";
                     </div>
                     <div class="flex-1 overflow-y-auto scrollbar-hide p-2 space-y-3">
 
-                    <!-- Placeholder：永远存在 -->
+                    <!-- Placeholder：-->
                         <div
                             id="no-submission-placeholder"
                             class="p-8 text-center text-neutral-500"
@@ -477,7 +477,7 @@ include "includes/layout_start.php";
                             <?php endif; ?>
                         </div>
 
-                        <!-- Submission details：永远存在 -->
+                        <!-- Submission details： -->
                         <div
                             id="submission-details"
                             style="<?= $currentSubmission ? '' : 'display:none;' ?>"
@@ -980,20 +980,16 @@ if (searchInput) {
                 return;
             }
 
+            clearReviewForm();
+
             const item = document.querySelector(`.submit-item[data-id="${data.submission_id}"]`);
             if (!item) return;
 
-            /* =========================
-            1️⃣ 更新 item 的 status（关键）
-            ========================= */
+  
             const newStatus = data.status.toLowerCase(); // approved / denied
             const statusText = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
 
             item.dataset.status = statusText;
-
-            /* =========================
-            2️⃣ 更新 badge 文本 & 颜色
-            ========================= */
             const badge = item.querySelector('.status-badge');
             if (badge) {
                 badge.textContent = statusText;
@@ -1005,36 +1001,15 @@ if (searchInput) {
                         : 'bg-danger/10 text-danger');
             }
 
-            /* =========================
-            3️⃣ 更新右侧面板（静态模式）
-            ========================= */
             updateRightPanelAfterReview(data);
-
-            /* =========================
-            4️⃣ 更新 Accordion 数量
-            ========================= */
             updateAccordionCount('pending', -1);
             updateAccordionCount(newStatus, +1);
 
-            /* =========================
-            5️⃣ 移动 item 到正确 accordion
-            ========================= */
             moveItemToAccordion(item, statusText);
 
-            /* =========================
-            6️⃣ 重新分页 & 高度修正
-            ========================= */
             ['pending', 'approved', 'denied'].forEach(s => renderAccordionPage(s));
 
-            /* =========================
-            7️⃣ 自动选择下一个 pending
-            （若没有 → 显示 All Reviewed）
-            ========================= */
             autoSelectNextPending();
-
-            /* =========================
-            8️⃣ 回到 submission list
-            ========================= */
             scrollToSubmissionList();
 
         })
@@ -1201,6 +1176,17 @@ function renderAccordionPage(status) {
         paginationState[status] += delta;
         renderAccordionPage(status);
     }
+
+    function clearReviewForm() {
+    const form = document.getElementById('review-form');
+    if (!form) return;
+
+    const radios = form.querySelectorAll('input[name="review_result"]');
+    radios.forEach(r => r.checked = false);
+
+    const feedback = document.getElementById('detail-feedback');
+    if (feedback) feedback.value = '';
+}
 
 
 
