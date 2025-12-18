@@ -13,12 +13,12 @@ include("db_connect.php");
 // Time filter
 $timeFilter = $_GET['time'] ?? 'all';
 
-// 默认时间条件为空
+
 $days = null;
 $subTimeCondition = '';
 $redeemTimeCondition = '';
 
-// 根据 filter 设置时间条件
+
 if ($timeFilter === '7') {
     $days = 7;
     $subTimeCondition = " AND uploaded_at >= NOW() - INTERVAL 7 DAY";
@@ -69,7 +69,7 @@ $rankStmt = $conn->prepare("
     FROM user 
     WHERE walletPoint > ?
 ");
-$rankStmt->bind_param("i", $currentPoints); // 用 currentPoints（已经根据 filter 计算）
+$rankStmt->bind_param("i", $currentPoints); 
 $rankStmt->execute();
 $userRank = $rankStmt->get_result()->fetch_assoc()['rank'];
 $rankStmt->close();
@@ -173,7 +173,7 @@ $teamID = $userTeamInfo['teamID'] ?? null;
 $teamName = $userTeamInfo['teamName'] ?? null;
 
 // ============================
-// User summary stats (跟 filter 一起走)
+// User summary stats 
 $sql_current_points = "
     SELECT 
         COALESCE((SELECT SUM(pointEarned) FROM sub WHERE userID = ? $subTimeCondition),0) AS earnedPoints,
@@ -311,13 +311,13 @@ if ($teamID === null) {
 }
 
 // ============================
-// Team Overall Rank（用户所在团队在所有团队中的排名）
-$myTeamRank = 0; // 初始化，避免 Undefined variable
+// Team Overall Rank
+$myTeamRank = 0; 
 $myTeamPoints = 0;
 $myTeamName = $teamName ?? '';
 
 if ($teamID !== null) {
-    // 根据 filter 设置日期条件
+
     $dateCondition = '';
     if ($timeFilter === '7') {
         $dateCondition = " AND pt.generate_at >= NOW() - INTERVAL 7 DAY";
@@ -327,7 +327,7 @@ if ($teamID !== null) {
         $dateCondition = " AND DATE(pt.generate_at) = CURDATE()";
     }
 
-    // 查询所有团队积分
+    
     $team_sql = "
         SELECT t.teamID, COALESCE(SUM(pt.pointsTransaction),0) AS teamPoints
         FROM team t
@@ -343,9 +343,9 @@ if ($teamID !== null) {
     if ($team_result) {
         while ($row = $team_result->fetch_assoc()) {
             if ($row['teamID'] == $teamID) {
-                $myTeamRank = $rankCounter; // 找到该用户团队排名
+                $myTeamRank = $rankCounter; 
                 $myTeamPoints = $row['teamPoints'];
-                break; // 找到就可以退出循环
+                break; 
             }
             $rankCounter++;
         }
@@ -442,28 +442,26 @@ include "includes/layout_start.php";
 
     /* --- START: Quick Navigation Custom Styles (ECO-THEME ADAPTED) --- */
 
-/* 容器样式 (reward-summary-card) */
+/* (reward-summary-card) */
 .reward-summary-card {
     display: flex; 
     align-items: center; 
     padding: 15px 20px;
-    border: 1px solid #e2e8f0; /* 使用 card-eco 的边框色 */
+    border: 1px solid #e2e8f0; 
     border-radius: 8px; 
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); 
     background-color: #ffffff;
 }
 
-/* 1. 图标容器 */
 .icon-container {
     font-size: 28px;
-    color: #f59e0b; /* 使用 eco-text-point (Amber/Gold) */
+    color: #f59e0b; 
     margin-right: 20px;
 }
 .icon-container .fas {
     font-size: 32px;
 }
 
-/* 2. 文本内容 */
 .text-content {
     flex-grow: 1; 
     margin-right: 20px;
@@ -482,7 +480,7 @@ include "includes/layout_start.php";
     color: #64748b; /* Base secondary color */
 }
 
-/* 3. 导航链接/按钮 */
+
 .action-link {
     flex-shrink: 0; 
 }
@@ -490,7 +488,7 @@ include "includes/layout_start.php";
 .nav-button {
     text-decoration: none;
     padding: 8px 12px;
-    background-color: #10b981; /* 适配 eco-primary */
+    background-color: #10b981; 
     color: white;
     border-radius: 4px;
     font-size: 14px;
@@ -501,18 +499,16 @@ include "includes/layout_start.php";
 }
 
 .nav-button:hover {
-    background-color: #059669; /* eco-primary 的 hover 颜色 */
+    background-color: #059669; 
 }
 
-/* 按钮内的箭头图标 */
+
 .nav-button .fas {
     margin-left: 8px;
     font-size: 12px;
 }
 
-/* ---------------------------------- */
-/* 4. 次要快速导航样式 (reward-nav-links) */
-/* ---------------------------------- */
+
 .reward-nav-links {
     display: flex; 
     gap: 10px; 
@@ -543,7 +539,7 @@ include "includes/layout_start.php";
     color: #10b981; /* eco-primary */
 }
 
-/* 导航项内部图标 */
+
 .quick-nav-item .fas {
     margin-right: 8px;
     font-size: 16px;
@@ -768,7 +764,6 @@ include "includes/layout_start.php";
         window.location.href = url.toString();
     }
 
-    // 全局变量来存储 ECharts 实例，防止重复初始化
     window.chartInstances = {
         teamRankChart: null,
         submissionStatusChart: null,
@@ -777,14 +772,14 @@ include "includes/layout_start.php";
 
     const submissionDetails = <?= $submissionDetailsJson ?>;
     
-    // 从 PHP 注入 Reward Chart Data
+    
     const trendLabels = <?= $trendLabelsJson ?>;
     const trendData = <?= $trendDataJson ?>;
     const catLabels = <?= $catLabelsJson ?>;
     const catData = <?= $catDataJson ?>;
 
     
-    // 通用无数据提示 HTML
+  
     const noDataHtml = (iconClass, title, message) => `
         <div class="text-center py-20 text-gray-400 bg-gray-50 rounded-lg h-full flex flex-col items-center justify-center">
             <i class="${iconClass} text-4xl text-gray-300 mb-3"></i>
@@ -795,8 +790,7 @@ include "includes/layout_start.php";
 
     document.addEventListener('DOMContentLoaded', function () {
         
-        // --- 1. ECharts 初始化函数 (保持不变) ---
-
+        
         // A. Team Rank Chart (Bar Chart)
         function initializeTeamRankChart() {
             const teamRankData = <?= json_encode($teamRank); ?>;
@@ -951,7 +945,7 @@ include "includes/layout_start.php";
 }
 
 
-        // --- 2. Chart.js 初始化函数 (已修复和确认) ---
+        // --- 2. Chart.js 
         function initializeRewardCharts() {
             // Trend Chart
             const trendEl = document.getElementById('trendChart');
@@ -960,7 +954,7 @@ include "includes/layout_start.php";
             if (trendData.length > 0) {
                 trendEl.style.height = '300px'; // Set height explicitly for Chart.js in flex container
                 const ctx = trendEl.getContext('2d');
-                // 确保移除无数据提示
+                
                 if (trendContainer.querySelector('.text-center.py-20')) {
                     trendContainer.innerHTML = '';
                     trendContainer.appendChild(trendEl);
@@ -984,7 +978,7 @@ include "includes/layout_start.php";
                     options: { 
                         responsive: true, 
                         maintainAspectRatio: false,
-                        plugins: { legend: { display: false } }, // 趋势图不需要图例
+                        plugins: { legend: { display: false } }, 
                         scales: { y: { beginAtZero: true } }
                     }
                 });
@@ -1003,7 +997,7 @@ include "includes/layout_start.php";
             if (catData.length > 0) {
                 catEl.style.height = '280px'; // Set height for Doughnut chart
                 const ctx = catEl.getContext('2d');
-                // 确保移除无数据提示
+                
                 if (categoryContainer.querySelector('.text-center.py-20')) {
                     categoryContainer.innerHTML = '';
                     categoryContainer.appendChild(catEl);
@@ -1014,7 +1008,7 @@ include "includes/layout_start.php";
                 new Chart(ctx, {
                     type: 'doughnut',
                     data: {
-                        // catLabels 就是用户兑换过的奖励类别名称
+                        
                         labels: catLabels, 
                         datasets: [{ 
                             data: catData,
@@ -1027,7 +1021,7 @@ include "includes/layout_start.php";
                         maintainAspectRatio: false, 
                         cutout: '75%',
                         plugins: { 
-                            // 图例在这里，它会根据 labels 自动生成
+                            
                             legend: { 
                                 position: 'bottom' 
                             } 
@@ -1044,7 +1038,7 @@ include "includes/layout_start.php";
         }
 
 
-        // --- 3. 页面加载时执行所有初始化 ---
+        
         initializeTeamRankChart();
         initializeSubmissionStatusChart();
         initializeChallengeChart();

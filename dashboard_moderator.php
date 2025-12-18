@@ -16,13 +16,13 @@ $days = null;
 if ($timeFilter === '7') $days = 7;
 elseif ($timeFilter === '30') $days = 30;
 
-// 时间条件
+
 $timeCondition = '';
 if ($days !== null) $timeCondition = " AND uploaded_at >= NOW() - INTERVAL $days DAY";
 elseif ($timeFilter === 'today') $timeCondition = " AND DATE(uploaded_at) = CURDATE()";
 
 // ======================
-// KPI 卡片
+
 $totalSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE 1=1 $timeCondition")->fetch_assoc()['c'];
 
 $pendingSubmission = $conn->query("SELECT COUNT(*) AS c FROM sub WHERE status = 'pending' $timeCondition")->fetch_assoc()['c'];
@@ -54,7 +54,7 @@ $totalReviews = $approveCount + $rejectCount;
 
 
 // ======================
-// Challenge Type (全站)
+
 $challengeTypeSQL = "
     SELECT category.categoryName, COUNT(*) AS total
     FROM sub
@@ -75,9 +75,8 @@ while ($c = $challengeType->fetch_assoc()) {
 }
 
 
-// Approval Trend (当前 moderator)
+// Approval Trend
 // ----------------------
-// 1. 生成日期列表
 
 $endDate = date('Y-m-d'); // today
 
@@ -86,7 +85,7 @@ if ($timeFilter === 'today') {
 } elseif ($days !== null) {
     $startDate = date('Y-m-d', strtotime("-$days days"));
 } else {
-    // All Time → 基于 submission 生命周期最早上传
+   
     $minDateRow = $conn->query("
         SELECT MIN(uploaded_at) AS minDate
         FROM sub
@@ -171,15 +170,6 @@ $trendDenied    = array_column($trendDates, 'denied');
 
 
 
-
-
-
-
-
-
-
-// ======================
-// Daily Submission Trend (全站)
 $dailySQL = "
     SELECT DATE(uploaded_at) AS d, COUNT(*) AS total
     FROM sub
@@ -278,7 +268,7 @@ include "includes/layout_start.php";
           }
       }
 
-      /* 容器样式 (Quick Navigation) */
+      
         .reward-summary-card {
             display: flex; 
             align-items: center; 
@@ -287,10 +277,10 @@ include "includes/layout_start.php";
             border-radius: 8px; 
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); 
             background-color: #ffffff;
-            /* 保持 flex 布局 */
+           
         }
 
-        /* 1. 图标容器 */
+     
         .icon-container {
             font-size: 28px;
             color: #FFC107; 
@@ -300,7 +290,6 @@ include "includes/layout_start.php";
             font-size: 32px;
         }
 
-        /* 2. 文本内容 */
         .text-content {
             flex-grow: 1; 
             margin-right: 20px;
@@ -319,7 +308,6 @@ include "includes/layout_start.php";
             color: #606771; 
         }
 
-        /* 3. 导航链接/按钮 */
         .action-link {
             flex-shrink: 0; 
         }
@@ -341,15 +329,13 @@ include "includes/layout_start.php";
             background-color: #0958d9;
         }
 
-        /* 按钮内的箭头图标 */
+       
         .nav-button .fas {
             margin-left: 8px;
             font-size: 12px;
         }
 
-/* ---------------------------------- */
-/* 2. 次要快速导航样式 (新增) */
-/* ---------------------------------- */
+
 .reward-nav-links {
     display: flex; 
     gap: 10px; 
@@ -381,7 +367,7 @@ include "includes/layout_start.php";
     color: #1677FF; 
 }
 
-/* 导航项内部图标 */
+
 .quick-nav-item .fas {
     margin-right: 8px;
     font-size: 16px;
@@ -551,7 +537,7 @@ const challengeValues = <?= json_encode($challengeValues) ?>;
 const dailyDates = <?= json_encode($dailyDates) ?>;
 const dailyTotals = <?= json_encode($dailyTotals) ?>;
 
-// 处理 Approval Trend 日期，保证每天都有数据
+
 const trendDates = <?= json_encode($trendDatesArr) ?>;
 const trendApproved = <?= json_encode($trendApproved) ?>;
 const trendDenied = <?= json_encode($trendDenied) ?>;
@@ -567,9 +553,7 @@ function applyTimeFilter() {
 
 document.addEventListener('DOMContentLoaded', function () {
 
-    // ============================
-    // 1. Approval Rate Donut Chart
-    // ============================
+   
     const approvalRateChart = echarts.init(document.getElementById('approvalRateChart'));
 
     if (!hasReview) {

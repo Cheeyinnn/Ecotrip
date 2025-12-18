@@ -31,13 +31,12 @@ switch($timeFilter) {
         break;
 }
 
-// -----------------------------
-// Helper: SQL WHERE 条件，根据时间筛选
+
 // -----------------------------
 function sql_time_filter($col, $interval = null, $today = false) {
     if ($today) return " AND DATE({$col}) = CURDATE() ";
     if ($interval) return " AND {$col} >= DATE_SUB(CURDATE(), INTERVAL {$interval} DAY) ";
-    return ""; // all 时不加限制
+    return ""; 
 }
 
 // -----------------------------
@@ -241,16 +240,16 @@ if ($team_result) {
     while($row = $team_result->fetch_assoc()){
         $teamRanks[] = [
             'teamName' => $row['teamName'],
-            'teamPoints' => (int)$row['teamPoints'] // 注意这里是 teamPoints，不是 teamPoint
+            'teamPoints' => (int)$row['teamPoints']
         ];
     }
 }
 
-// 输出到 JS
+
 $teamRanksJson = json_encode($teamRanks);
 
 // -----------------------------
-// 8. Login Trend (FIXED)
+// 8. Login Trend 
 // -----------------------------
 $loginTrendQuery = "
     SELECT DATE(last_online) AS date, COUNT(*) AS count
@@ -942,7 +941,7 @@ dashboardData.trendWindow = <?= $timeInterval ?? 30 ?>; // 7 / 30 / all default 
 // fill summary cards
 
 function loadSummaryCards(){
-    // dashboardData 从后端 PHP JSON 输出
+   
     document.getElementById('cardTotalUsers').innerText = dashboardData.totalUsers ?? 0;
     document.getElementById('cardTotalAdmin').innerText = dashboardData.totalAdmin ?? 0;
     document.getElementById('cardActiveTeams').innerText = dashboardData.activeTeams ?? 0;
@@ -1017,7 +1016,7 @@ function initGrowthChart(dashboardData) {
     const el = document.getElementById('growthChart');
     if (!el) return;
 
-    // 防止在 hidden 状态初始化
+
     if (el.offsetHeight === 0) {
         setTimeout(() => initGrowthChart(dashboardData), 100);
         return;
@@ -1025,16 +1024,14 @@ function initGrowthChart(dashboardData) {
 
     window.dashboardCharts = window.dashboardCharts || {};
 
-    // dispose 旧实例
+ 
     if (window.dashboardCharts.growth) {
         try { window.dashboardCharts.growth.dispose(); } catch(e){}
     }
 
     const chart = echarts.init(el);
 
-    // -----------------------------
-    // 1️⃣ 整理日期轴（以 submissionTrend 为主）
-    // -----------------------------
+    
     
     const newUsers = dashboardData.newUsers || [];
     const newAdmins = dashboardData.newAdmins || [];
@@ -1047,8 +1044,7 @@ function initGrowthChart(dashboardData) {
 
     const labels = Array.from(dateSet).sort();
 
-    // -----------------------------
-    // 2️⃣ 映射数据
+ 
     // -----------------------------
     const newUsersMap = {};
     newUsers.forEach(r => newUsersMap[r.day] = Number(r.cnt || 0));
@@ -1067,7 +1063,7 @@ function initGrowthChart(dashboardData) {
     const newAdminsSeries = labels.map(d => newAdminsMap[d] || 0);
 
     // -----------------------------
-    // 3️⃣ ECharts 配置
+   
     // -----------------------------
     chart.setOption({
     tooltip: { trigger: 'axis' },
@@ -1120,10 +1116,8 @@ function initGrowthChart(dashboardData) {
         ]
     });
 
-    // 保存实例
     window.dashboardCharts.growth = chart;
 
-    // resize（只绑一次）
     if (!window._growthResizeBound) {
         window.addEventListener('resize', () => {
             try { window.dashboardCharts.growth.resize(); } catch(e){}
@@ -1229,7 +1223,6 @@ new Chart(catCtx, {
         responsive: true,
         maintainAspectRatio: false,
 
-        // ⭐ 让圆环更厚，看起来更有力量
         cutout: '55%',
 
         layout: {
@@ -1347,7 +1340,7 @@ document.getElementById('kpiDenied').innerText = dashboardData.submissionCounts.
                 offset: true,
                 grid: { display:false },
                 ticks: {
-                    maxTicksLimit: 5  // 最多显示 5 个日期
+                    maxTicksLimit: 5  
                 }
             },
             y: {
@@ -1414,19 +1407,19 @@ function initUsersTab(){
 const teamCtx = document.getElementById('teamScoreChart').getContext('2d');
 
 window.usersCharts.teamScore = new Chart(teamCtx, {
-    type: 'bar', // 横向条形图
+    type: 'bar', 
     data: {
         labels: (dashboardData.teamScores || []).map(t => t.teamName),
         datasets: [{
             label: 'Team Score',
             data: (dashboardData.teamScores || []).map(t => t.teamPoints),
             backgroundColor: '#4F46E5',
-            borderRadius: 16, // 和 KPI 卡圆角一致
+            borderRadius: 16, 
             barThickness: 18
         }]
     },
     options: {
-        indexAxis: 'y', // 横向 bar
+        indexAxis: 'y', 
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
@@ -1441,7 +1434,7 @@ window.usersCharts.teamScore = new Chart(teamCtx, {
             x: {
                 beginAtZero: true,
                 grid: { color: '#E5E7EB' },
-                ticks: { color: '#374151' } // 字体颜色统一
+                ticks: { color: '#374151' } 
             },
             y: {
                 grid: { display: false },
@@ -1476,9 +1469,9 @@ window.usersCharts.sub = new Chart(subCtx, {
                 const colors = ['#22C55E','#10B981','#3B82F6','#F59E0B','#EF4444'];
                 return colors[ctx.dataIndex % colors.length];
             },
-            borderRadius: 8,       // 柱子圆角
-            borderSkipped: false,  // 圆角完整显示
-            maxBarThickness: 50    // 最大宽度
+            borderRadius: 8,       
+            borderSkipped: false,  
+            maxBarThickness: 50   
         }]
     },
     options: {
@@ -1486,7 +1479,7 @@ window.usersCharts.sub = new Chart(subCtx, {
         maintainAspectRatio: false,
         plugins: {
             legend: {
-                display: false // 不显示图例
+                display: false 
             },
             tooltip: {
                 callbacks: {
@@ -1498,12 +1491,12 @@ window.usersCharts.sub = new Chart(subCtx, {
         },
         scales: {
             x: {
-                grid: { display: false }, // 去掉 X 轴网格线
+                grid: { display: false }, 
                 ticks: { color: '#4B5563', font: { size: 12, weight: '500' } }
             },
             y: {
                 beginAtZero: true,
-                grid: { color: '#E5E7EB' }, // 轻灰色网格线
+                grid: { color: '#E5E7EB' }, 
                 ticks: { color: '#4B5563', font: { size: 12, weight: '500' }, stepSize: 1 }
             }
         }
