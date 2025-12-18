@@ -61,7 +61,7 @@ function getTeamMembersHTML($conn, $teamID, $teamLeaderID)
     $html = '<ul class="list-group list-group-flush">';
 
     while ($m = $result->fetch_assoc()) {
-        $avatar = "uploads/default.png";
+        $avatar = "uploads/avatar/default.png";
         if (!empty($m['avatarURL'])) {
             $checkPath = __DIR__ . "/" . $m['avatarURL'];
             if (file_exists($checkPath)) {
