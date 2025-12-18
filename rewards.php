@@ -31,6 +31,7 @@ $stmt->bind_param("i", $userID);
 $stmt->execute();
 $currentUser = $stmt->get_result()->fetch_assoc();
 $_SESSION['role'] = $currentUser['role'];
+$isStaff = in_array($currentUser['role'], ['admin', 'moderator']);
 
 $userPhone = $currentUser['phoneNumber'] ?? $currentUser['phone_number'] ?? $currentUser['phone'] ?? '';
 $userAddress = $currentUser['address'] ?? '';
@@ -111,9 +112,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['cancelRedemptionID']))
     $checkStmt->close();
 }
 
-
 // --- HANDLE REDEMPTION ---
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rewardID']) && !isset($_POST['cancelRedemptionID'])) {
+if (
+    $_SERVER['REQUEST_METHOD'] == 'POST' &&
+    isset($_POST['rewardID']) &&
+    !isset($_POST['cancelRedemptionID'])
+) {
+
+    if ($isStaff) {
+        header("Location: rewards.php?msg=not_allowed");
+        exit();
+    }
+
     $rewardID = $_POST['rewardID'];
     $quantity = $_POST['quantity'];
     $receiverName = $_POST['receiverName'] ?? $userName;
@@ -371,14 +381,38 @@ include "includes/layout_start.php";
     </style>
 <body>
 
-        <div class="content-wrapper">
-            <?php if(isset($_GET['msg']) && $_GET['msg'] == 'approved'): ?>
-            <div class="alert alert-success border-0 shadow-sm"><i class="fas fa-check-circle me-2"></i><strong>Redemption Approved!</strong> Your item has been approved.</div>
-            <?php elseif(isset($_GET['msg']) && $_GET['msg'] == 'pending'): ?>
-            <div class="alert alert-info border-0 shadow-sm"><i class="fas fa-clock me-2"></i><strong>Request Sent!</strong> Shipping soon.</div>
-            <?php elseif(isset($_GET['msg']) && $_GET['msg'] == 'cancelled'): ?>
-            <div class="alert alert-warning border-0 shadow-sm"><i class="fas fa-info-circle me-2"></i><strong>Cancelled!</strong> Request cancelled and points refunded.</div>
-            <?php endif; ?>
+       <div class="content-wrapper">
+
+<?php if (isset($_GET['msg']) && $_GET['msg'] === 'approved'): ?>
+
+    <div class="alert alert-success border-0 shadow-sm">
+        <i class="fas fa-check-circle me-2"></i>
+        <strong>Redemption Approved!</strong> Your item has been approved.
+    </div>
+
+<?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'pending'): ?>
+
+    <div class="alert alert-info border-0 shadow-sm">
+        <i class="fas fa-clock me-2"></i>
+        <strong>Request Sent!</strong> Shipping soon.
+    </div>
+
+<?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'cancelled'): ?>
+
+    <div class="alert alert-warning border-0 shadow-sm">
+        <i class="fas fa-info-circle me-2"></i>
+        <strong>Cancelled!</strong> Request cancelled and points refunded.
+    </div>
+
+<?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'not_allowed'): ?>
+
+    <div class="alert alert-danger border-0 shadow-sm">
+        <strong>Access Restricted.</strong>
+        Admins and moderators cannot redeem rewards.
+    </div>
+
+<?php endif; ?>
+
 
             <!-- Dashboard Row -->
             <div class="dashboard-row">
@@ -690,6 +724,9 @@ include "includes/layout_start.php";
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+const IS_STAFF = <?php echo $isStaff ? 'true' : 'false'; ?>;
+</script>
+<script>
     function generateBarcode(serial, prefix, productName) {
         let codePrefix = "";
         if (prefix && prefix !== "null" && prefix !== "") {
@@ -733,30 +770,59 @@ include "includes/layout_start.php";
     const userData = { name: "<?php echo addslashes($userName); ?>", phone: "<?php echo addslashes($userPhone); ?>", address: "<?php echo addslashes(str_replace(["\r", "\n"], ' ', $userAddress)); ?>" };
 
     function openRewardModal(data) {
-        document.getElementById('modalRewardName').innerText = data.name;
-        document.getElementById('modalRewardImg').src = data.img;
-        document.getElementById('modalRewardPoints').innerText = Number(data.points).toLocaleString() + ' pts';
-        document.getElementById('modalRewardStock').innerText = data.stock + ' Left';
-        document.getElementById('modalRewardDesc').innerText = data.desc;
-        document.getElementById('modalFormRewardID').value = data.id;
-        const shipSection = document.getElementById('shippingSection');
-        const inputs = shipSection.querySelectorAll('input, textarea');
-        if (data.category.toLowerCase() === 'product') {
-            shipSection.classList.remove('hidden');
-            if(!document.getElementById('shipName').value) document.getElementById('shipName').value = userData.name;
-            if(!document.getElementById('shipPhone').value) document.getElementById('shipPhone').value = userData.phone;
-            if(!document.getElementById('shipAddress').value) document.getElementById('shipAddress').value = userData.address;
-            inputs.forEach(i => i.required = true);
-        } else {
-            shipSection.classList.add('hidden');
-            inputs.forEach(i => i.required = false);
-        }
-        const btn = document.getElementById('modalRedeemBtn');
-        const msg = document.getElementById('modalUnavailableMsg');
-        if (data.canRedeem) { btn.disabled = false; btn.classList.remove('hidden'); msg.classList.add('hidden'); } 
-        else { btn.disabled = true; btn.classList.add('hidden'); msg.classList.remove('hidden'); msg.innerText = !data.active ? "Unavailable" : (!data.inStock ? "Out of Stock" : "Not Enough Points"); }
-        rewardModal.show();
+    document.getElementById('modalRewardName').innerText = data.name;
+    document.getElementById('modalRewardImg').src = data.img;
+    document.getElementById('modalRewardPoints').innerText = Number(data.points).toLocaleString() + ' pts';
+    document.getElementById('modalRewardStock').innerText = data.stock + ' Left';
+    document.getElementById('modalRewardDesc').innerText = data.desc;
+    document.getElementById('modalFormRewardID').value = data.id;
+
+    const shipSection = document.getElementById('shippingSection');
+    const inputs = shipSection.querySelectorAll('input, textarea');
+
+    if (data.category.toLowerCase() === 'product') {
+    shipSection.classList.remove('hidden');
+    inputs.forEach(i => i.required = true);
+
+    // ✅ AUTO-FILL FROM PROFILE
+    document.getElementById('shipName').value    = userData.name || '';
+    document.getElementById('shipPhone').value   = userData.phone || '';
+    document.getElementById('shipAddress').value = userData.address || '';
+
+    } else {
+        shipSection.classList.add('hidden');
+        inputs.forEach(i => i.required = false);
     }
+
+    // ✅ DEFINE FIRST
+    const btn = document.getElementById('modalRedeemBtn');
+    const msg = document.getElementById('modalUnavailableMsg');
+
+    // ✅ ROLE LOGIC
+    if (IS_STAFF) {
+        btn.disabled = true;
+        btn.classList.add('hidden');
+        msg.classList.remove('hidden');
+        msg.innerText = "Admins and moderators can only view rewards.";
+    }
+    else if (data.canRedeem) {
+        btn.disabled = false;
+        btn.classList.remove('hidden');
+        msg.classList.add('hidden');
+    }
+    else {
+        btn.disabled = true;
+        btn.classList.add('hidden');
+        msg.classList.remove('hidden');
+        msg.innerText = !data.active
+            ? "Unavailable"
+            : (!data.inStock ? "Out of Stock" : "Not Enough Points");
+    }
+
+    // ✅ THIS WILL NOW RUN
+    rewardModal.show();
+}
+
 
     function openVoucherFromList(v) {
         document.getElementById('ticketTitle').innerText = v.rewardName;
