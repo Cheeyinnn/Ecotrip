@@ -495,7 +495,19 @@ include 'includes/layout_start.php';
                     document.getElementById('modalTitle').innerText = name + "'s Performance";
                     
                     // UPDATED FETCH CALL: Passing scope parameters
-                    fetch(`lbDetail.php?id=${id}&type=${type}&scope=${currentScope}`)
+                    const params = new URLSearchParams(window.location.search);
+const month = params.get('month');
+const year  = params.get('year');
+
+fetch(
+    `lbDetail.php` +
+    `?id=${id}` +
+    `&type=${type}` +
+    `&scope=${currentScope}` +
+    (month ? `&month=${month}` : '') +
+    (year  ? `&year=${year}`  : '')
+)
+
                         .then(response => {
                             if (!response.ok) {
                                 throw new Error('Network response was not ok: ' + response.statusText);
