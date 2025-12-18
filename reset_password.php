@@ -1,8 +1,4 @@
 <?php
-echo "RESET PAGE REACHED";
-exit;
-
-
 require 'db_connect.php';
 
 $token = $_GET['token'] ?? '';

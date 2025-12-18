@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $insert->bind_param("sii", $token, $channel, $userID);
         $insert->execute();
 
-        $reset_link = "http://localhost/ecotest/reset_password.php?token=" . urlencode($token);
+        $reset_link = "http://localhost/ecotrip/reset_password.php?token=" . urlencode($token);
 
         // Send email
         require 'reset_email.php';
