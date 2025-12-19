@@ -54,13 +54,8 @@ if ($scope == "monthly") {
 
 function teamImg($img) {
     if (empty($img)) return 'uploads/team/default.png';
-
-    $path = 'uploads/team/' . $img;
-    if (file_exists(__DIR__ . '/' . $path)) {
-        return $path;
-    }
-
-    return 'uploads/team/default.png';
+    // If database already has the path, return it. Otherwise, add the prefix.
+    return (strpos($img, 'uploads/') === 0) ? $img : 'uploads/team/' . $img;
 }
 
 // --- USER LEADERBOARD QUERY ---
@@ -158,6 +153,7 @@ if ($team_result) {
             $myTeamRank = $rank;
             $myTeamPoints = $row['scorePoint'];
             $myTeamName = $row['teamName'];
+            $myTeamImage = $row['teamImage'];
         }
         if ($rank <= 3) $top3Teams[] = $row; 
         else $remainingTeams[] = $row; 
@@ -667,12 +663,7 @@ fetch(
                             <div class="podium-item rank-<?= $rank ?>" data-id="<?= $team['teamID'] ?>" data-type="team" data-name="<?= htmlspecialchars($team['teamName']) ?>">
                                 <div class="position-relative d-inline-block mb-2">
                                     <i class="fas fa-crown crown-icon"></i>
-                                    <img src="<?= htmlspecialchars(
-        !empty($team['teamImage']) && file_exists(__DIR__ . '/' . $team['teamImage'])
-            ? $team['teamImage']
-            : 'uploads/team/default_team.png'
-    ) ?>"
-    class="podium-avatar">
+                                    <img src="<?= teamImg($team['teamImage']) ?>" class="podium-avatar">
 
                                     <div class="rank-badge"><?= $rank ?></div>
                                 </div>
@@ -686,12 +677,8 @@ fetch(
                     <?php if ($myTeamRank > 0): ?>
                     <div class="current-rank-bar" style="background: linear-gradient(90deg, #ff8c00, #ff4500);" onclick="scrollToRank('team', <?= $userTeamID ?>)">
                         <div class="cr-left">
-                            <img src="<?= htmlspecialchars(
-        !empty($team['teamImage']) && file_exists(__DIR__ . '/' . $team['teamImage'])
-            ? $team['teamImage']
-            : 'uploads/team/default_team.png'
-    ) ?>"
-    class="lb-avatar">
+                            <img src="<?= teamImg($myTeamImage) ?>" 
+                class="cr-avatar">
 
                             <span class="cr-text">Your Team Ranks</span>
                         </div>
@@ -716,7 +703,7 @@ fetch(
                             <div class="leaderboard-card" data-id="<?= $team['teamID'] ?>" data-type="team" data-name="<?= htmlspecialchars($team['teamName']) ?>">
                                 <div class="lb-col-rank"><?= $rank ?></div>
                                 <div class="lb-col-avatar">
-                                    <div class="lb-avatar d-flex align-items-center justify-content-center bg-light" style="font-size: 24px;"><i class="fas fa-users text-secondary"></i></div>
+                                    <img src="<?= teamImg($team['teamImage']) ?>" class="lb-avatar">
                                 </div>
                                 <div class="lb-col-name"><?= htmlspecialchars($team['teamName']) ?></div>
                                 <div class="lb-col-team"><?= $team['memberCount'] ?> Members</div>
